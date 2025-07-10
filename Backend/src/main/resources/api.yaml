@@ -1,0 +1,873 @@
+openapi: 3.0.3
+info:
+  title: Gestion Economica e Inventario del Hogar API
+  version: 1.0.0
+  description: API RESTful para gestionar usuarios, casas, familias, inventario, gastos y notificaciones.
+servers:
+  - url: https://api.tuhogar.app/v1
+    description: Servidor de produccion
+  - url: http://localhost:8080/v1
+    description: Servidor de desarrollo local
+tags:
+  - name: Auth
+    description: Modulo de autenticacion y usuarios
+  - name: House
+    description: Modulo de casas, familias y membresias
+  - name: Inventory
+    description: Modulo de inventario
+  - name: Expense
+    description: Modulo de gastos y gastos recurrentes
+  - name: Reports
+    description: Modulo de reportes y forecast
+  - name: Notification
+    description: Modulo de configuracion de notificaciones
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    UserRegisterRequest:
+      type: object
+      required:
+        - username
+        - email
+        - password
+      properties:
+        username:
+          type: string
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          format: password
+    AuthResponse:
+      type: object
+      properties:
+        token:
+          type: string
+        expires_in:
+          type: integer
+    UserProfileResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+        username:
+          type: string
+        email:
+          type: string
+        timezone:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+    HouseDto:
+      type: object
+      properties:
+        id:
+          type: integer
+        nombre:
+          type: string
+        direccion:
+          type: string
+    FamilyDto:
+      type: object
+      properties:
+        id:
+          type: integer
+        house_id:
+          type: integer
+        nombre:
+          type: string
+        descripcion:
+          type: string
+    MembershipDto:
+      type: object
+      properties:
+        id:
+          type: integer
+        user_id:
+          type: integer
+        family_id:
+          type: integer
+        role:
+          type: string
+          enum:
+            - ADMIN
+            - MEMBER
+            - VIEWER
+        joined_at:
+          type: string
+          format: date-time
+    UnitDto:
+      type: object
+      properties:
+        id:
+          type: integer
+        codigo:
+          type: string
+        descripcion:
+          type: string
+        is_custom:
+          type: boolean
+    CategoryDto:
+      type: object
+      properties:
+        id:
+          type: integer
+        family_id:
+          type: integer
+        nombre:
+          type: string
+        descripcion:
+          type: string
+        parent_id:
+          type: integer
+    InventoryItemDto:
+      type: object
+      properties:
+        id:
+          type: integer
+        family_id:
+          type: integer
+        user_id:
+          type: integer
+        unit_id:
+          type: integer
+        nombre:
+          type: string
+        quantity:
+          type: number
+        min_threshold:
+          type: number
+        purchase_date:
+          type: string
+          format: date
+        expiry_date:
+          type: string
+          format: date
+        barcode:
+          type: string
+    ExpenseDto:
+      type: object
+      properties:
+        id:
+          type: integer
+        family_id:
+          type: integer
+        user_id:
+          type: integer
+        amount:
+          type: number
+        currency:
+          type: string
+        category_id:
+          type: integer
+        subcategory_id:
+          type: integer
+        descripcion:
+          type: string
+        date:
+          type: string
+          format: date
+    RecurringExpenseDto:
+      type: object
+      properties:
+        id:
+          type: integer
+        expense_template_id:
+          type: integer
+        frequency:
+          type: string
+          enum:
+            - DAILY
+            - WEEKLY
+            - BIWEEKLY
+            - MONTHLY
+            - QUARTERLY
+            - SEMIANNUAL
+            - ANNUAL
+        next_due_date:
+          type: string
+          format: date
+    ReportSummaryDto:
+      type: object
+      properties:
+        total_expenses:
+          type: number
+        total_income:
+          type: number
+        by_category:
+          type: array
+          items:
+            type: object
+            properties:
+              category:
+                type: string
+              amount:
+                type: number
+    ForecastDto:
+      type: object
+      properties:
+        projected_expenses:
+          type: array
+          items:
+            type: object
+            properties:
+              date:
+                type: string
+                format: date
+              amount:
+                type: number
+        advice:
+          type: string
+    NotificationSettingDto:
+      type: object
+      properties:
+        id:
+          type: integer
+        user_id:
+          type: integer
+        event_type:
+          type: string
+          enum:
+            - LOW_STOCK
+            - RECURRENT_EXPENSE_DUE
+            - ANOMALY_DETECTED
+            - EXPENSE_REMINDER
+        channels:
+          type: array
+          items:
+            type: string
+            enum:
+              - EMAIL
+              - PUSH
+              - SMS
+        frequencies:
+          type: array
+          items:
+            type: string
+            enum:
+              - INSTANT
+              - DAILY_SUMMARY
+              - WEEKLY_SUMMARY
+paths:
+  /auth/register:
+    post:
+      tags:
+        - Auth
+      summary: Registro de usuario
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserRegisterRequest'
+      responses:
+        '201':
+          description: Usuario registrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfileResponse'
+        '400':
+          description: Bad Request
+        '409':
+          description: Conflict - usuario existente
+
+  /auth/login:
+    post:
+      tags:
+        - Auth
+      summary: Login de usuario
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserRegisterRequest'
+      responses:
+        '200':
+          description: Autenticacion exitosa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '400':
+          description: Bad Request
+        '401':
+          description: Unauthorized
+
+  /users/me:
+    get:
+      tags:
+        - Auth
+      security:
+        - bearerAuth: [ ]
+      summary: Perfil del usuario autenticado
+      responses:
+        '200':
+          description: Perfil de usuario
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfileResponse'
+        '401':
+          description: Unauthorized
+
+  /houses:
+    get:
+      tags:
+        - House
+      security:
+        - bearerAuth: [ ]
+      summary: Listar casas
+      responses:
+        '200':
+          description: Lista de casas
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/HouseDto'
+    post:
+      tags:
+        - House
+      security:
+        - bearerAuth: [ ]
+      summary: Crear casa
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - nombre
+              properties:
+                nombre:
+                  type: string
+                direccion:
+                  type: string
+      responses:
+        '201':
+          description: Casa creada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HouseDto'
+
+  /houses/{house_id}/families:
+    get:
+      tags:
+        - House
+      security:
+        - bearerAuth: [ ]
+      summary: Listar familias en casa
+      parameters:
+        - in: path
+          name: house_id
+          schema:
+            type: integer
+          required: true
+      responses:
+        '200':
+          description: Lista de familias
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/FamilyDto'
+        '404':
+          description: Casa no encontrada
+    post:
+      tags:
+        - House
+      security:
+        - bearerAuth: [ ]
+      summary: Crear familia
+      parameters:
+        - in: path
+          name: house_id
+          schema:
+            type: integer
+          required: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - nombre
+              properties:
+                nombre:
+                  type: string
+                descripcion:
+                  type: string
+      responses:
+        '201':
+          description: Familia creada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FamilyDto'
+
+  /families/{family_id}/members:
+    get:
+      tags:
+        - House
+      security:
+        - bearerAuth: [ ]
+      summary: Listar membresias
+      parameters:
+        - in: path
+          name: family_id
+          schema:
+            type: integer
+          required: true
+      responses:
+        '200':
+          description: Lista de membresias
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MembershipDto'
+    post:
+      tags:
+        - House
+      security:
+        - bearerAuth: [ ]
+      summary: Invitar miembro
+      parameters:
+        - in: path
+          name: family_id
+          schema:
+            type: integer
+          required: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - user_id
+                - role
+              properties:
+                user_id:
+                  type: integer
+                role:
+                  type: string
+                  enum:
+                    - ADMIN
+                    - MEMBER
+                    - VIEWER
+      responses:
+        '201':
+          description: Invitacion enviada
+
+  /families/{family_id}/members/{id}:
+    put:
+      tags:
+        - House
+      security:
+        - bearerAuth: [ ]
+      summary: Actualizar rol de miembro
+      parameters:
+        - in: path
+          name: family_id
+          schema:
+            type: integer
+          required: true
+        - in: path
+          name: id
+          schema:
+            type: integer
+          required: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - role
+              properties:
+                role:
+                  type: string
+                  enum:
+                    - ADMIN
+                    - MEMBER
+                    - VIEWER
+      responses:
+        '200':
+          description: Rol actualizado
+
+  /units:
+    get:
+      tags:
+        - Inventory
+      security:
+        - bearerAuth: [ ]
+      summary: Listar unidades
+      responses:
+        '200':
+          description: Lista de unidades
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UnitDto'
+
+  /inventory-items:
+    get:
+      tags:
+        - Inventory
+      security:
+        - bearerAuth: [ ]
+      summary: Listar items de inventario
+      parameters:
+        - in: query
+          name: family_id
+          schema:
+            type: integer
+          required: true
+        - in: query
+          name: threshold
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Lista de items
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/InventoryItemDto'
+    post:
+      tags:
+        - Inventory
+      security:
+        - bearerAuth: [ ]
+      summary: Crear item
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InventoryItemDto'
+      responses:
+        '201':
+          description: item creado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InventoryItemDto'
+
+  /inventory-items/{id}:
+    put:
+      tags:
+        - Inventory
+      security:
+        - bearerAuth: [ ]
+      summary: Actualizar item
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: integer
+          required: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                quantity:
+                  type: number
+                min_threshold:
+                  type: number
+                purchase_date:
+                  type: string
+                  format: date
+                expiry_date:
+                  type: string
+                  format: date
+      responses:
+        '200':
+          description: item actualizado
+
+  /expenses:
+    get:
+      tags:
+        - Expense
+      security:
+        - bearerAuth: [ ]
+      summary: Listar gastos
+      parameters:
+        - in: query
+          name: family_id
+          schema:
+            type: integer
+          required: true
+        - in: query
+          name: start_date
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: end_date
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: category_id
+          schema:
+            type: integer
+        - in: query
+          name: subcategory_id
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Lista de gastos
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ExpenseDto'
+    post:
+      tags:
+        - Expense
+      security:
+        - bearerAuth: [ ]
+      summary: Crear gasto
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExpenseDto'
+      responses:
+        '201':
+          description: Gasto creado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExpenseDto'
+
+  /expenses/{id}:
+    put:
+      tags:
+        - Expense
+      security:
+        - bearerAuth: [ ]
+      summary: Actualizar gasto
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: integer
+          required: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExpenseDto'
+      responses:
+        '200':
+          description: Gasto actualizado
+
+  /recurring-expenses:
+    get:
+      tags:
+        - Expense
+      security:
+        - bearerAuth: [ ]
+      summary: Listar gastos recurrentes
+      parameters:
+        - in: query
+          name: family_id
+          schema:
+            type: integer
+          required: true
+      responses:
+        '200':
+          description: Lista de gastos recurrentes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RecurringExpenseDto'
+    post:
+      tags:
+        - Expense
+      security:
+        - bearerAuth: [ ]
+      summary: Crear gasto recurrente
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecurringExpenseDto'
+      responses:
+        '201':
+          description: Gasto recurrente creado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecurringExpenseDto'
+
+  /recurring-expenses/{id}:
+    put:
+      tags:
+        - Expense
+      security:
+        - bearerAuth: [ ]
+      summary: Actualizar gasto recurrente
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: integer
+          required: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                next_due_date:
+                  type: string
+                  format: date
+      responses:
+        '200':
+          description: Gasto recurrente actualizado
+    delete:
+      tags:
+        - Expense
+      security:
+        - bearerAuth: [ ]
+      summary: Eliminar gasto recurrente
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: integer
+          required: true
+      responses:
+        '204':
+          description: Gasto recurrente eliminado
+
+  /reports/summary:
+    get:
+      tags:
+        - Reports
+      security:
+        - bearerAuth: [ ]
+      summary: Resumen de ingresos y egresos
+      parameters:
+        - in: query
+          name: family_id
+          schema:
+            type: integer
+          required: true
+        - in: query
+          name: start_date
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: end_date
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Resumen calculado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportSummaryDto'
+
+  /reports/forecast:
+    get:
+      tags:
+        - Reports
+      security:
+        - bearerAuth: [ ]
+      summary: Proyeccion de gastos futuros
+      parameters:
+        - in: query
+          name: family_id
+          schema:
+            type: integer
+          required: true
+        - in: query
+          name: horizon_days
+          schema:
+            type: integer
+          required: true
+      responses:
+        '200':
+          description: Proyeccion de gastos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForecastDto'
+
+  /notification-settings:
+    get:
+      tags:
+        - Notification
+      security:
+        - bearerAuth: [ ]
+      summary: Listar configuraciones de notificacion
+      responses:
+        '200':
+          description: Lista de NotificationSettingDto
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/NotificationSettingDto'
+
+  /notification-settings/{id}:
+    put:
+      tags:
+        - Notification
+      security:
+        - bearerAuth: [ ]
+      summary: Actualizar configuracion de notificacion
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: integer
+          required: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NotificationSettingDto'
+      responses:
+        '200':
+          description: Configuracion de notificacion actualizada
