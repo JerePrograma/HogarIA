@@ -1,17 +1,4 @@
-package com.hogaria.service;
-
-import com.hogaria.dto.TransactionCreateRequest;
-import com.hogaria.entity.MoneyTransaction;
-import com.hogaria.repository.MoneyTransactionRepository;
-import java.util.UUID;
-import org.springframework.stereotype.Service;
-
-@Service
-public class TransactionService {
-  private final MoneyTransactionRepository repository;
-  public TransactionService(MoneyTransactionRepository repository) { this.repository = repository; }
-  public MoneyTransaction create(TransactionCreateRequest request, UUID userId) {
-    MoneyTransaction tx = new MoneyTransaction();
-    return repository.save(tx);
-  }
-}
+package com.hogaria.service; import com.hogaria.dto.*; import com.hogaria.entity.*; import com.hogaria.exception.*; import com.hogaria.repository.*; import org.springframework.stereotype.Service; import java.time.*; import java.util.*;
+@Service public class TransactionService { private final MoneyTransactionRepository repository; private final FinancialProfileRepository profileRepository; private final AccountRepository accountRepository; private final CategoryRepository categoryRepository; public TransactionService(MoneyTransactionRepository repository, FinancialProfileRepository profileRepository, AccountRepository accountRepository, CategoryRepository categoryRepository){this.repository=repository;this.profileRepository=profileRepository;this.accountRepository=accountRepository;this.categoryRepository=categoryRepository;}
+public TransactionResponse create(TransactionCreateRequest request, UUID userId){ if(request.amount().signum()<=0) throw new BadRequestException("Amount must be positive"); var profile=profileRepository.findByIdAndUserId(request.profileId(),userId).orElseThrow(()->new ForbiddenException("Profile does not belong to user")); if(!accountRepository.existsByIdAndProfileId(request.accountId(),profile.getId())) throw new BadRequestException("Account does not belong to profile"); var category=categoryRepository.findById(request.categoryId()).orElseThrow(()->new NotFoundException("Category not found")); if(category.getProfileId()!=null && !Objects.equals(category.getProfileId(),profile.getId())) throw new BadRequestException("Category does not belong to profile"); var now=LocalDateTime.now(); var tx=MoneyTransaction.builder().profileId(request.profileId()).accountId(request.accountId()).categoryId(request.categoryId()).movementType(request.movementType()).realDate(request.realDate()).budgetDate(request.budgetDate()).amount(request.amount()).currency(request.currency().toUpperCase()).description(request.description()).origin(request.origin()==null? MoneyTransaction.Origin.MANUAL:request.origin()).status(request.status()==null? MoneyTransaction.Status.CONFIRMED:request.status()).createdAt(now).updatedAt(now).build(); return toResponse(repository.save(tx)); }
+private TransactionResponse toResponse(MoneyTransaction t){return new TransactionResponse(t.getId(),t.getProfileId(),t.getAccountId(),t.getCategoryId(),t.getMovementType(),t.getRealDate(),t.getBudgetDate(),t.getAmount(),t.getCurrency(),t.getDescription(),t.getOrigin(),t.getStatus(),t.getCreatedAt(),t.getUpdatedAt());}}

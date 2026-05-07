@@ -1,0 +1,3 @@
+package com.hogaria.entity;import jakarta.persistence.*;import lombok.*;import java.util.UUID;
+@Entity @Table(name="category",uniqueConstraints=@UniqueConstraint(columnNames={"profile_id","name","type"})) @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
+public class Category { @Id @GeneratedValue private UUID id; private UUID profileId; private UUID parentId; @Column(nullable=false) private String name; @Enumerated(EnumType.STRING) @Column(nullable=false) private CategoryType type; @Enumerated(EnumType.STRING) @Column(nullable=false) private Scope scope; @Column(nullable=false) private boolean active; public enum CategoryType{INCOME,FIXED_EXPENSE,VARIABLE_EXPENSE,SAVING,DEBT,INVESTMENT} public enum Scope{PERSONAL,FAMILY,BUSINESS,GLOBAL}}
