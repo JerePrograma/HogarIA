@@ -1,17 +1,2 @@
-package com.hogaria.dto;
-
-import jakarta.validation.constraints.*;
-import java.math.BigDecimal;
-import java.time.LocalDate;
-import java.util.UUID;
-
-public record TransactionCreateRequest(
-  @NotNull UUID profileId,
-  @NotNull UUID accountId,
-  @NotNull UUID categoryId,
-  @NotBlank String movementType,
-  @NotNull LocalDate realDate,
-  @NotNull LocalDate budgetDate,
-  @NotNull @DecimalMin("0.01") BigDecimal amount,
-  @Size(max = 255) String description
-) {}
+package com.hogaria.dto; import com.hogaria.entity.MoneyTransaction.*; import jakarta.validation.constraints.*; import java.math.BigDecimal; import java.time.LocalDate; import java.util.UUID;
+public record TransactionCreateRequest(@NotNull UUID profileId,@NotNull UUID accountId,@NotNull UUID categoryId,@NotNull MovementType movementType,@NotNull LocalDate realDate,@NotNull LocalDate budgetDate,@NotNull @DecimalMin("0.01") BigDecimal amount,@NotBlank String currency,String description, Origin origin, Status status) {}

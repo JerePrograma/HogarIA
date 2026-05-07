@@ -1,0 +1,1 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';const qc=new QueryClient();export const Providers=({children}:{children:React.ReactNode})=><QueryClientProvider client={qc}>{children}</QueryClientProvider>;

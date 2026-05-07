@@ -1,0 +1,1 @@
+package com.hogaria.security; import com.hogaria.exception.BadRequestException; import org.springframework.stereotype.Component; import java.util.UUID; @Component public class CurrentUserResolver { public UUID parse(String id){ try{return UUID.fromString(id);}catch(Exception e){ throw new BadRequestException("Invalid X-User-Id"); } }}

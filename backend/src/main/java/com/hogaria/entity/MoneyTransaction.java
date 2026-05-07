@@ -1,21 +1,3 @@
-package com.hogaria.entity;
-
-import jakarta.persistence.*;
-import java.math.BigDecimal;
-import java.time.LocalDate;
-import java.util.UUID;
-
-@Entity
-@Table(name = "transaction")
-public class MoneyTransaction {
-  @Id @GeneratedValue private UUID id;
-  private UUID profileId;
-  private UUID accountId;
-  private UUID categoryId;
-  @Enumerated(EnumType.STRING) private MovementType movementType;
-  private LocalDate realDate;
-  private LocalDate budgetDate;
-  @Column(precision = 19, scale = 2) private BigDecimal amount;
-  private String description;
-  public enum MovementType { INCOME, EXPENSE, SAVING, TRANSFER, ADJUSTMENT }
-}
+package com.hogaria.entity;import jakarta.persistence.*;import lombok.*;import java.math.BigDecimal;import java.time.*;import java.util.UUID;
+@Entity @Table(name="money_transaction") @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
+public class MoneyTransaction { @Id @GeneratedValue private UUID id; @Column(nullable=false) private UUID profileId; @Column(nullable=false) private UUID accountId; @Column(nullable=false) private UUID categoryId; @Enumerated(EnumType.STRING) @Column(nullable=false) private MovementType movementType; @Column(nullable=false) private LocalDate realDate; @Column(nullable=false) private LocalDate budgetDate; @Column(nullable=false,precision=19,scale=2) private BigDecimal amount; @Column(nullable=false,length=3) private String currency; private String description; @Enumerated(EnumType.STRING) @Column(nullable=false) private Origin origin; @Enumerated(EnumType.STRING) @Column(nullable=false) private Status status; @Column(nullable=false) private LocalDateTime createdAt; @Column(nullable=false) private LocalDateTime updatedAt; public enum MovementType { INCOME, EXPENSE, SAVING, TRANSFER, ADJUSTMENT } public enum Origin { MANUAL, IMPORT, RECURRENT, SYSTEM } public enum Status { CONFIRMED, PENDING, IGNORED }}

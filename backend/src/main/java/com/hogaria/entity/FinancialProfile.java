@@ -1,15 +1,3 @@
-package com.hogaria.entity;
-
-import jakarta.persistence.*;
-import java.util.UUID;
-
-@Entity
-public class FinancialProfile {
-  @Id @GeneratedValue private UUID id;
-  private UUID userId;
-  @Enumerated(EnumType.STRING) private ProfileType type;
-  private String name;
-  private String baseCurrency;
-  private Integer activeYear;
-  public enum ProfileType { PERSONAL, FAMILY, BUSINESS }
-}
+package com.hogaria.entity;import jakarta.persistence.*;import lombok.*;import java.util.UUID;
+@Entity @Table(name="financial_profile",uniqueConstraints=@UniqueConstraint(columnNames={"user_id","name"})) @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
+public class FinancialProfile { @Id @GeneratedValue private UUID id; @Column(nullable=false) private UUID userId; @Column(nullable=false) private String name; @Enumerated(EnumType.STRING) @Column(nullable=false) private ProfileType type; @Column(nullable=false,length=3) private String baseCurrency; @Column(nullable=false) private Integer activeYear; public enum ProfileType{PERSONAL,FAMILY,BUSINESS}}
