@@ -1,0 +1,1 @@
+package com.hogaria.repository; import com.hogaria.entity.BudgetMonth; import java.util.*; import org.springframework.data.jpa.repository.JpaRepository; public interface BudgetMonthRepository extends JpaRepository<BudgetMonth,UUID>{ Optional<BudgetMonth> findByBudgetYearIdAndMonth(UUID budgetYearId,Integer month); List<BudgetMonth> findByBudgetYearId(UUID budgetYearId);} 
