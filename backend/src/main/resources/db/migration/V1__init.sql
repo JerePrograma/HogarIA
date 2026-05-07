@@ -7,8 +7,11 @@ CREATE TABLE financial_profile (
  user_id UUID NOT NULL REFERENCES app_user(id),
  name VARCHAR(100) NOT NULL,
  type VARCHAR(20) NOT NULL CHECK (type IN ('PERSONAL','FAMILY','BUSINESS')),
- base_currency VARCHAR(3) NOT NULL,
- active_year INT NOT NULL,
+ base_currency VARCHAR(3) NOT NULL CHECK (char_length(currency)=3),
+ active_year INT NOT NULL CHECK (active_year BETWEEN 2000 AND 2100),
+ active BOOLEAN NOT NULL DEFAULT TRUE,
+ created_at TIMESTAMP NOT NULL DEFAULT now(),
+ updated_at TIMESTAMP NOT NULL DEFAULT now(),
  UNIQUE(user_id, name)
 );
 
@@ -17,11 +20,13 @@ CREATE TABLE account (
  profile_id UUID NOT NULL REFERENCES financial_profile(id),
  name VARCHAR(120) NOT NULL,
  account_type VARCHAR(30) NOT NULL CHECK (account_type IN ('CASH','BANK','CREDIT_CARD','DEBIT_CARD','VIRTUAL_WALLET','BUSINESS')),
- currency VARCHAR(3) NOT NULL,
+ currency VARCHAR(3) NOT NULL CHECK (char_length(currency)=3),
  credit_limit NUMERIC(19,2),
- statement_close_day INT,
- due_day INT,
+ statement_close_day INT CHECK (statement_close_day BETWEEN 1 AND 31),
+ due_day INT CHECK (due_day BETWEEN 1 AND 31),
  active BOOLEAN NOT NULL DEFAULT TRUE,
+ created_at TIMESTAMP NOT NULL DEFAULT now(),
+ updated_at TIMESTAMP NOT NULL DEFAULT now(),
  UNIQUE(profile_id, name)
 );
 
@@ -33,8 +38,11 @@ name VARCHAR(120) NOT NULL,
 type VARCHAR(30) NOT NULL CHECK (type IN ('INCOME','FIXED_EXPENSE','VARIABLE_EXPENSE','SAVING','DEBT','INVESTMENT')),
 scope VARCHAR(20) NOT NULL CHECK (scope IN ('PERSONAL','FAMILY','BUSINESS','GLOBAL')),
 active BOOLEAN NOT NULL DEFAULT TRUE,
-UNIQUE(profile_id, name, type)
+created_at TIMESTAMP NOT NULL DEFAULT now(),
+updated_at TIMESTAMP NOT NULL DEFAULT now()
 );
+CREATE UNIQUE INDEX ux_category_profile_name_type ON category(profile_id, name, type) WHERE profile_id IS NOT NULL;
+CREATE UNIQUE INDEX ux_category_global_name_type ON category(name, type) WHERE profile_id IS NULL;
 
 CREATE TABLE money_transaction (
  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -45,7 +53,7 @@ CREATE TABLE money_transaction (
  real_date DATE NOT NULL,
  budget_date DATE NOT NULL,
  amount NUMERIC(19,2) NOT NULL CHECK(amount > 0),
- currency VARCHAR(3) NOT NULL,
+ currency VARCHAR(3) NOT NULL CHECK (char_length(currency)=3),
  description VARCHAR(255),
  origin VARCHAR(20) NOT NULL DEFAULT 'MANUAL' CHECK (origin IN ('MANUAL','IMPORT','RECURRENT','SYSTEM')),
  status VARCHAR(20) NOT NULL DEFAULT 'CONFIRMED' CHECK (status IN ('CONFIRMED','PENDING','IGNORED')),
