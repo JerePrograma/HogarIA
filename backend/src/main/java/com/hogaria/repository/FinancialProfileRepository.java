@@ -1,1 +1,5 @@
-package com.hogaria.repository; import com.hogaria.entity.FinancialProfile; import org.springframework.data.jpa.repository.JpaRepository; import java.util.*; public interface FinancialProfileRepository extends JpaRepository<FinancialProfile, UUID> { Optional<FinancialProfile> findByIdAndUserId(UUID id, UUID userId); List<FinancialProfile> findByUserId(UUID userId);}
+package com.hogaria.repository;
+import com.hogaria.entity.FinancialProfile;
+import org.springframework.data.jpa.repository.JpaRepository;
+import java.util.*;
+public interface FinancialProfileRepository extends JpaRepository<FinancialProfile, UUID> { Optional<FinancialProfile> findByIdAndUserId(UUID id, UUID userId); List<FinancialProfile> findByUserIdAndActiveTrue(UUID userId); boolean existsByIdAndUserId(UUID id, UUID userId); }
