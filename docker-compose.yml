@@ -1,0 +1,11 @@
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: hogaria
+      POSTGRES_USER: hogaria
+      POSTGRES_PASSWORD: hogaria
+    ports: ["5432:5432"]
+    volumes: ["pg_data:/var/lib/postgresql/data"]
+volumes:
+  pg_data:
