@@ -1,2 +1,4 @@
-import {Routes,Route} from 'react-router-dom';import {ProfilesPage} from '../features/profiles/ProfilesPage';
-export const AppRouter=()=> <Routes><Route path='*' element={<ProfilesPage/>}/></Routes>;
+import {Navigate, Route, Routes} from 'react-router-dom';
+import {DevUserPage} from '../features/dev-user/DevUserPage';import {ProfilesPage} from '../features/profiles/ProfilesPage';import {AccountsPage} from '../features/accounts/AccountsPage';import {CategoriesPage} from '../features/categories/CategoriesPage';import {TransactionsPage} from '../features/transactions/TransactionsPage';import {DashboardPage} from '../features/dashboard/DashboardPage';
+const guard=(el:JSX.Element)=>localStorage.getItem('devUserId')?el:<Navigate to='/dev-user'/>;
+export const AppRouter=()=> <Routes><Route path='/dev-user' element={<DevUserPage/>}/><Route path='/profiles' element={guard(<ProfilesPage/>)} /><Route path='/profiles/:profileId/dashboard' element={guard(<DashboardPage/>)} /><Route path='/profiles/:profileId/accounts' element={guard(<AccountsPage/>)} /><Route path='/profiles/:profileId/categories' element={guard(<CategoriesPage/>)} /><Route path='/profiles/:profileId/transactions' element={guard(<TransactionsPage/>)} /><Route path='*' element={<Navigate to='/profiles'/>}/></Routes>;
