@@ -1,30 +1,42 @@
-# HogarIA MVP Iteración 3
+# HogarIA
 
-Flujo MVP (dev):
-1. `docker compose up -d` (PostgreSQL)
-2. `cd backend && mvn spring-boot:run`
-3. `cd frontend && npm install && npm run dev`
-4. Abrir `http://localhost:5173`
-5. Crear usuario dev (temporal)
-6. Crear perfil
-7. Crear cuenta
-8. Crear categorías
-9. Crear movimientos
-10. Ver dashboard mensual
+Flujo MVP implementado: dev user -> profile -> accounts/categories/transactions -> dashboard mensual.
 
-## Endpoints principales
-- `POST /api/dev/users`
-- `GET /api/dev/users`
-- `POST /api/transactions`
-- `GET /api/profiles/{profileId}/transactions?year=2026&month=5`
-- `PUT /api/transactions/{id}`
-- `DELETE /api/transactions/{id}`
+## URLs
+- Backend: `http://localhost:8080`
+- Frontend: `http://localhost:5173`
 
-> Header temporal: `X-User-Id: <uuid>` (se reemplazará por JWT en próxima iteración).
+## Variables
+- Frontend: `VITE_API_BASE_URL` (default `http://localhost:8080`)
+- Header temporal: `X-User-Id`
 
-## cURL ejemplo
+## Comandos
+- Backend tests: `cd backend && mvn test`
+- Frontend install/build: `cd frontend && npm install && npm run build`
+- Docker: `docker compose config`
+
+## Flujo rápido con curl
+1) Crear dev user
 ```bash
-curl -X POST http://localhost:8080/api/dev/users \
-  -H 'Content-Type: application/json' \
-  -d '{"email":"dev@hogaria.local","fullName":"Dev User","password":"dev123"}'
+curl -X POST http://localhost:8080/api/dev-users -H 'Content-Type: application/json' -d '{"name":"Demo","email":"demo@test.com"}'
+```
+2) Crear profile
+```bash
+curl -X POST http://localhost:8080/api/profiles -H 'X-User-Id: <USER_ID>' -H 'Content-Type: application/json' -d '{"name":"Casa","scope":"PERSONAL"}'
+```
+3) Crear cuenta
+```bash
+curl -X POST http://localhost:8080/api/profiles/<PROFILE_ID>/accounts -H 'X-User-Id: <USER_ID>' -H 'Content-Type: application/json' -d '{"name":"Efectivo","accountType":"CASH","currency":"ARS"}'
+```
+4) Crear categoría
+```bash
+curl -X POST http://localhost:8080/api/profiles/<PROFILE_ID>/categories -H 'X-User-Id: <USER_ID>' -H 'Content-Type: application/json' -d '{"name":"Comida","type":"VARIABLE_EXPENSE","scope":"PERSONAL"}'
+```
+5) Crear movimiento
+```bash
+curl -X POST http://localhost:8080/api/transactions -H 'X-User-Id: <USER_ID>' -H 'Content-Type: application/json' -d '{"profileId":"<PROFILE_ID>","accountId":"<ACCOUNT_ID>","categoryId":"<CATEGORY_ID>","movementType":"EXPENSE","realDate":"2026-05-01","budgetDate":"2026-05-01","amount":1000,"currency":"ARS"}'
+```
+6) Ver dashboard
+```bash
+curl 'http://localhost:8080/api/profiles/<PROFILE_ID>/dashboard/monthly?year=2026&month=5' -H 'X-User-Id: <USER_ID>'
 ```
