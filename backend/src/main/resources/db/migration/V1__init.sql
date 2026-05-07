@@ -7,7 +7,7 @@ CREATE TABLE financial_profile (
  user_id UUID NOT NULL REFERENCES app_user(id),
  name VARCHAR(100) NOT NULL,
  type VARCHAR(20) NOT NULL CHECK (type IN ('PERSONAL','FAMILY','BUSINESS')),
- base_currency VARCHAR(3) NOT NULL CHECK (char_length(currency)=3),
+ base_currency VARCHAR(3) NOT NULL CHECK (char_length(base_currency)=3),
  active_year INT NOT NULL CHECK (active_year BETWEEN 2000 AND 2100),
  active BOOLEAN NOT NULL DEFAULT TRUE,
  created_at TIMESTAMP NOT NULL DEFAULT now(),
