@@ -1,0 +1,11 @@
+import {http} from './http';
+export const createBudgetYear=(profileId:string,p:any)=>http.post(`/api/profiles/${profileId}/budgets`,p).then(r=>r.data);
+export const listBudgetYears=(profileId:string)=>http.get(`/api/profiles/${profileId}/budgets`).then(r=>r.data);
+export const getBudgetYear=(profileId:string,year:number)=>http.get(`/api/profiles/${profileId}/budgets/${year}`).then(r=>r.data);
+export const updateBudgetYear=(profileId:string,year:number,p:any)=>http.put(`/api/profiles/${profileId}/budgets/${year}`,p).then(r=>r.data);
+export const createBudgetMonth=(profileId:string,year:number,p:any)=>http.post(`/api/profiles/${profileId}/budgets/${year}/months`,p).then(r=>r.data);
+export const getBudgetMonth=(profileId:string,year:number,month:number)=>http.get(`/api/profiles/${profileId}/budgets/${year}/months/${month}`).then(r=>r.data);
+export const updateBudgetMonth=(id:string,p:any)=>http.put(`/api/budget-months/${id}`,p).then(r=>r.data);
+export const upsertBudgetCategoryItem=(id:string,p:any)=>http.put(`/api/budget-months/${id}/items`,p).then(r=>r.data);
+export const deleteBudgetCategoryItem=(id:string)=>http.delete(`/api/budget-category-items/${id}`).then(r=>r.data);
+export const getBudgetComparison=(profileId:string,year:number,month:number)=>http.get(`/api/profiles/${profileId}/budgets/${year}/months/${month}/comparison`).then(r=>r.data);

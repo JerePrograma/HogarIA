@@ -1,0 +1,4 @@
+package com.hogaria.entity;
+import jakarta.persistence.*;import java.math.BigDecimal;import java.time.LocalDateTime;import java.util.UUID;import lombok.*;
+@Entity @Table(name="budget_year") @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
+public class BudgetYear { @Id @GeneratedValue private UUID id; @Column(name="profile_id",nullable=false) private UUID profileId; @Column(nullable=false) private Integer year; @Column(name="target_income") private BigDecimal targetIncome; @Column(name="target_saving") private BigDecimal targetSaving; private String notes; @Column(name="created_at",nullable=false) private LocalDateTime createdAt; @Column(name="updated_at",nullable=false) private LocalDateTime updatedAt; @PrePersist void pp(){var n=LocalDateTime.now(); if(createdAt==null)createdAt=n; if(updatedAt==null)updatedAt=n;} @PreUpdate void pu(){updatedAt=LocalDateTime.now();}}
