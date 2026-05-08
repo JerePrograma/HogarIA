@@ -26,6 +26,8 @@ CREATE TABLE habit (
  created_at TIMESTAMP NOT NULL DEFAULT now(),
  updated_at TIMESTAMP NOT NULL DEFAULT now()
 );
+CREATE INDEX idx_habit_profile ON habit(profile_id);
+CREATE INDEX idx_habit_active ON habit(active);
 
 CREATE TABLE habit_checkin (
  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -36,6 +38,8 @@ CREATE TABLE habit_checkin (
  created_at TIMESTAMP NOT NULL DEFAULT now(),
  UNIQUE(habit_id, checkin_date)
 );
+CREATE INDEX idx_habit_checkin_habit ON habit_checkin(habit_id);
+CREATE INDEX idx_habit_checkin_date ON habit_checkin(checkin_date);
 
 CREATE TABLE inflation_index (
  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -47,9 +51,10 @@ CREATE TABLE inflation_index (
  source VARCHAR(120),
  projection BOOLEAN NOT NULL DEFAULT FALSE,
  created_at TIMESTAMP NOT NULL DEFAULT now(),
- updated_at TIMESTAMP NOT NULL DEFAULT now(),
- UNIQUE (year, month, COALESCE(category_code, 'GENERAL'))
+ updated_at TIMESTAMP NOT NULL DEFAULT now()
 );
+CREATE UNIQUE INDEX ux_inflation_year_month_category
+ON inflation_index (year, month, COALESCE(category_code, 'GENERAL'));
 CREATE INDEX idx_inflation_year ON inflation_index(year);
 CREATE INDEX idx_inflation_month ON inflation_index(month);
 CREATE INDEX idx_inflation_projection ON inflation_index(projection);
@@ -68,6 +73,8 @@ CREATE TABLE excel_import_batch (
  created_at TIMESTAMP NOT NULL DEFAULT now(),
  updated_at TIMESTAMP NOT NULL DEFAULT now()
 );
+CREATE INDEX idx_excel_import_batch_profile ON excel_import_batch(profile_id);
+CREATE INDEX idx_excel_import_batch_status ON excel_import_batch(status);
 
 CREATE TABLE excel_import_row (
  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -83,3 +90,5 @@ CREATE TABLE excel_import_row (
  raw_json JSONB,
  created_at TIMESTAMP NOT NULL DEFAULT now()
 );
+CREATE INDEX idx_excel_import_row_batch ON excel_import_row(batch_id);
+CREATE INDEX idx_excel_import_row_status ON excel_import_row(status);
