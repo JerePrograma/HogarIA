@@ -1,9 +1,6 @@
-// src/features/budgets/BudgetPage.tsx
-
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useParams } from 'react-router-dom';
-
 import {
   createBudgetMonth,
   createBudgetYear,
@@ -12,21 +9,18 @@ import {
   getBudgetYear,
   upsertBudgetCategoryItem,
 } from '../../api/budgetsApi';
-
 import { listCategories } from '../../api/categoriesApi';
 import { AppLayout } from '../../components/layout/AppLayout';
-
 import {
   budgetComparisonStatusLabels,
   categoryTypeLabels,
-  labelOrValue,
+  labelOrMissing,
   monthLabels,
 } from '../../domain/financeLabels';
-
 import { formatMoney, formatPercent } from '../../domain/formatters';
-
 import type {
   BudgetCategoryItem,
+  BudgetComparison,
   BudgetComparisonItem,
   Category,
   CategoryType,
@@ -37,7 +31,6 @@ export function BudgetPage() {
   const qc = useQueryClient();
 
   const today = new Date();
-
   const [year, setYear] = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth() + 1);
 
@@ -68,9 +61,7 @@ export function BudgetPage() {
     enabled: Boolean(profileId),
   });
 
-  const budgetableCategories = (categoriesQuery.data ?? []).filter(
-    (category: Category) => category.active,
-  );
+  const budgetableCategories = (categoriesQuery.data ?? []).filter((category: Category) => category.active);
 
   const createYearMutation = useMutation({
     mutationFn: () => createBudgetYear(profileId, { year }),
@@ -87,13 +78,7 @@ export function BudgetPage() {
   });
 
   const saveItemMutation = useMutation({
-    mutationFn: ({
-      categoryId,
-      budgetAmount,
-    }: {
-      categoryId: string;
-      budgetAmount: number;
-    }) => {
+    mutationFn: ({ categoryId, budgetAmount }: { categoryId: string; budgetAmount: number }) => {
       if (!budgetMonthQuery.data?.id) {
         throw new Error('Primero tenés que crear el mes presupuestario.');
       }
@@ -110,167 +95,165 @@ export function BudgetPage() {
   });
 
   const findBudgetAmount = (categoryId: string) => {
-    const item = budgetMonthQuery.data?.items?.find(
-      (i: BudgetCategoryItem) => i.categoryId === categoryId,
-    );
-
+    const item = budgetMonthQuery.data?.items?.find((i: BudgetCategoryItem) => i.categoryId === categoryId);
     return item?.budgetAmount ?? 0;
   };
 
+  const comparison = comparisonQuery.data as BudgetComparison | undefined;
+
   return (
     <AppLayout>
-      <div className="card">
-        <h1>Presupuesto</h1>
+      <div className="page-header">
+        <div>
+          <p className="eyebrow">Planificación</p>
+          <h1>Presupuesto</h1>
+          <p className="muted">Definí importes esperados y comparalos contra la ejecución real.</p>
+        </div>
 
-        <div className="form-row">
-          <input
-            className="input"
-            type="number"
-            value={year}
-            min={2000}
-            max={2100}
-            onChange={(e) => setYear(Number(e.target.value))}
-          />
+        <div className="toolbar">
+          <label className="field compact-field">
+            <span>Año</span>
+            <input type="number" value={year} onChange={(event) => setYear(Number(event.target.value))} />
+          </label>
 
-          <select
-            className="select"
-            value={month}
-            onChange={(e) => setMonth(Number(e.target.value))}
-          >
-            {Object.entries(monthLabels).map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </select>
+          <label className="field compact-field">
+            <span>Mes</span>
+            <select value={month} onChange={(event) => setMonth(Number(event.target.value))}>
+              {Object.entries(monthLabels).map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      </div>
 
+      <section className="card">
+        <div className="status-row">
+          <span className={`badge ${budgetYearQuery.data ? 'good' : 'warning'}`}>
+            Año: {budgetYearQuery.data ? 'Creado' : 'No creado'}
+          </span>
+          <span className={`badge ${budgetMonthQuery.data ? 'good' : 'warning'}`}>
+            Mes: {budgetMonthQuery.data ? 'Creado' : 'No creado'}
+          </span>
+        </div>
+
+        <div className="actions">
           <button
+            type="button"
+            className="button secondary"
             onClick={() => createYearMutation.mutate()}
-            disabled={createYearMutation.isPending}
+            disabled={createYearMutation.isPending || Boolean(budgetYearQuery.data)}
           >
             Crear año
           </button>
 
           <button
+            type="button"
+            className="button secondary"
             onClick={() => createMonthMutation.mutate()}
-            disabled={createMonthMutation.isPending}
+            disabled={createMonthMutation.isPending || Boolean(budgetMonthQuery.data)}
           >
             Crear mes
           </button>
         </div>
 
-        <p>
-          Año: {budgetYearQuery.data ? 'OK' : 'No existe'} | Mes:{' '}
-          {budgetMonthQuery.data ? 'OK' : 'No existe'}
-        </p>
-
         {!budgetMonthQuery.data && (
-          <p className="empty-state">
-            Primero creá el mes para poder cargar importes presupuestados.
-          </p>
+          <div className="alert warning">Primero creá el mes para poder cargar importes presupuestados.</div>
         )}
+      </section>
 
-        <h3>Carga presupuestaria</h3>
+      <section className="card">
+        <h2>Carga presupuestaria</h2>
 
-        <table className="table">
-          <thead>
-            <tr>
-              <th>Categoría</th>
-              <th>Tipo</th>
-              <th>Presupuesto</th>
-            </tr>
-          </thead>
+        {!budgetableCategories.length ? (
+          <p className="muted">No hay categorías activas para presupuestar.</p>
+        ) : (
+          <div className="table-wrap">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Categoría</th>
+                  <th>Tipo</th>
+                  <th className="amount">Presupuesto</th>
+                </tr>
+              </thead>
+              <tbody>
+                {budgetableCategories.map((category: Category) => (
+                  <tr key={category.id}>
+                    <td>{category.name}</td>
+                    <td>{labelOrMissing(categoryTypeLabels, category.type as CategoryType)}</td>
+                    <td className="amount">
+                      <input
+                        className="amount-input"
+                        type="number"
+                        min="0"
+                        defaultValue={findBudgetAmount(category.id)}
+                        disabled={!budgetMonthQuery.data}
+                        onBlur={(event) =>
+                          budgetMonthQuery.data &&
+                          saveItemMutation.mutate({
+                            categoryId: category.id,
+                            budgetAmount: Number(event.currentTarget.value),
+                          })
+                        }
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
 
-          <tbody>
-            {budgetableCategories.map((category: Category) => (
-              <tr key={category.id}>
-                <td>{category.name}</td>
+      <section className="card">
+        <h2>Presupuesto vs ejecutado</h2>
 
-                <td>
-                  {labelOrValue(
-                    categoryTypeLabels,
-                    category.type as CategoryType,
-                  )}
-                </td>
+        {!comparison?.items?.length ? (
+          <p className="muted">No hay datos comparativos para este período.</p>
+        ) : (
+          <>
+            <div className="table-wrap">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Categoría</th>
+                    <th>Tipo</th>
+                    <th className="amount">Presupuesto</th>
+                    <th className="amount">Ejecutado</th>
+                    <th className="amount">Diferencia</th>
+                    <th className="amount">% usado</th>
+                    <th>Estado</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {comparison.items.map((item: BudgetComparisonItem) => (
+                    <tr key={item.categoryId}>
+                      <td>{item.categoryName}</td>
+                      <td>{labelOrMissing(categoryTypeLabels, item.categoryType as CategoryType)}</td>
+                      <td className="amount">{formatMoney(item.budgetAmount)}</td>
+                      <td className="amount">{formatMoney(item.realAmount)}</td>
+                      <td className="amount">{formatMoney(item.difference)}</td>
+                      <td className="amount">{formatPercent(item.percentUsed)}</td>
+                      <td>
+                        <span className={`badge ${item.status === 'EXCEEDED' ? 'danger' : item.status === 'WARNING' ? 'warning' : 'good'}`}>
+                          {labelOrMissing(budgetComparisonStatusLabels, item.status)}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
 
-                <td>
-                  <input
-                    className="input"
-                    type="number"
-                    min={0}
-                    defaultValue={findBudgetAmount(category.id)}
-                    disabled={!budgetMonthQuery.data}
-                    onBlur={(e) =>
-                      budgetMonthQuery.data &&
-                      saveItemMutation.mutate({
-                        categoryId: category.id,
-                        budgetAmount: Number(e.target.value),
-                      })
-                    }
-                  />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-
-        <h3>Presupuesto vs Real</h3>
-
-        <table className="table">
-          <thead>
-            <tr>
-              <th>Categoría</th>
-              <th>Tipo</th>
-              <th>Presupuesto</th>
-              <th>Real</th>
-              <th>Diferencia</th>
-              <th>% usado</th>
-              <th>Estado</th>
-            </tr>
-          </thead>
-
-          <tbody>
-            {comparisonQuery.data?.items?.map((item: BudgetComparisonItem) => (
-              <tr key={item.categoryId}>
-                <td>{item.categoryName}</td>
-
-                <td>
-                  {labelOrValue(
-                    categoryTypeLabels,
-                    item.categoryType as CategoryType,
-                  )}
-                </td>
-
-                <td>{formatMoney(item.budgetAmount)}</td>
-                <td>{formatMoney(item.realAmount)}</td>
-                <td>{formatMoney(item.difference)}</td>
-                <td>{formatPercent(item.percentUsed)}</td>
-
-                <td>
-                  <span
-                    className={`badge ${
-                      item.status === 'EXCEEDED'
-                        ? 'badge-danger'
-                        : item.status === 'WARNING'
-                          ? 'badge-warning'
-                          : 'badge-ok'
-                    }`}
-                  >
-                    {labelOrValue(budgetComparisonStatusLabels, item.status)}
-                  </span>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-
-        <p>
-          Totales: Presupuesto{' '}
-          {formatMoney(comparisonQuery.data?.totalBudget)} | Real{' '}
-          {formatMoney(comparisonQuery.data?.totalReal)} | Diferencia{' '}
-          {formatMoney(comparisonQuery.data?.totalDifference)}
-        </p>
-      </div>
+            <p className="summary-line">
+              Totales: Presupuesto {formatMoney(comparison.totalBudget)} | Ejecutado {formatMoney(comparison.totalReal)} | Diferencia {formatMoney(comparison.totalDifference)}
+            </p>
+          </>
+        )}
+      </section>
     </AppLayout>
   );
 }

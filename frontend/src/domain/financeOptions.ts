@@ -1,12 +1,14 @@
-// src/domain/financeOptions.ts
-
 import {
   accountTypeLabels,
   categoryScopeLabels,
   categoryTypeLabels,
+  goalTypeLabels,
+  habitFrequencyLabels,
   movementTypeLabels,
   profileTypeLabels,
   transactionStatusLabels,
+  type GoalType,
+  type HabitFrequency,
 } from './financeLabels';
 
 import type {
@@ -18,10 +20,10 @@ import type {
   TransactionStatus,
 } from './types';
 
-function toOptions<T extends string>(labels: Record<T, string>) {
+function toOptions<T extends string | number>(labels: Partial<Record<T, string>>) {
   return Object.entries(labels).map(([value, label]) => ({
-    value: value as T,
-    label: label as string,
+    value: value as unknown as T,
+    label: String(label),
   }));
 }
 
@@ -30,5 +32,6 @@ export const accountTypeOptions = toOptions<AccountType>(accountTypeLabels);
 export const categoryTypeOptions = toOptions<CategoryType>(categoryTypeLabels);
 export const categoryScopeOptions = toOptions<CategoryScope>(categoryScopeLabels);
 export const movementTypeOptions = toOptions<MovementType>(movementTypeLabels);
-export const transactionStatusOptions =
-  toOptions<TransactionStatus>(transactionStatusLabels);
+export const transactionStatusOptions = toOptions<TransactionStatus>(transactionStatusLabels);
+export const goalTypeOptions = toOptions<GoalType>(goalTypeLabels);
+export const habitFrequencyOptions = toOptions<HabitFrequency>(habitFrequencyLabels);

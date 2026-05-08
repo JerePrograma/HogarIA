@@ -1,27 +1,70 @@
+import type { ReactNode } from 'react';
 import { NavLink, useNavigate, useParams } from 'react-router-dom';
 
-export function AppLayout({ children }: { children: React.ReactNode }) {
+const profileNavItems = [
+  { path: 'dashboard', label: 'Panel' },
+  { path: 'transactions', label: 'Movimientos' },
+  { path: 'budgets', label: 'Presupuesto' },
+  { path: 'accounts', label: 'Cuentas' },
+  { path: 'categories', label: 'Categorías' },
+  { path: 'goals', label: 'Objetivos' },
+  { path: 'habits', label: 'Hábitos' },
+  { path: 'inflation', label: 'Inflación' },
+];
+
+export function AppLayout({ children }: { children: ReactNode }) {
   const { profileId } = useParams();
   const nav = useNavigate();
   const base = profileId ? `/profiles/${profileId}` : '';
-  return <div className='app-shell'>
-    <aside className='sidebar'>
-      <h2>HogarIA</h2>
-      <p>Usuario: {localStorage.getItem('devUserId')?.slice(0, 8) ?? '-'}</p>
-      <p>Perfil: {localStorage.getItem('selectedProfileId')?.slice(0, 8) ?? '-'}</p>
-      {profileId && <>
-        <NavLink to={`${base}/dashboard`}>Dashboard</NavLink>
-        <NavLink to={`${base}/accounts`}>Cuentas</NavLink>
-        <NavLink to={`${base}/categories`}>Categorías</NavLink>
-        <NavLink to={`${base}/transactions`}>Movimientos</NavLink>
-        <NavLink to={`${base}/budgets`}>Presupuesto</NavLink>
-        <NavLink to={`${base}/goals`}>Objetivos</NavLink>
-        <NavLink to={`${base}/habits`}>Hábitos</NavLink>
-        <NavLink to={`${base}/inflation`}>Inflación</NavLink>
-      </>}
-      <NavLink to='/profiles'>Perfiles</NavLink>
-      <button className='button-secondary' onClick={() => { localStorage.removeItem('devUserId'); localStorage.removeItem('selectedProfileId'); nav('/dev-user'); }}>Cambiar usuario</button>
-    </aside>
-    <main className='content'>{children}</main>
-  </div>;
+
+  const devUserId = localStorage.getItem('devUserId');
+  const selectedProfileId = localStorage.getItem('selectedProfileId');
+
+  const logout = () => {
+    localStorage.removeItem('devUserId');
+    localStorage.removeItem('selectedProfileId');
+    nav('/dev-user');
+  };
+
+  return (
+    <div className="app-shell">
+      <aside className="sidebar">
+        <div className="brand">
+          <span className="brand-mark">H</span>
+          <div>
+            <strong>HogarIA</strong>
+            <small>Finanzas personales</small>
+          </div>
+        </div>
+
+        <div className="sidebar-meta">
+          <span>Usuario: {devUserId?.slice(0, 8) ?? '-'}</span>
+          <span>Perfil: {selectedProfileId?.slice(0, 8) ?? '-'}</span>
+        </div>
+
+        <nav className="nav-menu" aria-label="Navegación principal">
+          {profileId &&
+            profileNavItems.map((item) => (
+              <NavLink
+                key={item.path}
+                to={`${base}/${item.path}`}
+                className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
+              >
+                {item.label}
+              </NavLink>
+            ))}
+
+          <NavLink to="/profiles" className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>
+            Perfiles
+          </NavLink>
+        </nav>
+
+        <button type="button" className="button ghost sidebar-action" onClick={logout}>
+          Cambiar usuario
+        </button>
+      </aside>
+
+      <main className="content">{children}</main>
+    </div>
+  );
 }

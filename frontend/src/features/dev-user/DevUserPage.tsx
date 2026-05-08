@@ -4,19 +4,139 @@ import { useNavigate } from 'react-router-dom';
 import { createDevUser, listDevUsers } from '../../api/devUsersApi';
 import { getApiErrorMessage } from '../../api/http';
 
+interface DevUserRow {
+  id: string;
+  fullName: string;
+  email: string;
+}
+
 export function DevUserPage() {
-  const nav = useNavigate(); const qc = useQueryClient();
-  const [form, setForm] = useState({ fullName: '', email: '', password: '' });
-  const q = useQuery({ queryKey: ['dev-users'], queryFn: listDevUsers });
-  const c = useMutation({ mutationFn: () => createDevUser(form), onSuccess: (u: { id: string }) => { qc.invalidateQueries({ queryKey: ['dev-users'] }); localStorage.setItem('devUserId', u.id); nav('/profiles'); } });
-  return <div className='card'><h1>Dev users</h1>
-    {q.isError && <div className='error-box'>{getApiErrorMessage(q.error)}</div>}
-    <div className='form-row'>
-      <input className='input' placeholder='Nombre completo' value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} />
-      <input className='input' placeholder='Email' value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
-      <input className='input' type='password' placeholder='Password' value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
-      <button className='button-primary' onClick={() => c.mutate()} disabled={c.isPending}>Crear y seleccionar</button>
-    </div>
-    {q.isLoading ? <p>Cargando...</p> : !q.data?.length ? <p className='empty-state'>No hay usuarios creados.</p> : <table className='table'><thead><tr><th>Nombre</th><th>Email</th><th></th></tr></thead><tbody>{q.data.map((u: { id: string; fullName: string; email: string }) => <tr key={u.id}><td>{u.fullName}</td><td>{u.email}</td><td><button onClick={() => { localStorage.setItem('devUserId', u.id); nav('/profiles'); }}>Seleccionar</button></td></tr>)}</tbody></table>}
-  </div>;
+  const nav = useNavigate();
+  const qc = useQueryClient();
+
+  const [form, setForm] = useState({
+    fullName: '',
+    email: '',
+    password: '',
+  });
+
+  const usersQuery = useQuery({
+    queryKey: ['dev-users'],
+    queryFn: listDevUsers,
+  });
+
+  const createUserMutation = useMutation({
+    mutationFn: () => createDevUser(form),
+    onSuccess: (user: { id: string }) => {
+      qc.invalidateQueries({ queryKey: ['dev-users'] });
+      localStorage.setItem('devUserId', user.id);
+      nav('/profiles');
+    },
+  });
+
+  const canCreate = Boolean(form.fullName.trim()) && Boolean(form.email.trim()) && Boolean(form.password);
+
+  return (
+    <main className="auth-page">
+      <section className="auth-card">
+        <div className="page-header">
+          <div>
+            <p className="eyebrow">Entorno de desarrollo</p>
+            <h1>Usuarios de desarrollo</h1>
+            <p className="muted">Seleccioná un usuario existente o creá uno nuevo para continuar.</p>
+          </div>
+        </div>
+
+        {usersQuery.isError && <div className="alert danger">{getApiErrorMessage(usersQuery.error)}</div>}
+
+        <div className="card">
+          <h2>Crear usuario</h2>
+
+          <div className="form-grid">
+            <label className="field">
+              <span>Nombre completo</span>
+              <input
+                value={form.fullName}
+                placeholder="Ej: Jeremías Rivelli"
+                onChange={(event) => setForm({ ...form, fullName: event.target.value })}
+              />
+            </label>
+
+            <label className="field">
+              <span>Correo electrónico</span>
+              <input
+                type="email"
+                value={form.email}
+                placeholder="usuario@correo.com"
+                onChange={(event) => setForm({ ...form, email: event.target.value })}
+              />
+            </label>
+
+            <label className="field">
+              <span>Contraseña</span>
+              <input
+                type="password"
+                value={form.password}
+                placeholder="Contraseña"
+                onChange={(event) => setForm({ ...form, password: event.target.value })}
+              />
+            </label>
+          </div>
+
+          <div className="actions">
+            <button
+              type="button"
+              className="button primary"
+              onClick={() => createUserMutation.mutate()}
+              disabled={!canCreate || createUserMutation.isPending}
+            >
+              Crear y seleccionar
+            </button>
+          </div>
+        </div>
+
+        <div className="card">
+          <h2>Usuarios disponibles</h2>
+
+          {usersQuery.isLoading ? (
+            <p className="muted">Cargando usuarios...</p>
+          ) : !usersQuery.data?.length ? (
+            <p className="muted">No hay usuarios creados.</p>
+          ) : (
+            <div className="table-wrap">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Nombre</th>
+                    <th>Correo electrónico</th>
+                    <th>Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {usersQuery.data.map((user: DevUserRow) => (
+                    <tr key={user.id}>
+                      <td>{user.fullName}</td>
+                      <td>{user.email}</td>
+                      <td>
+                        <button
+                          type="button"
+                          className="button secondary"
+                          onClick={() => {
+                            localStorage.setItem('devUserId', user.id);
+                            nav('/profiles');
+                          }}
+                        >
+                          Seleccionar
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </section>
+    </main>
+  );
 }

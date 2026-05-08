@@ -1,5 +1,3 @@
-// src/domain/financeLabels.ts
-
 import type {
   AccountType,
   BudgetComparisonStatus,
@@ -11,6 +9,11 @@ import type {
   TransactionOrigin,
   TransactionStatus,
 } from './types';
+
+export type GoalType = 'OTHER' | 'EMERGENCY_FUND' | 'TRAVEL' | 'HOME' | 'INVESTMENT';
+export type GoalStatus = 'ACTIVE' | 'COMPLETED' | 'PAUSED' | 'CANCELLED' | 'ARCHIVED';
+export type HabitFrequency = 'DAILY' | 'WEEKLY' | 'MONTHLY';
+export type InflationSource = 'MANUAL' | 'IMPORT' | 'SYSTEM';
 
 export const profileTypeLabels: Record<ProfileType, string> = {
   PERSONAL: 'Personal',
@@ -66,7 +69,7 @@ export const transactionStatusLabels: Record<TransactionStatus, string> = {
 
 export const budgetComparisonStatusLabels: Record<BudgetComparisonStatus, string> = {
   OK: 'Correcto',
-  WARNING: 'Advertencia',
+  WARNING: 'Atención',
   EXCEEDED: 'Excedido',
 };
 
@@ -75,6 +78,34 @@ export const financialHealthLabels: Record<FinancialHealth, string> = {
   HEALTHY: 'Saludable',
   WARNING: 'En observación',
   CRITICAL: 'Crítico',
+};
+
+export const goalTypeLabels: Record<GoalType, string> = {
+  OTHER: 'Otro',
+  EMERGENCY_FUND: 'Fondo de emergencia',
+  TRAVEL: 'Viaje',
+  HOME: 'Vivienda',
+  INVESTMENT: 'Inversión',
+};
+
+export const goalStatusLabels: Record<GoalStatus, string> = {
+  ACTIVE: 'Activo',
+  COMPLETED: 'Completado',
+  PAUSED: 'Pausado',
+  CANCELLED: 'Cancelado',
+  ARCHIVED: 'Archivado',
+};
+
+export const habitFrequencyLabels: Record<HabitFrequency, string> = {
+  DAILY: 'Diario',
+  WEEKLY: 'Semanal',
+  MONTHLY: 'Mensual',
+};
+
+export const inflationSourceLabels: Record<InflationSource, string> = {
+  MANUAL: 'Manual',
+  IMPORT: 'Importado',
+  SYSTEM: 'Sistema',
 };
 
 export const monthLabels: Record<number, string> = {
@@ -92,11 +123,22 @@ export const monthLabels: Record<number, string> = {
   12: 'Diciembre',
 };
 
-export function labelOrValue<T extends string>(
-  labels: Record<T, string>,
-  value: T | string | null | undefined,
+export function labelOrMissing<T extends string | number>(
+  labels: Partial<Record<T, string>>,
+  value: T | string | number | null | undefined,
+  fallback = 'Sin definir',
 ): string {
-  if (!value) return '-';
+  if (value === null || value === undefined || value === '') return fallback;
 
-  return labels[value as T] ?? value;
+  const mapped = labels[value as T];
+
+  if (mapped) return mapped;
+
+  return import.meta.env.DEV ? `Sin traducir: ${String(value)}` : fallback;
 }
+
+/**
+ * Alias mantenido para compatibilidad con pantallas existentes.
+ * Usar labelOrMissing en código nuevo.
+ */
+export const labelOrValue = labelOrMissing;
