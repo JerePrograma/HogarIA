@@ -1,7 +1,7 @@
 // src/features/transactions/TransactionsPage.tsx
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 
 import { listAccounts } from '../../api/accountsApi';
@@ -49,6 +49,49 @@ interface TransactionForm {
   status: TransactionStatus;
 }
 
+const monthOptions = [
+  { value: 1, label: 'Enero' },
+  { value: 2, label: 'Febrero' },
+  { value: 3, label: 'Marzo' },
+  { value: 4, label: 'Abril' },
+  { value: 5, label: 'Mayo' },
+  { value: 6, label: 'Junio' },
+  { value: 7, label: 'Julio' },
+  { value: 8, label: 'Agosto' },
+  { value: 9, label: 'Septiembre' },
+  { value: 10, label: 'Octubre' },
+  { value: 11, label: 'Noviembre' },
+  { value: 12, label: 'Diciembre' },
+];
+
+function getDefaultDate(year: number, month: number) {
+  return `${year}-${String(month).padStart(2, '0')}-01`;
+}
+
+function formatDate(value: string) {
+  if (!value) return '-';
+
+  return new Intl.DateTimeFormat('es-AR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  }).format(new Date(`${value}T00:00:00`));
+}
+
+function getStatusBadgeClass(status: TransactionStatus) {
+  if (status === 'CONFIRMED') return 'badge badge-ok';
+  if (status === 'PENDING') return 'badge badge-warning';
+  return 'badge badge-danger';
+}
+
+function getMovementBadgeClass(type: MovementType) {
+  if (type === 'INCOME') return 'badge badge-ok';
+  if (type === 'SAVING') return 'badge badge-info';
+  if (type === 'TRANSFER') return 'badge badge-muted';
+  if (type === 'ADJUSTMENT') return 'badge badge-warning';
+  return 'badge badge-danger';
+}
+
 function toTransactionUpdatePayload(transaction: MoneyTransaction) {
   return {
     accountId: transaction.accountId,
@@ -59,53 +102,94 @@ function toTransactionUpdatePayload(transaction: MoneyTransaction) {
     amount: transaction.amount,
     currency: transaction.currency,
     description: transaction.description ?? '',
-    status:
-      transaction.status === 'CONFIRMED'
-        ? 'PENDING'
-        : 'CONFIRMED',
+    status: transaction.status === 'CONFIRMED' ? 'PENDING' : 'CONFIRMED',
   };
 }
 
 export function TransactionsPage() {
   const { profileId = '' } = useParams();
-  const qc = useQueryClient();
+  const queryClient = useQueryClient();
 
   const today = new Date();
-  const yyyy = today.getFullYear();
-  const mm = String(today.getMonth() + 1).padStart(2, '0');
+  const initialYear = today.getFullYear();
+  const initialMonth = today.getMonth() + 1;
 
-  const [year, setYear] = useState(yyyy);
-  const [month, setMonth] = useState(today.getMonth() + 1);
+  const [year, setYear] = useState(initialYear);
+  const [month, setMonth] = useState(initialMonth);
 
   const [form, setForm] = useState<TransactionForm>({
     accountId: '',
     categoryId: '',
     movementType: 'EXPENSE',
-    realDate: `${yyyy}-${mm}-01`,
-    budgetDate: `${yyyy}-${mm}-01`,
+    realDate: getDefaultDate(initialYear, initialMonth),
+    budgetDate: getDefaultDate(initialYear, initialMonth),
     amount: 0,
     currency: 'ARS',
     description: '',
     status: 'CONFIRMED',
   });
 
-  const accountsQuery = useQuery({
+  const accountsQuery = useQuery<Account[]>({
     queryKey: ['accounts', profileId],
     queryFn: () => listAccounts(profileId),
     enabled: Boolean(profileId),
   });
 
-  const categoriesQuery = useQuery({
+  const categoriesQuery = useQuery<Category[]>({
     queryKey: ['categories', profileId],
     queryFn: () => listCategories(profileId, true),
     enabled: Boolean(profileId),
   });
 
-  const transactionsQuery = useQuery({
+  const transactionsQuery = useQuery<MoneyTransaction[]>({
     queryKey: ['tx', profileId, year, month],
     queryFn: () => listTransactions(profileId, year, month),
     enabled: Boolean(profileId),
   });
+
+  const accountsById = useMemo(() => {
+    return new Map((accountsQuery.data ?? []).map((account) => [account.id, account]));
+  }, [accountsQuery.data]);
+
+  const categoriesById = useMemo(() => {
+    return new Map((categoriesQuery.data ?? []).map((category) => [category.id, category]));
+  }, [categoriesQuery.data]);
+
+  const transactions = transactionsQuery.data ?? [];
+
+  const totals = useMemo(() => {
+    return transactions.reduce(
+      (acc, transaction) => {
+        if (transaction.status === 'IGNORED') {
+          acc.ignored += Number(transaction.amount ?? 0);
+          return acc;
+        }
+
+        if (transaction.movementType === 'INCOME') {
+          acc.income += Number(transaction.amount ?? 0);
+          return acc;
+        }
+
+        if (transaction.movementType === 'SAVING') {
+          acc.saving += Number(transaction.amount ?? 0);
+          return acc;
+        }
+
+        if (transaction.movementType === 'EXPENSE') {
+          acc.expenses += Number(transaction.amount ?? 0);
+          return acc;
+        }
+
+        return acc;
+      },
+      {
+        income: 0,
+        expenses: 0,
+        saving: 0,
+        ignored: 0,
+      },
+    );
+  }, [transactions]);
 
   const createTransactionMutation = useMutation({
     mutationFn: () =>
@@ -116,8 +200,14 @@ export function TransactionsPage() {
         origin: 'MANUAL',
       }),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['tx', profileId, year, month] });
-      qc.invalidateQueries({ queryKey: ['budget-comp', profileId, year, month] });
+      queryClient.invalidateQueries({ queryKey: ['tx', profileId, year, month] });
+      queryClient.invalidateQueries({ queryKey: ['budget-comp', profileId, year, month] });
+
+      setForm((current) => ({
+        ...current,
+        amount: 0,
+        description: '',
+      }));
     },
   });
 
@@ -125,283 +215,421 @@ export function TransactionsPage() {
     mutationFn: (transaction: MoneyTransaction) =>
       updateTransaction(transaction.id, toTransactionUpdatePayload(transaction)),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['tx', profileId, year, month] });
-      qc.invalidateQueries({ queryKey: ['budget-comp', profileId, year, month] });
+      queryClient.invalidateQueries({ queryKey: ['tx', profileId, year, month] });
+      queryClient.invalidateQueries({ queryKey: ['budget-comp', profileId, year, month] });
     },
   });
 
   const deleteTransactionMutation = useMutation({
     mutationFn: (id: string) => deleteTransaction(id),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['tx', profileId, year, month] });
-      qc.invalidateQueries({ queryKey: ['budget-comp', profileId, year, month] });
+      queryClient.invalidateQueries({ queryKey: ['tx', profileId, year, month] });
+      queryClient.invalidateQueries({ queryKey: ['budget-comp', profileId, year, month] });
     },
   });
-
-  const nameById = <T extends { id: string; name: string }>(
-    items: T[] | undefined,
-    id: string,
-  ) => items?.find((item) => item.id === id)?.name ?? id;
 
   const canSave =
     Boolean(form.accountId) &&
     Boolean(form.categoryId) &&
     form.amount > 0 &&
     Boolean(form.realDate) &&
-    Boolean(form.budgetDate);
+    Boolean(form.budgetDate) &&
+    !createTransactionMutation.isPending;
+
+  const handlePeriodChange = (nextYear: number, nextMonth: number) => {
+    setYear(nextYear);
+    setMonth(nextMonth);
+
+    const nextDefaultDate = getDefaultDate(nextYear, nextMonth);
+
+    setForm((current) => ({
+      ...current,
+      realDate: nextDefaultDate,
+      budgetDate: nextDefaultDate,
+    }));
+  };
 
   return (
     <AppLayout>
-      <div className="card">
-        <h1>Movimientos</h1>
+      <div className="page-stack">
+        <section className="page-header">
+          <div>
+            <p className="eyebrow">Gestión diaria</p>
+            <h1>Movimientos</h1>
+            <p className="muted">
+              Cargá ingresos, gastos, ahorros y ajustes para alimentar el presupuesto y el panel mensual.
+            </p>
+          </div>
 
-        {!accountsQuery.data?.length && (
+          <div className="period-selector">
+            <label>
+              Año
+              <input
+                className="input"
+                type="number"
+                value={year}
+                min={2000}
+                max={2100}
+                onChange={(event) =>
+                  handlePeriodChange(Number(event.target.value), month)
+                }
+              />
+            </label>
+
+            <label>
+              Mes
+              <select
+                className="select"
+                value={month}
+                onChange={(event) =>
+                  handlePeriodChange(year, Number(event.target.value))
+                }
+              >
+                {monthOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+        </section>
+
+        <section className="summary-grid">
+          <div className="metric-card metric-income">
+            <span>Ingresos</span>
+            <strong>{formatMoney(totals.income)}</strong>
+          </div>
+
+          <div className="metric-card metric-expense">
+            <span>Gastos</span>
+            <strong>{formatMoney(totals.expenses)}</strong>
+          </div>
+
+          <div className="metric-card metric-saving">
+            <span>Ahorro</span>
+            <strong>{formatMoney(totals.saving)}</strong>
+          </div>
+
+          <div className="metric-card">
+            <span>Balance operativo</span>
+            <strong>{formatMoney(totals.income - totals.expenses - totals.saving)}</strong>
+          </div>
+        </section>
+
+        {!accountsQuery.isLoading && !accountsQuery.data?.length && (
           <p className="empty-state">
-            No hay cuentas.{' '}
+            No hay cuentas cargadas.{' '}
             <Link to={`/profiles/${profileId}/accounts`}>Crear cuenta</Link>
           </p>
         )}
 
-        {!categoriesQuery.data?.length && (
+        {!categoriesQuery.isLoading && !categoriesQuery.data?.length && (
           <p className="empty-state">
-            No hay categorías.{' '}
-            <Link to={`/profiles/${profileId}/categories`}>
-              Crear categoría
-            </Link>
+            No hay categorías cargadas.{' '}
+            <Link to={`/profiles/${profileId}/categories`}>Crear categoría</Link>
           </p>
         )}
 
-        <div className="form-row">
-          <input
-            className="input"
-            type="number"
-            value={year}
-            min={2000}
-            max={2100}
-            onChange={(e) => setYear(Number(e.target.value))}
-          />
+        <section className="card">
+          <div className="section-title">
+            <div>
+              <h2>Cargar movimiento</h2>
+              <p className="muted">
+                Los movimientos confirmados impactan en reportes y comparación presupuesto vs real.
+              </p>
+            </div>
+          </div>
 
-          <input
-            className="input"
-            type="number"
-            value={month}
-            min={1}
-            max={12}
-            onChange={(e) => setMonth(Number(e.target.value))}
-          />
-        </div>
+          <div className="form-grid transaction-form-grid">
+            <label>
+              Cuenta
+              <select
+                className="select"
+                value={form.accountId}
+                onChange={(event) =>
+                  setForm({
+                    ...form,
+                    accountId: event.target.value,
+                  })
+                }
+              >
+                <option value="">Seleccionar cuenta</option>
 
-        <div className="form-row">
-          <select
-            className="select"
-            value={form.accountId}
-            onChange={(e) =>
-              setForm({
-                ...form,
-                accountId: e.target.value,
-              })
-            }
-          >
-            <option value="">Cuenta</option>
+                {accountsQuery.data?.map((account) => (
+                  <option key={account.id} value={account.id}>
+                    {account.name}
+                  </option>
+                ))}
+              </select>
+            </label>
 
-            {accountsQuery.data?.map((account: Account) => (
-              <option key={account.id} value={account.id}>
-                {account.name}
-              </option>
-            ))}
-          </select>
+            <label>
+              Categoría
+              <select
+                className="select"
+                value={form.categoryId}
+                onChange={(event) =>
+                  setForm({
+                    ...form,
+                    categoryId: event.target.value,
+                  })
+                }
+              >
+                <option value="">Seleccionar categoría</option>
 
-          <select
-            className="select"
-            value={form.categoryId}
-            onChange={(e) =>
-              setForm({
-                ...form,
-                categoryId: e.target.value,
-              })
-            }
-          >
-            <option value="">Categoría</option>
+                {categoriesQuery.data?.map((category) => (
+                  <option key={category.id} value={category.id}>
+                    {category.name}
+                  </option>
+                ))}
+              </select>
+            </label>
 
-            {categoriesQuery.data?.map((category: Category) => (
-              <option key={category.id} value={category.id}>
-                {category.name}
-              </option>
-            ))}
-          </select>
+            <label>
+              Tipo de movimiento
+              <select
+                className="select"
+                value={form.movementType}
+                onChange={(event) =>
+                  setForm({
+                    ...form,
+                    movementType: event.target.value as MovementType,
+                  })
+                }
+              >
+                {movementTypeOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
 
-          <select
-            className="select"
-            value={form.movementType}
-            onChange={(e) =>
-              setForm({
-                ...form,
-                movementType: e.target.value as MovementType,
-              })
-            }
-          >
-            {movementTypeOptions.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
+            <label>
+              Estado
+              <select
+                className="select"
+                value={form.status}
+                onChange={(event) =>
+                  setForm({
+                    ...form,
+                    status: event.target.value as TransactionStatus,
+                  })
+                }
+              >
+                {transactionStatusOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
 
-          <select
-            className="select"
-            value={form.status}
-            onChange={(e) =>
-              setForm({
-                ...form,
-                status: e.target.value as TransactionStatus,
-              })
-            }
-          >
-            {transactionStatusOptions.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </div>
+            <label>
+              Fecha real
+              <input
+                className="input"
+                type="date"
+                value={form.realDate}
+                onChange={(event) =>
+                  setForm({
+                    ...form,
+                    realDate: event.target.value,
+                  })
+                }
+              />
+            </label>
 
-        <div className="form-row">
-          <input
-            className="input"
-            type="date"
-            value={form.realDate}
-            onChange={(e) =>
-              setForm({
-                ...form,
-                realDate: e.target.value,
-              })
-            }
-          />
+            <label>
+              Fecha de presupuesto
+              <input
+                className="input"
+                type="date"
+                value={form.budgetDate}
+                onChange={(event) =>
+                  setForm({
+                    ...form,
+                    budgetDate: event.target.value,
+                  })
+                }
+              />
+            </label>
 
-          <input
-            className="input"
-            type="date"
-            value={form.budgetDate}
-            onChange={(e) =>
-              setForm({
-                ...form,
-                budgetDate: e.target.value,
-              })
-            }
-          />
+            <label>
+              Monto
+              <input
+                className="input"
+                type="number"
+                min={0}
+                value={form.amount}
+                onChange={(event) =>
+                  setForm({
+                    ...form,
+                    amount: Number(event.target.value),
+                  })
+                }
+              />
+            </label>
 
-          <input
-            className="input"
-            type="number"
-            min={0}
-            value={form.amount}
-            onChange={(e) =>
-              setForm({
-                ...form,
-                amount: Number(e.target.value),
-              })
-            }
-          />
+            <label className="form-field-wide">
+              Descripción
+              <input
+                className="input"
+                value={form.description}
+                placeholder="Ej: supermercado, sueldo, alquiler"
+                onChange={(event) =>
+                  setForm({
+                    ...form,
+                    description: event.target.value,
+                  })
+                }
+              />
+            </label>
+          </div>
 
-          <input
-            className="input"
-            value={form.description}
-            placeholder="Descripción"
-            onChange={(e) =>
-              setForm({
-                ...form,
-                description: e.target.value,
-              })
-            }
-          />
+          <div className="form-actions">
+            <button
+              className="button-primary"
+              onClick={() => createTransactionMutation.mutate()}
+              disabled={!canSave}
+            >
+              {createTransactionMutation.isPending ? 'Guardando...' : 'Guardar movimiento'}
+            </button>
 
-          <button
-            className="button-primary"
-            onClick={() => createTransactionMutation.mutate()}
-            disabled={!canSave || createTransactionMutation.isPending}
-          >
-            Guardar
-          </button>
-        </div>
+            {!canSave && (
+              <span className="muted">
+                Completá cuenta, categoría, monto y fechas para guardar.
+              </span>
+            )}
+          </div>
 
-        <table className="table">
-          <thead>
-            <tr>
-              <th>Fecha real</th>
-              <th>Fecha presupuesto</th>
-              <th>Tipo</th>
-              <th>Cuenta</th>
-              <th>Categoría</th>
-              <th>Monto</th>
-              <th>Estado</th>
-              <th>Descripción</th>
-              <th></th>
-            </tr>
-          </thead>
+          {createTransactionMutation.isError && (
+            <p className="error-box">
+              No se pudo guardar el movimiento. Revisá los datos ingresados.
+            </p>
+          )}
+        </section>
 
-          <tbody>
-            {transactionsQuery.data?.map((transaction: MoneyTransaction) => (
-              <tr key={transaction.id}>
-                <td>{transaction.realDate}</td>
-                <td>{transaction.budgetDate}</td>
+        <section className="card">
+          <div className="section-title">
+            <div>
+              <h2>Movimientos del período</h2>
+              <p className="muted">
+                {transactions.length} movimiento{transactions.length === 1 ? '' : 's'} registrado
+                {transactions.length === 1 ? '' : 's'}.
+              </p>
+            </div>
+          </div>
 
-                <td>
-                  {labelOrValue(
-                    movementTypeLabels,
-                    transaction.movementType,
-                  )}
-                </td>
+          {transactionsQuery.isLoading && (
+            <p className="empty-state">Cargando movimientos...</p>
+          )}
 
-                <td>
-                  {nameById<Account>(
-                    accountsQuery.data,
-                    transaction.accountId,
-                  )}
-                </td>
+          {transactionsQuery.isError && (
+            <p className="error-box">
+              No se pudieron cargar los movimientos del período.
+            </p>
+          )}
 
-                <td>
-                  {nameById<Category>(
-                    categoriesQuery.data,
-                    transaction.categoryId,
-                  )}
-                </td>
+          {!transactionsQuery.isLoading &&
+            !transactionsQuery.isError &&
+            transactions.length === 0 && (
+              <p className="empty-state">
+                Todavía no hay movimientos cargados para este mes.
+              </p>
+            )}
 
-                <td>{formatMoney(transaction.amount, transaction.currency)}</td>
+          {transactions.length > 0 && (
+            <div className="table-wrapper">
+              <table className="table table-compact">
+                <thead>
+                  <tr>
+                    <th>Fecha</th>
+                    <th>Movimiento</th>
+                    <th>Cuenta</th>
+                    <th>Categoría</th>
+                    <th>Monto</th>
+                    <th>Estado</th>
+                    <th>Acciones</th>
+                  </tr>
+                </thead>
 
-                <td>
-                  {labelOrValue(
-                    transactionStatusLabels,
-                    transaction.status,
-                  )}
-                </td>
+                <tbody>
+                  {transactions.map((transaction) => {
+                    const accountName =
+                      accountsById.get(transaction.accountId)?.name ?? 'Cuenta no encontrada';
 
-                <td>{transaction.description}</td>
+                    const categoryName =
+                      categoriesById.get(transaction.categoryId)?.name ?? 'Categoría no encontrada';
 
-                <td>
-                  <button
-                    onClick={() =>
-                      updateTransactionMutation.mutate(transaction)
-                    }
-                  >
-                    {transaction.status === 'CONFIRMED'
-                      ? 'Pasar a pendiente'
-                      : 'Confirmar'}
-                  </button>
+                    return (
+                      <tr key={transaction.id}>
+                        <td>
+                          <strong>{formatDate(transaction.realDate)}</strong>
+                          <br />
+                          <span className="muted">
+                            Presupuesto: {formatDate(transaction.budgetDate)}
+                          </span>
+                        </td>
 
-                  <button
-                    className="button-danger"
-                    onClick={() =>
-                      window.confirm('¿Eliminar movimiento?') &&
-                      deleteTransactionMutation.mutate(transaction.id)
-                    }
-                  >
-                    Eliminar
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                        <td>
+                          <span className={getMovementBadgeClass(transaction.movementType)}>
+                            {labelOrValue(movementTypeLabels, transaction.movementType)}
+                          </span>
+
+                          <br />
+
+                          <span className="muted">
+                            {transaction.description || 'Sin descripción'}
+                          </span>
+                        </td>
+
+                        <td>{accountName}</td>
+                        <td>{categoryName}</td>
+
+                        <td className="amount-cell">
+                          {formatMoney(transaction.amount, transaction.currency)}
+                        </td>
+
+                        <td>
+                          <span className={getStatusBadgeClass(transaction.status)}>
+                            {labelOrValue(transactionStatusLabels, transaction.status)}
+                          </span>
+                        </td>
+
+                        <td>
+                          <div className="row-actions">
+                            <button
+                              className="button-secondary"
+                              disabled={updateTransactionMutation.isPending}
+                              onClick={() => updateTransactionMutation.mutate(transaction)}
+                            >
+                              {transaction.status === 'CONFIRMED'
+                                ? 'Pasar a pendiente'
+                                : 'Confirmar'}
+                            </button>
+
+                            <button
+                              className="button-danger"
+                              disabled={deleteTransactionMutation.isPending}
+                              onClick={() =>
+                                window.confirm('¿Eliminar este movimiento?') &&
+                                deleteTransactionMutation.mutate(transaction.id)
+                              }
+                            >
+                              Eliminar
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
       </div>
     </AppLayout>
   );
