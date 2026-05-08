@@ -37,7 +37,7 @@ public class HabitService {
 
     private void own(UUID userId, UUID profileId) {
         profileRepository.findByIdAndUserId(profileId, userId)
-                .orElseThrow(() -> new ForbiddenException("Profile does not belong to user"));
+                .orElseThrow(() -> new ForbiddenException("El perfil no pertenece al usuario actual."));
     }
 
     @Transactional(readOnly = true)
@@ -76,10 +76,10 @@ public class HabitService {
         own(userId, profileId);
 
         Habit habit = repo.findById(habitId)
-                .orElseThrow(() -> new NotFoundException("Habit not found"));
+                .orElseThrow(() -> new NotFoundException("Hábito no encontrado."));
 
         if (!habit.getProfileId().equals(profileId)) {
-            throw new ForbiddenException("Habit not in profile");
+            throw new ForbiddenException("El hábito no pertenece al perfil indicado.");
         }
 
         HabitCheckin checkin = checkRepo.findByHabitIdAndCheckinDate(habitId, date)
