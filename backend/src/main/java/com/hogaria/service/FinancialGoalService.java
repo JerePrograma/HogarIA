@@ -43,7 +43,7 @@ public class FinancialGoalService {
 
     private void own(UUID userId, UUID profileId) {
         profileRepository.findByIdAndUserId(profileId, userId)
-                .orElseThrow(() -> new ForbiddenException("Profile does not belong to user"));
+                .orElseThrow(() -> new ForbiddenException("El perfil no pertenece al usuario actual."));
     }
 
     @Transactional(readOnly = true)
@@ -90,10 +90,10 @@ public class FinancialGoalService {
         own(userId, profileId);
 
         FinancialGoal goal = repo.findById(id)
-                .orElseThrow(() -> new NotFoundException("Goal not found"));
+                .orElseThrow(() -> new NotFoundException("Objetivo no encontrado."));
 
         if (!goal.getProfileId().equals(profileId)) {
-            throw new ForbiddenException("Goal not in profile");
+            throw new ForbiddenException("El objetivo no pertenece al perfil indicado.");
         }
 
         repo.delete(goal);
@@ -104,7 +104,7 @@ public class FinancialGoalService {
         own(userId, profileId);
 
         if (months < 3 || months > 6) {
-            throw new IllegalArgumentException("Coverage months must be between 3 and 6");
+            throw new IllegalArgumentException("La cobertura debe estar entre 3 y 6 meses.");
         }
 
         List<MoneyTransaction> transactions = transactionRepository.findByProfileId(profileId);
