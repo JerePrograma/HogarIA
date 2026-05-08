@@ -191,3 +191,19 @@ export interface DashboardSummary {
   categoryBreakdown: CategoryBreakdown[];
   budgetSummary: BudgetSummary | null;
 }
+export type GoalType = 'EMERGENCY_FUND' | 'DEBT_PAYOFF' | 'SAVING_TARGET' | 'INVESTMENT' | 'BUSINESS' | 'TRAVEL' | 'EDUCATION' | 'OTHER';
+export type GoalStatus = 'ACTIVE' | 'PAUSED' | 'COMPLETED' | 'CANCELLED';
+export type HabitFrequency = 'DAILY' | 'WEEKLY' | 'MONTHLY';
+
+export interface FinancialGoal { id: string; profileId: string; name: string; goalType: GoalType; targetAmount: number; currentAmount: number; monthlyContribution?: number | null; targetDate?: string | null; status: GoalStatus; progressPercent?: number; monthsRemaining?: number | null; notes?: string | null; }
+export interface GoalSuggestion { averageMonthlyExpenses: number; targetMin: number; targetRecommended: number; suggestedType: GoalType; }
+export interface Habit { id: string; profileId: string; description: string; area?: string | null; frequency: HabitFrequency; active: boolean; }
+export interface HabitCheckin { id: string; habitId: string; checkinDate: string; completed: boolean; note?: string | null; }
+export interface HabitSummary { totalHabits: number; completedCheckins: number; expectedCheckins: number; completionRate: number; completionRateByArea: Record<string, number>; }
+export interface InflationIndex { id: string; year: number; month: number; categoryCode?: string | null; categoryName?: string | null; monthlyRate: number; source?: string | null; projection: boolean; }
+export interface InflationAccumulated { accumulatedRate: number; }
+export interface ExcelImportRow { id: string; sheetName: string; rowNumber?: number | null; concept?: string | null; month?: number | null; amount?: number | null; targetEntity?: string | null; status: string; errorMessage?: string | null; }
+export interface ExcelImportBatch { id: string; profileId: string; originalFileName?: string | null; status: string; detectedProfileType?: ProfileType | null; year?: number | null; currency: string; rows?: ExcelImportRow[]; }
+export interface BudgetExcelImportPreviewResponse { batchId: string; detectedSheets: string[]; missingSheets: string[]; rows: ExcelImportRow[]; warnings: string[]; errors: string[]; summary: Record<string, number>; }
+export interface BudgetExcelImportCommitRequest { createCategories: boolean; createAccounts: boolean; createBudgets: boolean; createTransactions: boolean; createGoals: boolean; createHabits: boolean; createInflation: boolean; updateExisting: boolean; ignoreInvalidRows: boolean; year: number; currency: string; profileType: ProfileType; }
+export interface BudgetExcelImportCommitResponse { batchId: string; status: string; importedByType: Record<string, number>; warnings: string[]; errors: string[]; }
