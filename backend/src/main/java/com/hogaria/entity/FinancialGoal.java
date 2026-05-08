@@ -1,0 +1,4 @@
+package com.hogaria.entity;
+import jakarta.persistence.*;import lombok.*;import org.hibernate.annotations.CreationTimestamp;import org.hibernate.annotations.UpdateTimestamp;import java.math.*;import java.time.*;import java.util.*;
+@Entity @Table(name="financial_goal") @Data @Builder @NoArgsConstructor @AllArgsConstructor
+public class FinancialGoal { @Id @GeneratedValue private UUID id; private UUID profileId; private String name; @Enumerated(EnumType.STRING) private GoalType goalType; private BigDecimal targetAmount; private BigDecimal currentAmount; private BigDecimal monthlyTargetAmount; private LocalDate targetDate; private Integer priority; @Enumerated(EnumType.STRING) private GoalStatus status; private String notes; @CreationTimestamp private LocalDateTime createdAt; @UpdateTimestamp private LocalDateTime updatedAt; }

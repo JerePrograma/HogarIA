@@ -6,6 +6,9 @@ import { CategoriesPage } from '../features/categories/CategoriesPage';
 import { TransactionsPage } from '../features/transactions/TransactionsPage';
 import { DashboardPage } from '../features/dashboard/DashboardPage';
 import { BudgetPage } from '../features/budgets/BudgetPage';
+import { GoalsPage } from '../features/goals/GoalsPage';
+import { HabitsPage } from '../features/habits/HabitsPage';
+import { InflationPage } from '../features/inflation/InflationPage';
 
 const DevGuard = ({ children }: { children: JSX.Element }) => localStorage.getItem('devUserId') ? children : <Navigate to='/dev-user' />;
 const ProfileGuard = ({ children }: { children: JSX.Element }) => {
@@ -23,5 +26,8 @@ export const AppRouter = () => <Routes>
   <Route path='/profiles/:profileId/categories' element={<DevGuard><ProfileGuard><CategoriesPage /></ProfileGuard></DevGuard>} />
   <Route path='/profiles/:profileId/transactions' element={<DevGuard><ProfileGuard><TransactionsPage /></ProfileGuard></DevGuard>} />
   <Route path='/profiles/:profileId/budgets' element={<DevGuard><ProfileGuard><BudgetPage /></ProfileGuard></DevGuard>} />
+  <Route path='/profiles/:profileId/goals' element={<DevGuard><ProfileGuard><GoalsPage /></ProfileGuard></DevGuard>} />
+  <Route path='/profiles/:profileId/habits' element={<DevGuard><ProfileGuard><HabitsPage /></ProfileGuard></DevGuard>} />
+  <Route path='/profiles/:profileId/inflation' element={<DevGuard><ProfileGuard><InflationPage /></ProfileGuard></DevGuard>} />
   <Route path='*' element={<Navigate to='/profiles' />} />
 </Routes>;
