@@ -1,0 +1,1 @@
+package com.hogaria.repository; import com.hogaria.entity.*; import org.springframework.data.jpa.repository.*; import java.util.*; public interface HabitRepository extends JpaRepository<Habit,UUID>{ List<Habit> findByProfileIdAndActiveTrue(UUID profileId); List<Habit> findByProfileId(UUID profileId);}

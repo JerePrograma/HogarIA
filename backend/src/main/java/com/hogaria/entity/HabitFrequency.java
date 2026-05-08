@@ -1,0 +1,1 @@
+package com.hogaria.entity; public enum HabitFrequency { DAILY, WEEKLY, MONTHLY }

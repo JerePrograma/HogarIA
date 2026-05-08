@@ -1,0 +1,1 @@
+package com.hogaria.repository; import com.hogaria.entity.*; import org.springframework.data.jpa.repository.*; import java.util.*; public interface FinancialGoalRepository extends JpaRepository<FinancialGoal,UUID>{ List<FinancialGoal> findByProfileId(UUID profileId); }
