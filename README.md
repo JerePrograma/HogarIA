@@ -10,15 +10,15 @@
 - Backend: http://localhost:8080
 - Swagger: http://localhost:8080/swagger-ui/index.html
 
-## Flujo UI
-1. Crear dev user.
-2. Crear perfil.
-3. Crear cuenta.
-4. Crear categorías.
-5. Crear movimientos.
-6. Crear presupuesto.
-7. Ver Budget vs Real.
-8. Ver Dashboard.
+## Flujo UI completo
+1. Crear o seleccionar dev user.
+2. Crear, editar, desactivar y entrar a perfiles.
+3. Crear, listar y desactivar cuentas.
+4. Crear, listar y desactivar categorías (con includeGlobal).
+5. Crear, listar, editar estado y eliminar movimientos por año/mes.
+6. Crear/obtener budget anual y mensual.
+7. Cargar budget por categoría y ver Budget vs Real.
+8. Ver dashboard mensual con resumen, 50/30/20 y desglose por categoría.
 
 ## Smoke test funcional UI
 1. Crear dev user.
@@ -31,7 +31,7 @@
 8. Verificar Budget vs Real: totalBudget 650.000, totalReal 680.000, Supermercado EXCEEDED, Sueldo no aparece como EXCEEDED.
 
 ## Limitaciones
-- `X-User-Id` temporal.
+- `X-User-Id` temporal (sin JWT real).
 - JWT pendiente.
 - Objetivos financieros pendientes.
 - Hábitos pendientes.
