@@ -1,1 +1,8 @@
-package com.hogaria.entity; public enum GoalStatus { ACTIVE, PAUSED, COMPLETED, CANCELLED }
+package com.hogaria.entity;
+
+public enum GoalStatus {
+    ACTIVE,
+    PAUSED,
+    COMPLETED,
+    CANCELLED
+}

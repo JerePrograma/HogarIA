@@ -9,13 +9,13 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Entity
-@Table(name = "habit")
+@Table(name = "excel_import_batch")
 @Getter
 @Setter
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class Habit {
+public class ExcelImportBatch {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
@@ -25,18 +25,30 @@ public class Habit {
     @Column(name = "profile_id", nullable = false)
     private UUID profileId;
 
-    @Column(name = "description", nullable = false, length = 255)
-    private String description;
-
-    @Column(name = "area", length = 80)
-    private String area;
+    @Column(name = "original_file_name", length = 255)
+    private String originalFileName;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "frequency", nullable = false, length = 20)
-    private HabitFrequency frequency;
+    @Column(name = "status", nullable = false, length = 30)
+    private ImportBatchStatus status;
 
-    @Column(name = "active", nullable = false)
-    private Boolean active;
+    @Column(name = "detected_profile_type", length = 30)
+    private String detectedProfileType;
+
+    @Column(name = "year")
+    private Integer year;
+
+    @Column(name = "currency", nullable = false, length = 3)
+    private String currency;
+
+    @Column(name = "summary_json", columnDefinition = "jsonb")
+    private String summaryJson;
+
+    @Column(name = "warnings_json", columnDefinition = "jsonb")
+    private String warningsJson;
+
+    @Column(name = "errors_json", columnDefinition = "jsonb")
+    private String errorsJson;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)

@@ -1,12 +1,178 @@
 package com.hogaria.service;
-import com.hogaria.dto.PlanningDtos.*;import com.hogaria.entity.*;import com.hogaria.exception.*;import com.hogaria.repository.*;import org.springframework.stereotype.Service;import java.math.*;import java.util.*;
-@Service public class FinancialGoalService {
-private final FinancialGoalRepository repo; private final FinancialProfileRepository pr; private final MoneyTransactionRepository tr; private final CategoryRepository cr;
-public FinancialGoalService(FinancialGoalRepository repo, FinancialProfileRepository pr, MoneyTransactionRepository tr, CategoryRepository cr){this.repo=repo;this.pr=pr;this.tr=tr;this.cr=cr;}
-private void own(UUID u,UUID p){pr.findByIdAndUserId(p,u).orElseThrow(()->new ForbiddenException("Profile does not belong to user"));}
-public List<FinancialGoalResponse> list(UUID u,UUID p){own(u,p); return repo.findByProfileId(p).stream().map(this::to).toList();}
-public FinancialGoalResponse create(UUID u,UUID p, FinancialGoalCreateRequest r){own(u,p); var g=repo.save(FinancialGoal.builder().profileId(p).name(r.name()).goalType(r.goalType()).targetAmount(r.targetAmount()).currentAmount(r.currentAmount()).monthlyTargetAmount(r.monthlyTargetAmount()).targetDate(r.targetDate()).priority(r.priority()).notes(r.notes()).status(r.currentAmount().compareTo(r.targetAmount())>=0?GoalStatus.COMPLETED:GoalStatus.ACTIVE).build()); return to(g);} 
-public void delete(UUID u,UUID p,UUID id){own(u,p); var g=repo.findById(id).orElseThrow(()->new NotFoundException("Goal not found")); if(!g.getProfileId().equals(p)) throw new ForbiddenException("Goal not in profile"); repo.delete(g);} 
-public FinancialGoalResponse emergencyFund(UUID u,UUID p,int months){own(u,p); var txs=tr.findByProfileId(p); var avg=txs.stream().filter(t->t.getMovementType()==MoneyTransaction.MovementType.EXPENSE||t.getMovementType()==MoneyTransaction.MovementType.SAVING).map(t->t.getAmount()).reduce(BigDecimal.ZERO,BigDecimal::add); var target=avg.multiply(BigDecimal.valueOf(months)); var g=repo.save(FinancialGoal.builder().profileId(p).name("Fondo de emergencia").goalType(GoalType.EMERGENCY_FUND).targetAmount(target.max(new BigDecimal("0.01"))).currentAmount(BigDecimal.ZERO).priority(1).status(GoalStatus.ACTIVE).build()); return to(g);} 
-private FinancialGoalResponse to(FinancialGoal g){var progress=g.getTargetAmount().signum()==0?BigDecimal.ZERO:g.getCurrentAmount().multiply(new BigDecimal("100")).divide(g.getTargetAmount(),2,RoundingMode.HALF_UP); return new FinancialGoalResponse(g.getId(),g.getProfileId(),g.getName(),g.getGoalType(),g.getTargetAmount(),g.getCurrentAmount(),progress,g.getStatus());}
+
+import com.hogaria.dto.PlanningDtos.EmergencyFundRequest;
+import com.hogaria.dto.PlanningDtos.FinancialGoalCreateRequest;
+import com.hogaria.dto.PlanningDtos.FinancialGoalResponse;
+import com.hogaria.entity.FinancialGoal;
+import com.hogaria.entity.GoalStatus;
+import com.hogaria.entity.GoalType;
+import com.hogaria.entity.MoneyTransaction;
+import com.hogaria.exception.ForbiddenException;
+import com.hogaria.exception.NotFoundException;
+import com.hogaria.repository.CategoryRepository;
+import com.hogaria.repository.FinancialGoalRepository;
+import com.hogaria.repository.FinancialProfileRepository;
+import com.hogaria.repository.MoneyTransactionRepository;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.util.List;
+import java.util.UUID;
+
+@Service
+public class FinancialGoalService {
+
+    private final FinancialGoalRepository repo;
+    private final FinancialProfileRepository profileRepository;
+    private final MoneyTransactionRepository transactionRepository;
+    private final CategoryRepository categoryRepository;
+
+    public FinancialGoalService(
+            FinancialGoalRepository repo,
+            FinancialProfileRepository profileRepository,
+            MoneyTransactionRepository transactionRepository,
+            CategoryRepository categoryRepository
+    ) {
+        this.repo = repo;
+        this.profileRepository = profileRepository;
+        this.transactionRepository = transactionRepository;
+        this.categoryRepository = categoryRepository;
+    }
+
+    private void own(UUID userId, UUID profileId) {
+        profileRepository.findByIdAndUserId(profileId, userId)
+                .orElseThrow(() -> new ForbiddenException("Profile does not belong to user"));
+    }
+
+    @Transactional(readOnly = true)
+    public List<FinancialGoalResponse> list(UUID userId, UUID profileId) {
+        own(userId, profileId);
+
+        return repo.findByProfileId(profileId)
+                .stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
+    @Transactional
+    public FinancialGoalResponse create(UUID userId, UUID profileId, FinancialGoalCreateRequest request) {
+        own(userId, profileId);
+
+        BigDecimal currentAmount = request.currentAmount() != null
+                ? request.currentAmount()
+                : BigDecimal.ZERO;
+
+        GoalStatus status = request.status() != null
+                ? request.status()
+                : currentAmount.compareTo(request.targetAmount()) >= 0
+                  ? GoalStatus.COMPLETED
+                  : GoalStatus.ACTIVE;
+
+        FinancialGoal goal = FinancialGoal.builder()
+                .profileId(profileId)
+                .name(request.name())
+                .goalType(request.goalType())
+                .targetAmount(request.targetAmount())
+                .currentAmount(currentAmount)
+                .monthlyContribution(request.monthlyContribution())
+                .targetDate(request.targetDate())
+                .status(status)
+                .notes(request.notes())
+                .build();
+
+        return toResponse(repo.save(goal));
+    }
+
+    @Transactional
+    public void delete(UUID userId, UUID profileId, UUID id) {
+        own(userId, profileId);
+
+        FinancialGoal goal = repo.findById(id)
+                .orElseThrow(() -> new NotFoundException("Goal not found"));
+
+        if (!goal.getProfileId().equals(profileId)) {
+            throw new ForbiddenException("Goal not in profile");
+        }
+
+        repo.delete(goal);
+    }
+
+    @Transactional
+    public FinancialGoalResponse emergencyFund(UUID userId, UUID profileId, int months) {
+        own(userId, profileId);
+
+        if (months < 3 || months > 6) {
+            throw new IllegalArgumentException("Coverage months must be between 3 and 6");
+        }
+
+        List<MoneyTransaction> transactions = transactionRepository.findByProfileId(profileId);
+
+        BigDecimal totalExpenses = transactions.stream()
+                .filter(t -> t.getMovementType() == MoneyTransaction.MovementType.EXPENSE)
+                .map(MoneyTransaction::getAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        BigDecimal target = totalExpenses.multiply(BigDecimal.valueOf(months));
+
+        if (target.compareTo(BigDecimal.ZERO) <= 0) {
+            target = new BigDecimal("0.01");
+        }
+
+        FinancialGoal goal = FinancialGoal.builder()
+                .profileId(profileId)
+                .name("Fondo de emergencia")
+                .goalType(GoalType.EMERGENCY_FUND)
+                .targetAmount(target)
+                .currentAmount(BigDecimal.ZERO)
+                .monthlyContribution(null)
+                .status(GoalStatus.ACTIVE)
+                .notes("Objetivo sugerido automáticamente para cubrir " + months + " meses de gastos.")
+                .build();
+
+        return toResponse(repo.save(goal));
+    }
+
+    private FinancialGoalResponse toResponse(FinancialGoal goal) {
+        BigDecimal progressPercent = goal.getTargetAmount() == null
+                || goal.getTargetAmount().compareTo(BigDecimal.ZERO) == 0
+                ? BigDecimal.ZERO
+                : goal.getCurrentAmount()
+                  .multiply(new BigDecimal("100"))
+                  .divide(goal.getTargetAmount(), 2, RoundingMode.HALF_UP);
+
+        Integer monthsRemaining = null;
+
+        if (
+                goal.getMonthlyContribution() != null
+                        && goal.getMonthlyContribution().compareTo(BigDecimal.ZERO) > 0
+                        && goal.getTargetAmount() != null
+                        && goal.getCurrentAmount() != null
+                        && goal.getTargetAmount().compareTo(goal.getCurrentAmount()) > 0
+        ) {
+            BigDecimal pending = goal.getTargetAmount().subtract(goal.getCurrentAmount());
+
+            monthsRemaining = pending
+                    .divide(goal.getMonthlyContribution(), 0, RoundingMode.CEILING)
+                    .intValue();
+        }
+
+        return new FinancialGoalResponse(
+                goal.getId(),
+                goal.getProfileId(),
+                goal.getName(),
+                goal.getGoalType(),
+                goal.getTargetAmount(),
+                goal.getCurrentAmount(),
+                goal.getMonthlyContribution(),
+                goal.getTargetDate(),
+                goal.getStatus(),
+                goal.getNotes(),
+                progressPercent,
+                monthsRemaining,
+                goal.getCreatedAt(),
+                goal.getUpdatedAt()
+        );
+    }
 }

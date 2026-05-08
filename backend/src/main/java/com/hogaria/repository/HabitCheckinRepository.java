@@ -1,1 +1,13 @@
-package com.hogaria.repository; import com.hogaria.entity.*; import org.springframework.data.jpa.repository.*; import java.time.*; import java.util.*; public interface HabitCheckinRepository extends JpaRepository<HabitCheckin,UUID>{ Optional<HabitCheckin> findByHabitIdAndCheckDate(UUID habitId, LocalDate checkDate); List<HabitCheckin> findByHabitIdInAndCheckDateBetween(Collection<UUID> habitIds, LocalDate from, LocalDate to);}
+package com.hogaria.repository;
+
+import com.hogaria.entity.HabitCheckin;
+import org.springframework.data.jpa.repository.JpaRepository;
+
+import java.time.LocalDate;
+import java.util.Optional;
+import java.util.UUID;
+
+public interface HabitCheckinRepository extends JpaRepository<HabitCheckin, UUID> {
+
+    Optional<HabitCheckin> findByHabitIdAndCheckinDate(UUID habitId, LocalDate checkinDate);
+}
