@@ -1,0 +1,2 @@
+package com.hogaria.entity;import jakarta.persistence.*;import lombok.*;import org.hibernate.annotations.CreationTimestamp;import org.hibernate.annotations.UpdateTimestamp;import java.time.*;import java.util.*;
+@Entity @Table(name="habit_checkin") @Data @Builder @NoArgsConstructor @AllArgsConstructor public class HabitCheckin { @Id @GeneratedValue private UUID id; private UUID habitId; private LocalDate checkDate; private Boolean done; private String notes; @CreationTimestamp private LocalDateTime createdAt; @UpdateTimestamp private LocalDateTime updatedAt; }

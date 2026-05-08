@@ -36,3 +36,18 @@
 - Objetivos financieros pendientes.
 - Hábitos pendientes.
 - Inflación pendiente.
+
+## Nuevas capacidades (v4)
+- Objetivos financieros por perfil con cálculo de progreso y creación asistida de fondo de emergencia.
+- Hábitos financieros por perfil con check-ins diarios/semanales/mensuales.
+- Índices de inflación con cálculo de inflación acumulada por rango.
+- Migración Flyway `V4__financial_planning_extensions.sql` con tablas: `financial_goal`, `habit`, `habit_checkin`, `inflation_index`.
+
+### Endpoints nuevos
+- `GET/POST /api/profiles/{profileId}/goals`
+- `DELETE /api/profiles/{profileId}/goals/{goalId}`
+- `POST /api/profiles/{profileId}/goals/emergency-fund`
+- `GET/POST /api/profiles/{profileId}/habits`
+- `PUT /api/profiles/{profileId}/habits/{habitId}/checkins/{date}`
+- `GET/POST /api/inflation`
+- `GET /api/inflation/accumulated`

@@ -1,0 +1,1 @@
+package com.hogaria.repository; import com.hogaria.entity.*; import org.springframework.data.jpa.repository.*; import java.util.*; public interface InflationIndexRepository extends JpaRepository<InflationIndex,UUID>{ List<InflationIndex> findByYearOrderByMonthAsc(Integer year); }

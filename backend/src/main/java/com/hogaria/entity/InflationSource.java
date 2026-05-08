@@ -1,0 +1,1 @@
+package com.hogaria.entity; public enum InflationSource { MANUAL, INDEC, BCRA_REM, EXCEL }

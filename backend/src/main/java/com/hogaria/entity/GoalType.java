@@ -1,0 +1,1 @@
+package com.hogaria.entity; public enum GoalType { EMERGENCY_FUND, DEBT_FREE, TRAVEL, CAR, HOME, EDUCATION, INVESTMENT, BUSINESS, OTHER }
