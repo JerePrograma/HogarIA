@@ -1,1 +1,30 @@
-import {http} from './http'; export const listAccounts=(pid:string)=>http.get(`/api/profiles/${pid}/accounts`).then(r=>r.data); export const createAccount=(pid:string,p:unknown)=>http.post(`/api/profiles/${pid}/accounts`,p).then(r=>r.data); export const getAccount=(id:string)=>http.get(`/api/accounts/${id}`).then(r=>r.data); export const updateAccount=(id:string,p:unknown)=>http.put(`/api/accounts/${id}`,p).then(r=>r.data); export const deleteAccount=(id:string)=>http.delete(`/api/accounts/${id}`).then(r=>r.data);
+import { http } from './http';
+import type { Account, AccountType } from '../domain/types';
+
+export interface AccountCreateRequest {
+  name: string;
+  accountType: AccountType;
+  currency: string;
+  creditLimit?: number | null;
+  statementCloseDay?: number | null;
+  dueDay?: number | null;
+}
+
+export interface AccountUpdateRequest extends AccountCreateRequest {
+  active?: boolean;
+}
+
+export const listAccounts = (profileId: string): Promise<Account[]> =>
+  http.get<Account[]>(`/api/profiles/${profileId}/accounts`).then((response) => response.data);
+
+export const createAccount = (profileId: string, payload: AccountCreateRequest): Promise<Account> =>
+  http.post<Account>(`/api/profiles/${profileId}/accounts`, payload).then((response) => response.data);
+
+export const getAccount = (id: string): Promise<Account> =>
+  http.get<Account>(`/api/accounts/${id}`).then((response) => response.data);
+
+export const updateAccount = (id: string, payload: AccountUpdateRequest): Promise<Account> =>
+  http.put<Account>(`/api/accounts/${id}`, payload).then((response) => response.data);
+
+export const deleteAccount = (id: string): Promise<void> =>
+  http.delete<void>(`/api/accounts/${id}`).then((response) => response.data);
