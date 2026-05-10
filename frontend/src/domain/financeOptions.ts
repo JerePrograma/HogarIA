@@ -7,6 +7,10 @@ import {
   movementTypeLabels,
   profileTypeLabels,
   transactionStatusLabels,
+  monthlyPlanTypeLabels,
+  monthlyPlanPriorityLabels,
+  monthlyPlanStatusLabels,
+  monthlyPlanSourceLabels,
 } from './financeLabels';
 
 import type {
@@ -16,6 +20,10 @@ import type {
   MovementType,
   ProfileType,
   TransactionStatus,
+  MonthlyPlanItemType,
+  MonthlyPlanPriority,
+  MonthlyPlanStatus,
+  MonthlyPlanSource,
 } from './types';
 
 function toOptions<T extends string>(labels: Record<T, string>) {
@@ -32,3 +40,7 @@ export const categoryScopeOptions = toOptions<CategoryScope>(categoryScopeLabels
 export const movementTypeOptions = toOptions<MovementType>(movementTypeLabels);
 export const transactionStatusOptions =
   toOptions<TransactionStatus>(transactionStatusLabels);
+export const monthlyPlanTypeOptions = toOptions<MonthlyPlanItemType>(monthlyPlanTypeLabels);
+export const monthlyPlanPriorityOptions = toOptions<MonthlyPlanPriority>(monthlyPlanPriorityLabels);
+export const monthlyPlanStatusOptions = toOptions<MonthlyPlanStatus>(monthlyPlanStatusLabels);
+export const monthlyPlanSourceOptions = toOptions<MonthlyPlanSource>(monthlyPlanSourceLabels);

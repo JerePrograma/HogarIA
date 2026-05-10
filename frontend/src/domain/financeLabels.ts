@@ -11,6 +11,10 @@ import type {
   ProfileType,
   TransactionOrigin,
   TransactionStatus,
+  MonthlyPlanItemType,
+  MonthlyPlanPriority,
+  MonthlyPlanStatus,
+  MonthlyPlanSource,
 } from './types';
 
 export const profileTypeLabels: Record<ProfileType, string> = {
@@ -138,6 +142,12 @@ export const inflationProjectionLabels = {
   projected: 'Proyectado',
 };
 
+
+export const monthlyPlanTypeLabels: Record<MonthlyPlanItemType, string> = { INCOME:'Ingreso', EXPENSE:'Egreso', SAVING:'Ahorro', DEBT:'Deuda', TRANSFER:'Transferencia', RECOVERY:'Recupero', TODO:'Pendiente' };
+export const monthlyPlanPriorityLabels: Record<MonthlyPlanPriority, string> = { ESSENTIAL:'Esencial', IMPORTANT:'Importante', OPTIONAL:'Opcional' };
+export const monthlyPlanStatusLabels: Record<MonthlyPlanStatus, string> = { DRAFT:'Borrador', ESTIMATED:'Estimado', SCHEDULED:'Programado', DUE:'Por vencer', PAID:'Pagado', COLLECTED:'Cobrado', CANCELLED:'Cancelado' };
+export const monthlyPlanSourceLabels: Record<MonthlyPlanSource, string> = { MANUAL:'Manual', IMPORT:'Importado', QUICK_CAPTURE:'Captura rápida', SYSTEM:'Sistema' };
+
 export const monthLabels: Record<number, string> = {
   1: 'Enero',
   2: 'Febrero',
@@ -158,5 +168,5 @@ export function labelOrValue<T extends string>(
   value: T | string | null | undefined,
 ): string {
   if (!value) return '-';
-  return labels[value] ?? value;
+  return (labels as Record<string,string>)[value] ?? value;
 }
