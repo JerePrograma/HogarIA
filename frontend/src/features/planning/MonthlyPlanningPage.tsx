@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useParams } from 'react-router-dom';
+import { getApiErrorMessage } from '../../api/http';
 import { listAccounts } from '../../api/accountsApi';
 import { listCategories } from '../../api/categoriesApi';
 import { commitMonthlyPlanQuickCapture, previewMonthlyPlanQuickCapture } from '../../api/monthlyPlanQuickCaptureApi';
@@ -20,6 +21,7 @@ export function MonthlyPlanningPage() {
   const [quickText, setQuickText] = useState('');
   const [quickPreview, setQuickPreview] = useState<QuickCapturePreviewResponse | null>(null);
   const [quickForm, setQuickForm] = useState<MonthlyPlanItemCreatePayload | null>(null);
+  const [quickError, setQuickError] = useState('');
   const [form, setForm] = useState<MonthlyPlanItemCreatePayload>({ type: 'EXPENSE', title: '', periodYear: year, periodMonth: month, priority: 'IMPORTANT', status: 'ESTIMATED', currency: 'ARS' });
   const inv = () => { qc.invalidateQueries({ queryKey: ['planning', profileId, year, month] }); qc.invalidateQueries({ queryKey: ['dashboard', profileId, year, month] }); qc.invalidateQueries({ queryKey: ['tx', profileId, year, month] }); };
   const q = useQuery<MonthlyPlanSummary>({ queryKey: ['planning', profileId, year, month], queryFn: () => getMonthlyPlan(profileId, year, month), enabled: Boolean(profileId) });
@@ -29,14 +31,22 @@ export function MonthlyPlanningPage() {
   const del = useMutation({ mutationFn: (id: string) => deleteMonthlyPlanItem(profileId, id), onSuccess: inv });
   const conv = useMutation({ mutationFn: (id: string) => convertMonthlyPlanItemToTransaction(profileId, id), onSuccess: inv });
   const cancel = useMutation({ mutationFn: (id: string) => updateMonthlyPlanItem(profileId, id, { status: 'CANCELLED' }), onSuccess: inv });
-  const quickPreviewMutation = useMutation({ mutationFn: () => previewMonthlyPlanQuickCapture(profileId, { rawText: quickText, defaultYear: year, defaultMonth: month, defaultCurrency: 'ARS' }), onSuccess: (r) => { setQuickPreview(r); setQuickForm(r.parsed); } });
-  const quickCommitMutation = useMutation({ mutationFn: () => commitMonthlyPlanQuickCapture(profileId, { rawText: quickText, payload: quickForm as MonthlyPlanItemCreatePayload }), onSuccess: () => { setQuickText(''); setQuickPreview(null); setQuickForm(null); inv(); } });
+  const quickPreviewMutation = useMutation({ mutationFn: () => previewMonthlyPlanQuickCapture(profileId, { rawText: quickText, defaultYear: year, defaultMonth: month, defaultCurrency: 'ARS' }), onSuccess: (r) => { setQuickError(''); setQuickPreview(r); setQuickForm(r.parsed); }, onError: (e) => { setQuickPreview(null); setQuickForm(null); setQuickError(getApiErrorMessage(e)); } });
+  const quickCommitMutation = useMutation({ mutationFn: () => commitMonthlyPlanQuickCapture(profileId, { rawText: quickText, payload: quickForm as MonthlyPlanItemCreatePayload }), onSuccess: () => {
+    const py = quickForm?.periodYear;
+    const pm = quickForm?.periodMonth;
+    if (py != null && pm != null) {
+      qc.invalidateQueries({ queryKey: ['planning', profileId, py, pm] });
+      qc.invalidateQueries({ queryKey: ['dashboard', profileId, py, pm] });
+    }
+    setQuickText(''); setQuickPreview(null); setQuickForm(null); inv(); } });
   const canConvert = (i: MonthlyPlanItem) => ((i.amount != null) || (i.minAmount != null && i.minAmount === i.maxAmount)) && i.accountId && i.categoryId && i.type !== 'TODO' && i.status !== 'CANCELLED' && !i.transactionId;
 
   return <AppLayout><div className='page-stack'><section className='card'><h1>Planificación mensual</h1><div className='form-row'><input className='input' type='number' value={year} onChange={e => setYear(Number(e.target.value))} /><input className='input' type='number' min={1} max={12} value={month} onChange={e => setMonth(Number(e.target.value))} /></div></section>
     <section className='card'><h3>Captura rápida</h3><textarea className='input' placeholder='Ej: 05/06 95000 Juliana cuota 3/5' value={quickText} onChange={e => setQuickText(e.target.value)} /><div className='form-row'><button className='button-primary' onClick={() => quickPreviewMutation.mutate()} disabled={!quickText.trim()}>Analizar</button>{quickPreview && <button className='button-secondary' onClick={() => { setQuickPreview(null); setQuickForm(null); }}>Descartar</button>}</div>
+      {quickError && <p className='error-box'>{quickError}</p>}
       {quickPreview && quickForm && <div className='page-stack'>
-        <p><b>Confianza:</b> {quickPreview.confidence}{quickPreview.confidence === 'LOW' ? ' · Revisá bien antes de confirmar: la captura tiene baja confianza.' : ''}</p>
+        <p><b>Confianza:</b> {quickPreview.confidence === 'HIGH' ? 'Alta' : quickPreview.confidence === 'MEDIUM' ? 'Media' : 'Baja'}{quickPreview.confidence === 'LOW' ? ' · Revisá bien antes de confirmar: la captura tiene baja confianza.' : ''}</p>
         {quickPreview.warnings.length > 0 && <ul>{quickPreview.warnings.map((w, i) => <li key={i}>{w}</li>)}</ul>}
         <div className='form-grid'>
           <select className='select' value={quickForm.type} onChange={e => setQuickForm({ ...quickForm, type: e.target.value as MonthlyPlanItem['type'] })}>{monthlyPlanTypeOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}</select>
@@ -56,7 +66,7 @@ export function MonthlyPlanningPage() {
           <select className='select' value={quickForm.categoryId ?? ''} onChange={e => setQuickForm({ ...quickForm, categoryId: e.target.value || null })}><option value=''>Categoría opcional</option>{(cq.data ?? []).map((x: Category) => <option key={x.id} value={x.id}>{x.name}</option>)}</select>
         </div>
         <p>Monto detectado: {quickForm.amount != null ? formatMoney(quickForm.amount) : (quickForm.minAmount != null || quickForm.maxAmount != null) ? `${formatMoney(Number(quickForm.minAmount ?? 0))} - ${formatMoney(Number(quickForm.maxAmount ?? 0))}` : 'Sin monto'}</p>
-        <button className='button-primary' onClick={() => quickCommitMutation.mutate()} disabled={!quickForm.title.trim()}>Confirmar y crear</button>
+        <button className='button-primary' onClick={() => quickCommitMutation.mutate()} disabled={!quickForm || !quickForm.title.trim()}>Confirmar y crear</button>
       </div>}
     </section>
 <section className='grid'>{[['Ingresos estimados',q.data?.totalIncomeMin,q.data?.totalIncomeMax],['Egresos estimados',q.data?.totalExpenseMin,q.data?.totalExpenseMax],['Recuperos esperados',q.data?.totalRecoveryMin,q.data?.totalRecoveryMax],['Neto proyectado',q.data?.netMin,q.data?.netMax]].map((k)=><div className='card metric-card' key={k[0]}><b>{k[0]} min/max</b><div>{formatMoney(Number(k[1]??0))} / {formatMoney(Number(k[2]??0))}</div></div>)}<div className='card metric-card'><b>Pendiente de cobro</b><div>{formatMoney(Number(q.data?.pendingIncome??0))}</div></div><div className='card metric-card'><b>Pendiente de pago</b><div>{formatMoney(Number(q.data?.pendingExpense??0))}</div></div><div className='card metric-card'><b>Sin cotizar</b><div>{q.data?.unpricedCount??0}</div></div><div className='card metric-card'><b>Próximos 7 días</b><div>{q.data?.dueNext7DaysCount??0}</div></div></section>
