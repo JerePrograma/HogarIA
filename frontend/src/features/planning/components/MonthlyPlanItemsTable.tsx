@@ -4,6 +4,8 @@ import type { Account, Category, MonthlyPlanItem, MonthlyPlanItemUpdatePayload, 
 import { canConvertPlanItem, formatPlanNet, isCancelledPlanItem, isDonePlanItem, isPendingPlanItem } from '../planningUtils';
 import { StatusBadge } from '../../../components/ui/StatusBadge';
 import { getApiErrorMessage } from '../../../api/http';
+import { getMonthlyPlanSuggestions } from '../../../api/monthlyPlanSuggestionsApi';
+import type { PlanningSuggestionResponse } from '../../../domain/types';
 
 type Props = {
   items: MonthlyPlanItem[];
@@ -17,6 +19,7 @@ type Props = {
   onMarkCollected: (id: string) => void;
   pendingActionId?: string | null;
   actionError?: string | null;
+  profileId: string;
 };
 
 type EditMode = 'FULL' | 'AMOUNT' | 'CONVERT';
@@ -72,7 +75,8 @@ export function MonthlyPlanItemsTable({
   onMarkPaid,
   onMarkCollected,
   pendingActionId,
-  actionError
+  actionError,
+  profileId
 }: Props) {
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [typeFilter, setTypeFilter] = useState('ALL');
@@ -82,6 +86,7 @@ export function MonthlyPlanItemsTable({
   const [form, setForm] = useState<EditForm | null>(null);
   const [editError, setEditError] = useState<string | null>(null);
   const [savingId, setSavingId] = useState<string | null>(null);
+  const [suggestion, setSuggestion] = useState<PlanningSuggestionResponse | null>(null);
 
   const filtered = useMemo(
     () =>
@@ -111,6 +116,18 @@ export function MonthlyPlanItemsTable({
     setEditMode(mode);
     setForm(toForm(item));
     setEditError(null);
+    setSuggestion(null);
+  };
+
+
+  const loadSuggestion = async (item: MonthlyPlanItem) => {
+    const target = form ?? toForm(item);
+    try {
+      const res = await getMonthlyPlanSuggestions(profileId, { type: item.type, title: target.title, counterparty: target.counterparty || null, amount: parseNullableNumber(target.amount), minAmount: parseNullableNumber(target.minAmount), maxAmount: parseNullableNumber(target.maxAmount), expectedRecoveryAmount: parseNullableNumber(target.expectedRecoveryAmount), expectedRecoveryPercent: parseNullableNumber(target.expectedRecoveryPercent) });
+      setSuggestion(res);
+    } catch {
+      setEditError('No se pudo obtener sugerencias en este momento.');
+    }
   };
 
   const saveEdit = async (item: MonthlyPlanItem) => {
@@ -248,8 +265,9 @@ export function MonthlyPlanItemsTable({
                           <select className='select' value={form.categoryId} onChange={(e) => setForm({ ...form, categoryId: e.target.value })}><option value=''>Sin categoría</option>{categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
                           {editMode === 'FULL' ? <><select className='select' value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value as MonthlyPlanStatus })}>{Object.entries(monthlyPlanStatusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select><select className='select' value={form.priority} onChange={(e) => setForm({ ...form, priority: e.target.value as MonthlyPlanPriority })}>{Object.entries(monthlyPlanPriorityLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></> : null}
                         </div>
-                        {editError ? <p className='compact-muted' role='alert'>{editError}</p> : null}
+                        {editError ? <p className='compact-muted' role='alert'>{editError}</p> : null}{suggestion ? <div><p>{suggestion.confidence === 'NONE' ? 'No encontré historial suficiente para sugerir cuenta o categoría.' : 'Sugerencias disponibles.'}</p>{suggestion.confidence !== 'NONE' ? <button className='button-secondary' onClick={() => setForm({ ...form, accountId: suggestion.accountSuggestion?.id ?? form.accountId, categoryId: suggestion.categorySuggestion?.id ?? form.categoryId })}>Aplicar</button> : null}</div> : null}
                         <div className='table-actions'>
+                          <button className='button-secondary' onClick={() => void loadSuggestion(i)} disabled={savingId === i.id}>Sugerir cuenta/categoría</button>
                           <button className='button-primary' onClick={() => void saveEdit(i)} disabled={savingId === i.id}>Guardar</button>
                           <button className='button-secondary' onClick={() => { setEditingId(null); setForm(null); setEditError(null); }} disabled={savingId === i.id}>Cancelar</button>
                         </div>
