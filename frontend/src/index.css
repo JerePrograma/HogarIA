@@ -127,3 +127,14 @@ button:hover:not(:disabled), .button-primary:hover:not(:disabled), .button-secon
 .table-actions { display: flex; flex-wrap: wrap; gap: 6px; }
 .compact-muted { color: #6b7280; font-size: 12px; }
 .section-title { margin: 0 0 8px; }
+.guide-steps { display: grid; grid-template-columns: repeat(auto-fit,minmax(210px,1fr)); gap: 10px; }
+.guide-step { padding: 10px; border: 1px solid var(--color-border); border-radius: var(--radius-md); }
+.guide-step-active { border-color: var(--color-primary); background: #f0fdfa; }
+.quick-examples { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+.checklist-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(180px,1fr)); gap: 10px; }
+.checklist-item { border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: 10px; display: grid; gap: 8px; }
+.missing-badge { display: inline-flex; margin: 2px; padding: 3px 8px; background: #e2e8f0; border-radius: 999px; font-size: 12px; font-weight: 700; }
+.next-action-card { border-left: 4px solid var(--color-primary); }
+.secondary-text { color: var(--color-text-muted); font-size: 13px; margin: 0; }
+.action-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.row-expanded-panel { display: flex; flex-wrap: wrap; gap: 8px; padding: 8px; background: #f8fafc; border: 1px dashed var(--color-border-strong); border-radius: var(--radius-md); }

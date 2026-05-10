@@ -39,6 +39,36 @@ export function canConvertPlanItem(item) {
     const hasExactAmount = item.amount != null || (item.minAmount != null && item.maxAmount != null && item.minAmount === item.maxAmount);
     return hasExactAmount && Boolean(item.accountId) && Boolean(item.categoryId) && item.type !== 'TODO' && item.status !== 'CANCELLED' && !item.transactionId;
 }
+export function getPlanItemNextAction(item) {
+    const missingAmount = item.amount == null && item.minAmount == null && item.maxAmount == null;
+    if (missingAmount && item.status !== 'CANCELLED')
+        return 'COMPLETE_AMOUNT';
+    if (canConvertPlanItem(item))
+        return 'CONVERT';
+    if (['INCOME', 'RECOVERY'].includes(item.type) && !['COLLECTED', 'CANCELLED'].includes(item.status))
+        return 'MARK_COLLECTED';
+    if (['EXPENSE', 'DEBT', 'SAVING', 'TRANSFER'].includes(item.type) && !['PAID', 'CANCELLED'].includes(item.status))
+        return 'MARK_PAID';
+    if (!item.accountId || !item.categoryId || item.amount == null)
+        return 'PREPARE_CONVERSION';
+    return 'EDIT';
+}
+export function getPlanItemMissingLabels(item) {
+    if (item.status === 'CANCELLED')
+        return ['Cancelado'];
+    if (item.transactionId)
+        return ['Convertido'];
+    const labels = [];
+    if (item.amount == null && item.minAmount == null && item.maxAmount == null)
+        labels.push('Sin monto');
+    if (!item.accountId)
+        labels.push('Sin cuenta');
+    if (!item.categoryId)
+        labels.push('Sin categoría');
+    if (labels.length === 0 && canConvertPlanItem(item))
+        labels.push('Listo para convertir');
+    return labels;
+}
 export function confidenceMeta(confidence) {
     if (confidence === 'HIGH')
         return { label: 'Alta', className: 'badge-confidence-high' };
