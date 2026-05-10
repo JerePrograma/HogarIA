@@ -182,6 +182,22 @@ export interface CategoryBreakdown {
   movementCount: number;
 }
 
+export type FinancialRiskLevel = 'OK' | 'WATCH' | 'RISK' | 'CRITICAL';
+
+export interface PlanningDashboardSummary {
+  totalIncomeMin: number; totalIncomeMax: number; totalExpenseMin: number; totalExpenseMax: number;
+  totalRecoveryMin: number; totalRecoveryMax: number; projectedNetMin: number; projectedNetMax: number;
+  pendingIncome: number; pendingExpense: number; unpricedCount: number; dueNext7DaysCount: number;
+  plannedItemsCount: number; cancelledItemsCount: number; convertedItemsCount: number;
+}
+
+export interface DashboardOperationalSummary {
+  confirmedIncome: number; confirmedExpenses: number; confirmedSavings: number; confirmedBalance: number;
+  projectedNetMin: number; projectedNetMax: number; deltaProjectedMinVsConfirmed: number; deltaProjectedMaxVsConfirmed: number;
+  pendingIncome: number; pendingExpense: number; expectedRecoveriesMin: number; expectedRecoveriesMax: number;
+  unpricedCount: number; dueNext7DaysCount: number; financialRiskLevel: FinancialRiskLevel; alerts: string[];
+}
+
 export interface DashboardSummary {
   monthlyBalance: MonthlyBalance;
   fiftyThirtyTwenty: FiftyThirtyTwenty;
@@ -190,6 +206,8 @@ export interface DashboardSummary {
   financialHealth: FinancialHealth;
   categoryBreakdown: CategoryBreakdown[];
   budgetSummary: BudgetSummary | null;
+  planningSummary: PlanningDashboardSummary | null;
+  operationalSummary: DashboardOperationalSummary | null;
 }
 export type GoalType = 'EMERGENCY_FUND' | 'DEBT_PAYOFF' | 'SAVING_TARGET' | 'INVESTMENT' | 'BUSINESS' | 'TRAVEL' | 'EDUCATION' | 'OTHER';
 export type GoalStatus = 'ACTIVE' | 'PAUSED' | 'COMPLETED' | 'CANCELLED';
