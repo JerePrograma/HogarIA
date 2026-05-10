@@ -1,11 +1,13 @@
 import { Fragment, useMemo, useState } from 'react';
 import { labelOrValue, monthlyPlanPriorityLabels, monthlyPlanStatusLabels, monthlyPlanTypeLabels } from '../../../domain/financeLabels';
 import type { Account, Category, MonthlyPlanItem, MonthlyPlanItemUpdatePayload, MonthlyPlanPriority, MonthlyPlanStatus } from '../../../domain/types';
-import { canConvertPlanItem, formatPlanNet, isCancelledPlanItem, isDonePlanItem, isPendingPlanItem } from '../planningUtils';
+import { canConvertPlanItem, formatPlanNet, getPlanItemMissingLabels, getPlanItemNextAction, isCancelledPlanItem, isDonePlanItem, isPendingPlanItem } from '../planningUtils';
 import { StatusBadge } from '../../../components/ui/StatusBadge';
 import { getApiErrorMessage } from '../../../api/http';
 import { getMonthlyPlanSuggestions } from '../../../api/monthlyPlanSuggestionsApi';
 import type { PlanningSuggestionResponse } from '../../../domain/types';
+
+export type TableFilterKey = 'UNPRICED' | 'MISSING_CLASSIFICATION' | 'READY_TO_CONVERT' | 'DUE_NEXT_7_DAYS' | 'ALL';
 
 type Props = {
   items: MonthlyPlanItem[];
@@ -20,6 +22,7 @@ type Props = {
   pendingActionId?: string | null;
   actionError?: string | null;
   profileId: string;
+  externalFilterKey?: TableFilterKey;
 };
 
 type EditMode = 'FULL' | 'AMOUNT' | 'CONVERT';
@@ -76,7 +79,8 @@ export function MonthlyPlanItemsTable({
   onMarkCollected,
   pendingActionId,
   actionError,
-  profileId
+  profileId,
+  externalFilterKey
 }: Props) {
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [typeFilter, setTypeFilter] = useState('ALL');
@@ -87,12 +91,14 @@ export function MonthlyPlanItemsTable({
   const [editError, setEditError] = useState<string | null>(null);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [suggestion, setSuggestion] = useState<PlanningSuggestionResponse | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const filtered = useMemo(
     () =>
       items
         .filter(
           (i) =>
+            (externalFilterKey === 'ALL' || !externalFilterKey || (externalFilterKey === 'UNPRICED' ? (i.amount == null && i.minAmount == null && i.maxAmount == null) : externalFilterKey === 'MISSING_CLASSIFICATION' ? (!i.transactionId && i.status !== 'CANCELLED' && (!i.accountId || !i.categoryId)) : externalFilterKey === 'READY_TO_CONVERT' ? canConvertPlanItem(i) : true)) &&
             (statusFilter === 'ALL' ||
               (statusFilter === 'PENDING'
                 ? isPendingPlanItem(i)
@@ -224,7 +230,7 @@ export function MonthlyPlanItemsTable({
       </div>
       {actionError ? <p className='compact-muted' role='alert'>{actionError}</p> : null}
       <table className='table'>
-        <thead><tr><th>Fecha</th><th>Título</th><th>Tipo</th><th>Neto</th><th>Estado</th><th>Prioridad</th><th>Acciones</th></tr></thead>
+        <thead><tr><th>Fecha</th><th>Título</th><th>Tipo</th><th>Neto</th><th>Estado</th><th>Prioridad</th><th>Falta</th><th>Acciones</th></tr></thead>
         <tbody>
           {filtered.map((i) => {
             const canConvert = canConvertPlanItem(i);
@@ -238,19 +244,21 @@ export function MonthlyPlanItemsTable({
               <Fragment key={i.id}>
                 <tr>
                   <td>{i.expectedDate ?? '-'}</td><td>{i.title} {i.transactionId && <span className='compact-muted'>· Convertido</span>}</td><td>{labelOrValue(monthlyPlanTypeLabels, i.type)}</td><td>{formatPlanNet(i)}</td><td><StatusBadge label={labelOrValue(monthlyPlanStatusLabels, i.status)} /></td><td><StatusBadge label={labelOrValue(monthlyPlanPriorityLabels, i.priority)} /></td>
-                  <td className='table-actions'>
+                  <td>{getPlanItemMissingLabels(i).map((label) => <span key={label} className='missing-badge'>{label}</span>)}</td>
+                  <td className='action-row'>
                     <button className='button-secondary' onClick={() => startEdit(i, 'FULL')} disabled={isBusy}>Editar</button>
-                    {showMarkPaid ? <button className='button-secondary' onClick={() => onMarkPaid(i.id)} disabled={isBusy}>Marcar pagado</button> : null}
-                    {showMarkCollected ? <button className='button-secondary' onClick={() => onMarkCollected(i.id)} disabled={isBusy}>Marcar cobrado</button> : null}
-                    {showCompleteAmount ? <button className='button-secondary' onClick={() => startEdit(i, 'AMOUNT')} disabled={isBusy}>Completar monto</button> : null}
-                    {canConvert ? <button className='button-primary' onClick={() => onConvert(i.id)} disabled={isBusy}>Convertir</button> : <button className='button-secondary' onClick={() => startEdit(i, 'CONVERT')} disabled={isBusy || i.status === 'CANCELLED' || Boolean(i.transactionId)}>Preparar conversión</button>}
-                    <button className='button-secondary' onClick={() => onCancel(i.id)} disabled={isBusy || i.status === 'CANCELLED'}>Cancelar</button>
-                    <button className='button-danger' onClick={() => onDelete(i.id)} disabled={isBusy}>Eliminar</button>
+                    {getPlanItemNextAction(i) === 'COMPLETE_AMOUNT' ? <button className='button-secondary' onClick={() => startEdit(i, 'AMOUNT')} disabled={isBusy}>Completar monto</button> : null}
+                    {getPlanItemNextAction(i) === 'PREPARE_CONVERSION' ? <button className='button-secondary' onClick={() => startEdit(i, 'CONVERT')} disabled={isBusy}>Preparar conversión</button> : null}
+                    {getPlanItemNextAction(i) === 'CONVERT' ? <button className='button-primary' onClick={() => onConvert(i.id)} disabled={isBusy}>Convertir</button> : null}
+                    {getPlanItemNextAction(i) === 'MARK_PAID' ? <button className='button-secondary' onClick={() => onMarkPaid(i.id)} disabled={isBusy}>Marcar pagado</button> : null}
+                    {getPlanItemNextAction(i) === 'MARK_COLLECTED' ? <button className='button-secondary' onClick={() => onMarkCollected(i.id)} disabled={isBusy}>Marcar cobrado</button> : null}
+                    <button className='button-secondary' onClick={() => setExpandedId(expandedId === i.id ? null : i.id)}>Más acciones</button>
                   </td>
                 </tr>
+                {expandedId === i.id ? <tr><td colSpan={8}><div className='row-expanded-panel'><button className='button-secondary' onClick={() => onCancel(i.id)} disabled={isBusy || i.status === 'CANCELLED'}>Cancelar</button><button className='button-danger' onClick={() => onDelete(i.id)} disabled={isBusy}>Eliminar</button><button className='button-secondary' onClick={() => void loadSuggestion(i)} disabled={isBusy}>Sugerir cuenta/categoría</button><button className='button-secondary' onClick={() => startEdit(i, 'FULL')} disabled={isBusy}>Editar completo</button></div></td></tr> : null}
                 {isEditing ? (
                   <tr>
-                    <td colSpan={7}>
+                    <td colSpan={8}>
                       <div className='card'>
                         {editMode !== 'AMOUNT' ? <input className='input' placeholder='Título' value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /> : null}
                         <div className='form-row'>
