@@ -26,6 +26,15 @@ export function formatPlanNet(item) {
         return `${formatMoney(min)} – ${formatMoney(max)}`;
     return 'Sin monto';
 }
+export function isPendingPlanItem(item) {
+    return ['DRAFT', 'ESTIMATED', 'SCHEDULED', 'DUE'].includes(item.status);
+}
+export function isDonePlanItem(item) {
+    return ['PAID', 'COLLECTED'].includes(item.status);
+}
+export function isCancelledPlanItem(item) {
+    return item.status === 'CANCELLED';
+}
 export function canConvertPlanItem(item) {
     const hasExactAmount = item.amount != null || (item.minAmount != null && item.maxAmount != null && item.minAmount === item.maxAmount);
     return hasExactAmount && Boolean(item.accountId) && Boolean(item.categoryId) && item.type !== 'TODO' && item.status !== 'CANCELLED' && !item.transactionId;

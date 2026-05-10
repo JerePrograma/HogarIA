@@ -25,6 +25,18 @@ export function formatPlanNet(item: Pick<MonthlyPlanItem, 'netMin' | 'netMax'>):
   return 'Sin monto';
 }
 
+export function isPendingPlanItem(item: Pick<MonthlyPlanItem, 'status'>): boolean {
+  return ['DRAFT', 'ESTIMATED', 'SCHEDULED', 'DUE'].includes(item.status);
+}
+
+export function isDonePlanItem(item: Pick<MonthlyPlanItem, 'status'>): boolean {
+  return ['PAID', 'COLLECTED'].includes(item.status);
+}
+
+export function isCancelledPlanItem(item: Pick<MonthlyPlanItem, 'status'>): boolean {
+  return item.status === 'CANCELLED';
+}
+
 export function canConvertPlanItem(item: MonthlyPlanItem): boolean {
   const hasExactAmount = item.amount != null || (item.minAmount != null && item.maxAmount != null && item.minAmount === item.maxAmount);
   return hasExactAmount && Boolean(item.accountId) && Boolean(item.categoryId) && item.type !== 'TODO' && item.status !== 'CANCELLED' && !item.transactionId;
