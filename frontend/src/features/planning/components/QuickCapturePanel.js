@@ -1,0 +1,4 @@
+import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
+export function QuickCapturePanel({ input, onChange, onAnalyze, canAnalyze, error, children, onDiscard, showDiscard }) {
+    return _jsxs("section", { className: 'card quick-capture-card', children: [_jsx("h3", { className: 'section-title', children: "Captura r\u00E1pida" }), _jsx("textarea", { className: 'input', placeholder: 'Ej: 05/06 95000 Juliana cuota 3/5', value: input, onChange: (e) => onChange(e.target.value) }), _jsxs("div", { className: 'form-row', children: [_jsx("button", { className: 'button-primary', onClick: onAnalyze, disabled: !canAnalyze, children: "Analizar" }), showDiscard && _jsx("button", { className: 'button-secondary', onClick: onDiscard, children: "Descartar" })] }), error && _jsx("p", { className: 'error-box', children: error }), children] });
+}

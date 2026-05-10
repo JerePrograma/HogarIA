@@ -1,0 +1,6 @@
+import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
+import { MetricCard } from '../../../components/ui/MetricCard';
+import { formatMoney } from '../../../domain/formatters';
+export function PlanningSummaryCards({ summary }) {
+    return _jsxs("section", { className: 'metric-grid', children: [_jsx(MetricCard, { title: 'Ingresos estimados', value: `${formatMoney(summary?.totalIncomeMin ?? 0)} – ${formatMoney(summary?.totalIncomeMax ?? 0)}` }), _jsx(MetricCard, { title: 'Egresos estimados', value: `${formatMoney(summary?.totalExpenseMin ?? 0)} – ${formatMoney(summary?.totalExpenseMax ?? 0)}` }), _jsx(MetricCard, { title: 'Recuperos esperados', value: `${formatMoney(summary?.totalRecoveryMin ?? 0)} – ${formatMoney(summary?.totalRecoveryMax ?? 0)}` }), _jsx(MetricCard, { title: 'Neto proyectado', primary: true, value: `${formatMoney(summary?.netMin ?? 0)} – ${formatMoney(summary?.netMax ?? 0)}` }), _jsx(MetricCard, { title: 'Pendiente de cobro', value: formatMoney(summary?.pendingIncome ?? 0) }), _jsx(MetricCard, { title: 'Pendiente de pago', value: formatMoney(summary?.pendingExpense ?? 0) }), _jsx(MetricCard, { title: 'Sin cotizar', value: summary?.unpricedCount ?? 0 }), _jsx(MetricCard, { title: 'Pr\u00F3ximos 7 d\u00EDas', value: summary?.dueNext7DaysCount ?? 0 })] });
+}
