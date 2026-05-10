@@ -241,3 +241,10 @@ export interface QuickCapturePreviewRequest { rawText: string; defaultYear?: num
 export interface QuickCapturePreviewResponse { rawText: string; confidence: QuickCaptureConfidence; warnings: string[]; parsed: MonthlyPlanItemCreatePayload; detectedDateText?: string | null; detectedAmountText?: string | null; detectedRangeText?: string | null; detectedRecoveryText?: string | null; detectedInstallmentText?: string | null; detectedCounterpartyText?: string | null; detectedTypeText?: string | null; }
 export interface QuickCaptureCommitRequest { rawText: string; payload: MonthlyPlanItemCreatePayload; }
 export interface QuickCaptureCommitResponse { item: MonthlyPlanItem; warnings: string[]; }
+
+
+export type SuggestionConfidence = 'HIGH'|'MEDIUM'|'LOW'|'NONE';
+export interface PlanningSuggestionRequest { type: MonthlyPlanItemType; title: string; counterparty?: string | null; amount?: number | null; minAmount?: number | null; maxAmount?: number | null; expectedRecoveryAmount?: number | null; expectedRecoveryPercent?: number | null; }
+export interface SuggestedAccount { id: string; name: string; confidence: SuggestionConfidence; reason: string; }
+export interface SuggestedCategory { id: string; name: string; confidence: SuggestionConfidence; reason: string; }
+export interface PlanningSuggestionResponse { accountSuggestion?: SuggestedAccount | null; categorySuggestion?: SuggestedCategory | null; confidence: SuggestionConfidence; reasons: string[]; }
