@@ -111,3 +111,7 @@ button:hover:not(:disabled), .button-primary:hover:not(:disabled), .button-secon
   .page-header, .section-title { display: grid; }
   .form-actions { align-items: stretch; flex-direction: column; }
 }
+
+.badge-watch { color: #854d0e; background: #fef3c7; }
+.badge-risk { color: #9a3412; background: #ffedd5; }
+.badge-critical { color: #991b1b; background: #fee2e2; }

@@ -1,50 +1,29 @@
 package com.hogaria.service;
 
-import com.hogaria.entity.*;
-import com.hogaria.repository.*;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.*;
-import org.mockito.junit.jupiter.MockitoExtension;
-import java.math.BigDecimal;
-import java.time.LocalDate;
-import java.util.*;
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import com.hogaria.entity.*;import com.hogaria.repository.*;import org.junit.jupiter.api.Test;import org.junit.jupiter.api.extension.ExtendWith;import org.mockito.*;import org.mockito.junit.jupiter.MockitoExtension;import java.math.BigDecimal;import java.time.LocalDate;import java.util.*;import static org.junit.jupiter.api.Assertions.*;import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class DashboardServiceTest {
-  @Mock FinancialProfileRepository profileRepository; @Mock MoneyTransactionRepository transactionRepository; @Mock CategoryRepository categoryRepository; @Mock BudgetYearRepository budgetYearRepository; @Mock BudgetMonthRepository budgetMonthRepository; @Mock BudgetCategoryItemRepository budgetCategoryItemRepository; @InjectMocks DashboardService service;
+  @Mock FinancialProfileRepository profileRepository; @Mock MoneyTransactionRepository transactionRepository; @Mock CategoryRepository categoryRepository; @Mock BudgetYearRepository budgetYearRepository; @Mock BudgetMonthRepository budgetMonthRepository; @Mock BudgetCategoryItemRepository budgetCategoryItemRepository; @Mock MonthlyPlanItemRepository monthlyPlanItemRepository; @InjectMocks DashboardService service;
 
-  @Test void dashboardBudgetSummaryMatchesExpenseAndSavingsOnly(){
-    var u=UUID.randomUUID(); var p=UUID.randomUUID(); var byId=UUID.randomUUID(); var bmId=UUID.randomUUID();
-    var rentId=UUID.randomUUID(); var marketId=UUID.randomUUID(); var saveId=UUID.randomUUID(); var salaryId=UUID.randomUUID();
+  @Test void includesPlanningAndOperationalData(){
+    var u=UUID.randomUUID(); var p=UUID.randomUUID(); var incomeCat=UUID.randomUUID(); var expenseCat=UUID.randomUUID();
     when(profileRepository.findByIdAndUserId(p,u)).thenReturn(Optional.of(new FinancialProfile()));
-    when(transactionRepository.findByProfileIdAndBudgetDateBetween(eq(p),any(),any())).thenReturn(List.of(
-      MoneyTransaction.builder().profileId(p).categoryId(salaryId).movementType(MoneyTransaction.MovementType.INCOME).amount(new BigDecimal("1000000")).status(MoneyTransaction.Status.CONFIRMED).budgetDate(LocalDate.now()).build(),
-      MoneyTransaction.builder().profileId(p).categoryId(rentId).movementType(MoneyTransaction.MovementType.EXPENSE).amount(new BigDecimal("300000")).status(MoneyTransaction.Status.CONFIRMED).budgetDate(LocalDate.now()).build(),
-      MoneyTransaction.builder().profileId(p).categoryId(marketId).movementType(MoneyTransaction.MovementType.EXPENSE).amount(new BigDecimal("180000")).status(MoneyTransaction.Status.CONFIRMED).budgetDate(LocalDate.now()).build(),
-      MoneyTransaction.builder().profileId(p).categoryId(saveId).movementType(MoneyTransaction.MovementType.SAVING).amount(new BigDecimal("200000")).status(MoneyTransaction.Status.CONFIRMED).budgetDate(LocalDate.now()).build()
+    when(transactionRepository.findByProfileIdAndBudgetDateBetween(eq(p),any(),any())).thenReturn(List.of(MoneyTransaction.builder().profileId(p).categoryId(incomeCat).movementType(MoneyTransaction.MovementType.INCOME).amount(new BigDecimal("100")).status(MoneyTransaction.Status.CONFIRMED).budgetDate(LocalDate.now()).build()));
+    when(categoryRepository.findAllById(any())).thenReturn(List.of(Category.builder().id(incomeCat).type(Category.Type.INCOME).name("Ingreso").build(),Category.builder().id(expenseCat).type(Category.Type.VARIABLE_EXPENSE).name("Gasto").build()));
+    when(monthlyPlanItemRepository.findByProfileIdAndPeriodYearAndPeriodMonth(p,2026,5)).thenReturn(List.of(
+      MonthlyPlanItem.builder().type(MonthlyPlanItem.Type.INCOME).title("Cobro").periodYear(2026).periodMonth(5).minAmount(new BigDecimal("50")).maxAmount(new BigDecimal("100")).status(MonthlyPlanItem.Status.ESTIMATED).build(),
+      MonthlyPlanItem.builder().type(MonthlyPlanItem.Type.EXPENSE).title("Pago").periodYear(2026).periodMonth(5).amount(new BigDecimal("80")).status(MonthlyPlanItem.Status.DUE).transactionId(UUID.randomUUID()).build(),
+      MonthlyPlanItem.builder().type(MonthlyPlanItem.Type.TODO).title("Cotizar").periodYear(2026).periodMonth(5).status(MonthlyPlanItem.Status.DRAFT).build(),
+      MonthlyPlanItem.builder().type(MonthlyPlanItem.Type.EXPENSE).title("Cancelado").periodYear(2026).periodMonth(5).amount(new BigDecimal("999")).status(MonthlyPlanItem.Status.CANCELLED).build()
     ));
-    when(categoryRepository.findAllById(any())).thenReturn(List.of(
-      Category.builder().id(salaryId).name("Sueldo").type(Category.Type.INCOME).build(),
-      Category.builder().id(rentId).name("Alquiler").type(Category.Type.FIXED_EXPENSE).build(),
-      Category.builder().id(marketId).name("Supermercado").type(Category.Type.VARIABLE_EXPENSE).build(),
-      Category.builder().id(saveId).name("Ahorro").type(Category.Type.SAVING).build()
-    ));
-    when(budgetYearRepository.findByProfileIdAndYear(p,2026)).thenReturn(Optional.of(BudgetYear.builder().id(byId).profileId(p).year(2026).build()));
-    when(budgetMonthRepository.findByBudgetYearIdAndMonth(byId,5)).thenReturn(Optional.of(BudgetMonth.builder().id(bmId).budgetYearId(byId).month(5).build()));
-    when(budgetCategoryItemRepository.findByBudgetMonthId(bmId)).thenReturn(List.of(
-      BudgetCategoryItem.builder().budgetMonthId(bmId).categoryId(rentId).budgetAmount(new BigDecimal("300000")).build(),
-      BudgetCategoryItem.builder().budgetMonthId(bmId).categoryId(marketId).budgetAmount(new BigDecimal("150000")).build(),
-      BudgetCategoryItem.builder().budgetMonthId(bmId).categoryId(saveId).budgetAmount(new BigDecimal("200000")).build()
-    ));
-
     var res=service.getMonthlySummary(u,p,2026,5);
-    assertNotNull(res.budgetSummary());
-    assertEquals(new BigDecimal("650000"),res.budgetSummary().totalBudget());
-    assertEquals(new BigDecimal("680000"),res.budgetSummary().totalReal());
-    assertEquals(new BigDecimal("-30000"),res.budgetSummary().totalDifference());
-    assertEquals(1,res.budgetSummary().exceededCount());
+    assertNotNull(res.planningSummary());
+    assertEquals(new BigDecimal("-30"),res.planningSummary().projectedNetMin());
+    assertEquals(new BigDecimal("20"),res.planningSummary().projectedNetMax());
+    assertEquals(1,res.planningSummary().unpricedCount());
+    assertEquals(1,res.planningSummary().convertedItemsCount());
+    assertEquals("CRITICAL",res.operationalSummary().financialRiskLevel());
+    assertTrue(res.operationalSummary().alerts().stream().anyMatch(a->a.contains("ítems sin cotizar")));
   }
 }
