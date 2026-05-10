@@ -3,6 +3,7 @@ import { labelOrValue, monthlyPlanPriorityLabels, monthlyPlanStatusLabels, month
 import type { Account, Category, MonthlyPlanItem, MonthlyPlanItemUpdatePayload, MonthlyPlanPriority, MonthlyPlanStatus } from '../../../domain/types';
 import { canConvertPlanItem, formatPlanNet, isCancelledPlanItem, isDonePlanItem, isPendingPlanItem } from '../planningUtils';
 import { StatusBadge } from '../../../components/ui/StatusBadge';
+import { getApiErrorMessage } from '../../../api/http';
 
 type Props = {
   items: MonthlyPlanItem[];
@@ -33,6 +34,8 @@ type EditForm = {
   priority: MonthlyPlanPriority;
   accountId: string;
   categoryId: string;
+  installmentNumber: string;
+  installmentTotal: string;
 };
 
 const toForm = (item: MonthlyPlanItem): EditForm => ({
@@ -47,7 +50,9 @@ const toForm = (item: MonthlyPlanItem): EditForm => ({
   status: item.status,
   priority: item.priority,
   accountId: item.accountId ?? '',
-  categoryId: item.categoryId ?? ''
+  categoryId: item.categoryId ?? '',
+  installmentNumber: item.installmentNumber == null ? '' : String(item.installmentNumber),
+  installmentTotal: item.installmentTotal == null ? '' : String(item.installmentTotal)
 });
 
 const parseNullableNumber = (value: string): number | null => {
@@ -116,6 +121,35 @@ export function MonthlyPlanItemsTable({
     const expectedRecoveryAmount = parseNullableNumber(form.expectedRecoveryAmount);
     const expectedRecoveryPercent = parseNullableNumber(form.expectedRecoveryPercent);
 
+    const installmentNumber = parseNullableNumber(form.installmentNumber);
+    const installmentTotal = parseNullableNumber(form.installmentTotal);
+
+    if (minAmount != null && maxAmount != null && minAmount > maxAmount) {
+      setEditError('El monto mínimo no puede superar al máximo.');
+      return;
+    }
+
+    if (expectedRecoveryPercent != null && (expectedRecoveryPercent < 0 || expectedRecoveryPercent > 100)) {
+      setEditError('El recupero porcentual debe estar entre 0 y 100.');
+      return;
+    }
+
+    if (installmentNumber != null && installmentTotal != null && installmentNumber > installmentTotal) {
+      setEditError('La cuota no puede superar el total de cuotas.');
+      return;
+    }
+
+    const hadAmount = item.amount != null;
+    const hadRange = item.minAmount != null || item.maxAmount != null;
+    const hadRecovery = item.expectedRecoveryAmount != null || item.expectedRecoveryPercent != null;
+    const hadExpectedDate = Boolean(item.expectedDate);
+    const hadCounterparty = Boolean(item.counterparty);
+    const hadAccount = Boolean(item.accountId);
+    const hadCategory = Boolean(item.categoryId);
+    const hadInstallment = item.installmentNumber != null || item.installmentTotal != null;
+
+    const clearInstallment = form.installmentNumber.trim() === '' && form.installmentTotal.trim() === '' && hadInstallment;
+
     const payload: MonthlyPlanItemUpdatePayload = {
       title: form.title.trim() || item.title,
       status: form.status,
@@ -129,14 +163,16 @@ export function MonthlyPlanItemsTable({
       counterparty: form.counterparty || undefined,
       accountId: form.accountId || undefined,
       categoryId: form.categoryId || undefined,
-      clearAmount: form.amount.trim() === '',
-      clearRange: form.minAmount.trim() === '' && form.maxAmount.trim() === '',
-      clearRecovery: form.expectedRecoveryAmount.trim() === '' && form.expectedRecoveryPercent.trim() === '',
-      clearExpectedDate: form.expectedDate.trim() === '',
-      clearCounterparty: form.counterparty.trim() === '',
-      clearAccount: form.accountId.trim() === '',
-      clearCategory: form.categoryId.trim() === '',
-      clearInstallment: true
+      installmentNumber,
+      installmentTotal,
+      clearAmount: form.amount.trim() === '' && hadAmount,
+      clearRange: form.minAmount.trim() === '' && form.maxAmount.trim() === '' && hadRange,
+      clearRecovery: form.expectedRecoveryAmount.trim() === '' && form.expectedRecoveryPercent.trim() === '' && hadRecovery,
+      clearExpectedDate: form.expectedDate.trim() === '' && hadExpectedDate,
+      clearCounterparty: form.counterparty.trim() === '' && hadCounterparty,
+      clearAccount: form.accountId.trim() === '' && hadAccount,
+      clearCategory: form.categoryId.trim() === '' && hadCategory,
+      ...(clearInstallment ? { clearInstallment: true } : {})
     };
 
     try {
@@ -146,8 +182,7 @@ export function MonthlyPlanItemsTable({
       setEditingId(null);
       setForm(null);
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'No se pudo guardar el ítem.';
-      setEditError(message);
+      setEditError(getApiErrorMessage(error));
     } finally {
       setSavingId(null);
     }
@@ -207,6 +242,7 @@ export function MonthlyPlanItemsTable({
                           {editMode !== 'CONVERT' ? <><input className='input' placeholder='Monto mínimo' value={form.minAmount} onChange={(e) => setForm({ ...form, minAmount: e.target.value })} /><input className='input' placeholder='Monto máximo' value={form.maxAmount} onChange={(e) => setForm({ ...form, maxAmount: e.target.value })} /></> : null}
                         </div>
                         {editMode === 'FULL' ? <div className='form-row'><input className='input' placeholder='Recupero monto' value={form.expectedRecoveryAmount} onChange={(e) => setForm({ ...form, expectedRecoveryAmount: e.target.value })} /><input className='input' placeholder='Recupero %' value={form.expectedRecoveryPercent} onChange={(e) => setForm({ ...form, expectedRecoveryPercent: e.target.value })} /><input className='input' placeholder='Contraparte' value={form.counterparty} onChange={(e) => setForm({ ...form, counterparty: e.target.value })} /></div> : null}
+                        {editMode === 'FULL' ? <div className='form-row'><input className='input' placeholder='N° cuota' value={form.installmentNumber} onChange={(e) => setForm({ ...form, installmentNumber: e.target.value })} /><input className='input' placeholder='Total cuotas' value={form.installmentTotal} onChange={(e) => setForm({ ...form, installmentTotal: e.target.value })} /></div> : null}
                         <div className='form-row'>
                           <select className='select' value={form.accountId} onChange={(e) => setForm({ ...form, accountId: e.target.value })}><option value=''>Sin cuenta</option>{accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</select>
                           <select className='select' value={form.categoryId} onChange={(e) => setForm({ ...form, categoryId: e.target.value })}><option value=''>Sin categoría</option>{categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
