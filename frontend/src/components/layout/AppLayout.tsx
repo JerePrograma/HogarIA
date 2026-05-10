@@ -12,6 +12,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       {profileId && <>
         <p className='nav-group'>Planificación</p>
         <NavLink to={`${base}/dashboard`}>Dashboard</NavLink>
+        <NavLink to={`${base}/planning`}>Planificación</NavLink>
         <NavLink to={`${base}/imports/budget-excel`}>Carga guiada</NavLink>
         <NavLink to={`${base}/budgets`}>Presupuesto</NavLink>
         <NavLink to={`${base}/goals`}>Objetivos</NavLink>
