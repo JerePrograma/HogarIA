@@ -234,3 +234,10 @@ export interface MonthlyPlanItem { id:string; profileId:string; categoryId:strin
 export interface MonthlyPlanSummary { totalIncomeMin:number; totalIncomeMax:number; totalExpenseMin:number; totalExpenseMax:number; totalRecoveryMin:number; totalRecoveryMax:number; netMin:number; netMax:number; pendingIncome:number; pendingExpense:number; unpricedCount:number; dueNext7DaysCount:number; items:MonthlyPlanItem[]; }
 export interface MonthlyPlanItemCreatePayload { type:MonthlyPlanItemType; title:string; description?:string; expectedDate?:string|null; periodYear:number; periodMonth:number; amount?:number|null; minAmount?:number|null; maxAmount?:number|null; currency?:string; expectedRecoveryAmount?:number|null; expectedRecoveryPercent?:number|null; counterparty?:string|null; installmentNumber?:number|null; installmentTotal?:number|null; priority?:MonthlyPlanPriority; status?:MonthlyPlanStatus; source?:MonthlyPlanSource; categoryId?:string|null; accountId?:string|null; }
 export interface MonthlyPlanItemUpdatePayload extends Partial<MonthlyPlanItemCreatePayload> { clearExpectedDate?:boolean; clearAmount?:boolean; clearRange?:boolean; clearRecovery?:boolean; clearCounterparty?:boolean; clearInstallment?:boolean; clearCategory?:boolean; clearAccount?:boolean; }
+
+
+export type QuickCaptureConfidence = 'HIGH'|'MEDIUM'|'LOW';
+export interface QuickCapturePreviewRequest { rawText: string; defaultYear?: number | null; defaultMonth?: number | null; defaultCurrency?: string | null; }
+export interface QuickCapturePreviewResponse { rawText: string; confidence: QuickCaptureConfidence; warnings: string[]; parsed: MonthlyPlanItemCreatePayload; detectedDateText?: string | null; detectedAmountText?: string | null; detectedRangeText?: string | null; detectedRecoveryText?: string | null; detectedInstallmentText?: string | null; detectedCounterpartyText?: string | null; detectedTypeText?: string | null; }
+export interface QuickCaptureCommitRequest { rawText: string; payload: MonthlyPlanItemCreatePayload; }
+export interface QuickCaptureCommitResponse { item: MonthlyPlanItem; warnings: string[]; }
