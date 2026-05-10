@@ -8,7 +8,7 @@ CREATE TABLE monthly_plan_item (
     description VARCHAR(500),
     expected_date DATE,
     period_year INT NOT NULL CHECK (period_year BETWEEN 2000 AND 2100),
-    period_month SMALLINT NOT NULL CHECK (period_month BETWEEN 1 AND 12),
+    period_month INT NOT NULL CHECK (period_month BETWEEN 1 AND 12),
     amount NUMERIC(19,2),
     min_amount NUMERIC(19,2),
     max_amount NUMERIC(19,2),
