@@ -241,6 +241,11 @@ export function DashboardPage() {
             </div>
 
             <div className="card">
+              <h3>Planificación del mes</h3>
+              <p><Link to={`/profiles/${profileId}/planning`}>Ir a planificación</Link></p>
+            </div>
+
+            <div className="card">
               <h3>Desglose por categoría</h3>
 
               <table className="table">

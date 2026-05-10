@@ -10,6 +10,7 @@ import { GoalsPage } from '../features/goals/GoalsPage';
 import { HabitsPage } from '../features/habits/HabitsPage';
 import { InflationPage } from '../features/inflation/InflationPage';
 import { BudgetExcelImportPage } from '../features/imports/BudgetExcelImportPage';
+import { MonthlyPlanningPage } from '../features/planning/MonthlyPlanningPage';
 
 const DevGuard = ({ children }: { children: JSX.Element }) => localStorage.getItem('devUserId') ? children : <Navigate to='/dev-user' />;
 const ProfileGuard = ({ children }: { children: JSX.Element }) => {
@@ -31,5 +32,6 @@ export const AppRouter = () => <Routes>
   <Route path='/profiles/:profileId/habits' element={<DevGuard><ProfileGuard><HabitsPage /></ProfileGuard></DevGuard>} />
   <Route path='/profiles/:profileId/inflation' element={<DevGuard><ProfileGuard><InflationPage /></ProfileGuard></DevGuard>} />
   <Route path='/profiles/:profileId/imports/budget-excel' element={<DevGuard><ProfileGuard><BudgetExcelImportPage /></ProfileGuard></DevGuard>} />
+  <Route path='/profiles/:profileId/planning' element={<DevGuard><ProfileGuard><MonthlyPlanningPage /></ProfileGuard></DevGuard>} />
   <Route path='*' element={<Navigate to='/profiles' />} />
 </Routes>;

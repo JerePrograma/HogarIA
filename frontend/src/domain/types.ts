@@ -207,3 +207,9 @@ export interface ExcelImportBatch { id: string; profileId: string; originalFileN
 export interface BudgetExcelImportPreviewResponse { batchId: string; detectedSheets: string[]; missingSheets: string[]; rows: ExcelImportRow[]; warnings: string[]; errors: string[]; summary: Record<string, number>; }
 export interface BudgetExcelImportCommitRequest { createCategories: boolean; createAccounts: boolean; createBudgets: boolean; createTransactions: boolean; createGoals: boolean; createHabits: boolean; createInflation: boolean; updateExisting: boolean; ignoreInvalidRows: boolean; year: number; currency: string; profileType: ProfileType; }
 export interface BudgetExcelImportCommitResponse { batchId: string; status: string; importedByType: Record<string, number>; warnings: string[]; errors: string[]; }
+
+export type MonthlyPlanItemType = 'INCOME'|'EXPENSE'|'SAVING'|'DEBT'|'TRANSFER'|'RECOVERY'|'TODO';
+export type MonthlyPlanPriority = 'ESSENTIAL'|'IMPORTANT'|'OPTIONAL';
+export type MonthlyPlanStatus = 'DRAFT'|'ESTIMATED'|'SCHEDULED'|'DUE'|'PAID'|'COLLECTED'|'CANCELLED';
+export interface MonthlyPlanItem { id:string; profileId:string; categoryId:string|null; accountId:string|null; type:MonthlyPlanItemType; title:string; expectedDate?:string|null; grossMin:number; grossMax:number; recoveryMin:number; recoveryMax:number; netMin:number; netMax:number; priority:MonthlyPlanPriority; status:MonthlyPlanStatus; counterparty?:string|null; installmentNumber?:number|null; installmentTotal?:number|null; }
+export interface MonthlyPlanSummary { totalIncomeMin:number; totalIncomeMax:number; totalExpenseMin:number; totalExpenseMax:number; totalRecoveryMin:number; totalRecoveryMax:number; netMin:number; netMax:number; pendingIncome:number; pendingExpense:number; unpricedCount:number; dueNext7DaysCount:number; items:MonthlyPlanItem[]; }
