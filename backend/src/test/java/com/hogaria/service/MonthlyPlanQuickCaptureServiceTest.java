@@ -50,6 +50,24 @@ class MonthlyPlanQuickCaptureServiceTest {
   @Test void noInterpretaCtaComoMonto(){ var r=service.preview(userId,profileId,new QuickCapturePreviewRequest("cta 3/5",2026,6,"ARS"));
     assertNull(r.parsed().amount()); assertNull(r.parsed().minAmount()); assertNull(r.parsed().maxAmount()); }
 
+
+  @Test void parseaRecuperoPorcentajeConContrapartePosterior(){ var r=service.preview(userId,profileId,new QuickCapturePreviewRequest("hostel 550000 recupero 50% Agus",2026,6,"ARS"));
+    assertEquals(MonthlyPlanItem.Type.EXPENSE,r.parsed().type()); assertEquals(new BigDecimal("50"),r.parsed().expectedRecoveryPercent()); assertEquals("Agus",r.parsed().counterparty()); }
+
+  @Test void parseaRecuperoPorcentajeConContraparteAnterior(){ var r=service.preview(userId,profileId,new QuickCapturePreviewRequest("Agus 50% hostel 550000",2026,6,"ARS"));
+    assertEquals(MonthlyPlanItem.Type.EXPENSE,r.parsed().type()); assertEquals(new BigDecimal("50"),r.parsed().expectedRecoveryPercent()); assertEquals("Agus",r.parsed().counterparty()); }
+
+  @Test void parseaRangoConPuntos(){ var r=service.preview(userId,profileId,new QuickCapturePreviewRequest("escuela Megu 150.000 a 180.000",2026,6,"ARS"));
+    assertEquals(new BigDecimal("150000"),r.parsed().minAmount()); assertEquals(new BigDecimal("180000"),r.parsed().maxAmount()); assertNull(r.parsed().amount()); }
+
+  @Test void parseaRangoConPesos(){ var r=service.preview(userId,profileId,new QuickCapturePreviewRequest("escuela Megu $150.000 - $180.000",2026,6,"ARS"));
+    assertEquals(new BigDecimal("150000"),r.parsed().minAmount()); assertEquals(new BigDecimal("180000"),r.parsed().maxAmount()); assertNull(r.parsed().amount()); }
+
+  @Test void noConfundeFechaConRango(){ var r=service.preview(userId,profileId,new QuickCapturePreviewRequest("05/06 95000 Juliana",2026,6,"ARS"));
+    assertNull(r.parsed().minAmount()); assertNull(r.parsed().maxAmount()); assertEquals(new BigDecimal("95000"),r.parsed().amount()); }
+
+  @Test void noConfundeCuotaConRango(){ var r=service.preview(userId,profileId,new QuickCapturePreviewRequest("cuota 3/5 95000 Juliana",2026,6,"ARS"));
+    assertNull(r.parsed().minAmount()); assertNull(r.parsed().maxAmount()); assertEquals(new BigDecimal("95000"),r.parsed().amount()); }
   @Test void parseaTodoSinMonto(){ var r=service.preview(userId,profileId,new QuickCapturePreviewRequest("inflables Megu reservar fecha",2026,6,"ARS"));
     assertEquals(MonthlyPlanItem.Type.TODO,r.parsed().type()); assertNull(r.parsed().amount()); assertEquals(MonthlyPlanItem.Status.DRAFT,r.parsed().status()); }
 

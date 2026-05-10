@@ -58,17 +58,55 @@ public class MonthlyPlanQuickCaptureService {
   private ParsedAmount parseAmount(String raw,List<String>w,String installmentText){
     String l=raw.toLowerCase(Locale.ROOT);
     if(l.matches(".*\\b(sin monto|a confirmar|pendiente|reservar fecha)\\b.*")){w.add("Se detectó que el monto está pendiente de definir.");return new ParsedAmount(null,null,null,false,null,null);}    
-    String cleaned=installmentText==null?raw:raw.replace(installmentText," ");
-    Matcher range=Pattern.compile("(?i)(?:entre\\s+)?([$]?\\d{1,3}(?:[.,]\\d{3})*|[$]?\\d{5,})(?:\\s*a\\s*|\\s*-\\s*|\\s+y\\s+)([$]?\\d{1,3}(?:[.,]\\d{3})*|[$]?\\d{5,})").matcher(cleaned);
-    if(range.find() && !range.group().contains("/")){
-      BigDecimal a=toMoney(range.group(1)),b=toMoney(range.group(2));
-      if(a!=null&&b!=null) return new ParsedAmount(null,a.min(b),a.max(b),true,null,range.group());
-    }
-    Matcher m=Pattern.compile("(?<!\\d[\\/\\-.])\\$?\\d{1,3}(?:[.,]\\d{3})+|(?<!\\d[\\/\\-.])\\$?\\d{5,}(?![\\/\\-.]\\d)").matcher(cleaned);
-    if(m.find()){BigDecimal a=toMoney(m.group());return new ParsedAmount(a,null,null,a!=null,m.group(),null);} 
+    String cleaned=stripInstallments(stripDates(raw));
+    ParsedRange range=findMoneyRange(cleaned);
+    if(range!=null){ return new ParsedAmount(null,range.min,range.max,true,null,range.detectedText); }
+    ParsedMoney single=findSingleMoney(cleaned);
+    if(single!=null){ return new ParsedAmount(single.amount,null,null,true,single.detectedText,null);}
     return new ParsedAmount(null,null,null,false,null,null);
   }
-  private BigDecimal toMoney(String t){if(t==null)return null; String c=t.replace("$","").trim(); if(c.contains(".")||c.contains(",")){c=c.replace(".","").replace(",","");} if(!c.matches("\\d+")) return null; return new BigDecimal(c);}  
+  private BigDecimal toMoney(String t){ String n=normalizeMoneyToken(t); return n==null?null:new BigDecimal(n);}  
+
+  private String normalizeMoneyToken(String token){
+    if(token==null) return null;
+    String c=token.replace("$","").trim();
+    if(c.contains("/")) return null;
+    c=c.replace(".","").replace(",","");
+    if(!c.matches("\\d+")) return null;
+    return c;
+  }
+
+  private record ParsedRange(BigDecimal min,BigDecimal max,String detectedText){}
+  private record ParsedMoney(BigDecimal amount,String detectedText){}
+
+  private String stripDates(String raw){
+    return raw.replaceAll("\\b\\d{1,2}[\\/\\-.]\\d{1,2}(?:[\\/\\-.]\\d{4})?\\b"," ");
+  }
+
+  private String stripInstallments(String raw){
+    return raw.replaceAll("(?i)\\b(?:cuota|cta)\\s*(?:nro\\s*)?\\d{1,2}\\s*(?:[/]|\\s+de\\s+)\\d{1,2}\\b|\\b\\d{1,2}\\s+de\\s+\\d{1,2}\\s+cuotas\\b"," ");
+  }
+
+  private ParsedRange findMoneyRange(String cleaned){
+    Matcher range=Pattern.compile("(?i)(?:entre\\s+)?([$]?(?:\\d{1,3}(?:\\.\\d{3})+|\\d{5,}))(?:\\s*a\\s*|\\s*-\\s*|\\s+y\\s+)([$]?(?:\\d{1,3}(?:\\.\\d{3})+|\\d{5,}))").matcher(cleaned);
+    if(range.find()){
+      BigDecimal a=toMoney(range.group(1)),b=toMoney(range.group(2));
+      if(a!=null&&b!=null){
+        return new ParsedRange(a.min(b),a.max(b),range.group());
+      }
+    }
+    return null;
+  }
+
+  private ParsedMoney findSingleMoney(String cleaned){
+    Matcher m=Pattern.compile("\\$?\\d{1,3}(?:[.,]\\d{3})+|\\$?\\d{5,}").matcher(cleaned);
+    if(m.find()){
+      BigDecimal a=toMoney(m.group());
+      if(a!=null) return new ParsedMoney(a,m.group());
+    }
+    return null;
+  }
+
   private record ParsedInstallment(Integer number,Integer total,String detectedText){}
   private ParsedInstallment parseInstallment(String raw,List<String>w){
     String[] patterns={"(?i)\\b(?:cuota|cta)\\s*(?:nro\\s*)?(\\d{1,2})\\s*/\\s*(\\d{1,2})\\b","(?i)\\b(?:cuota|cta)\\s*(?:nro\\s*)?(\\d{1,2})\\s+de\\s+(\\d{1,2})\\b","(?i)\\b(\\d{1,2})\\s+de\\s+(\\d{1,2})\\s+cuotas\\b"};
@@ -77,7 +115,7 @@ public class MonthlyPlanQuickCaptureService {
   }
   private record ParsedRecovery(BigDecimal recoveryAmount,BigDecimal recoveryPercent,String detectedText,String detectedCounterparty,boolean hasRecoverySignal){}
   private ParsedRecovery parseRecovery(String raw){
-    Matcher p=Pattern.compile("(?i)(?:recupero|recuperar|devuelve|devoluci[oó]n)?\\s*\\b(\\d{1,3})%\\b").matcher(raw);
+    Matcher p=Pattern.compile("(?i)\\b(?:recupero|recuperar|devuelve|devoluci[oó]n)?\\s*(\\d{1,3})%(?!\\w)").matcher(raw);
     if(p.find()){ return new ParsedRecovery(null,new BigDecimal(p.group(1)),p.group(),null,true);} 
     Matcher m=Pattern.compile("(?i)(recupero|recuperar|devuelve|devoluci[oó]n)\\s*([$]?\\d{1,3}(?:[.,]\\d{3})+|[$]?\\d{5,})").matcher(raw);
     if(m.find()) return new ParsedRecovery(toMoney(m.group(2)),null,m.group(),null,true);
