@@ -1,0 +1,13 @@
+[
+  {
+    "id": 9,
+    "prestamoId": 1,
+    "fechaPago": "2026-06-03",
+    "monto": 88.00,
+    "principalRecovered": 50.00,
+    "interestCollected": 38.00,
+    "referenciaManual": "TRX-1",
+    "observaciones": "ok",
+    "estado": "CONFIRMADO"
+  }
+]
