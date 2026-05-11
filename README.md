@@ -46,3 +46,15 @@ Aplicación financiera full-stack (Spring Boot + React/TypeScript) para gestión
 7. Revisar Objetivos.
 8. Revisar Hábitos.
 9. Revisar Inflación.
+
+## Seguridad mínima (JWT)
+- Endpoints financieros (`/api/profiles/**`, `/api/transactions/**`, `/api/budgets/**`, `/api/accounts/**`, `/api/categories/**`) requieren `Authorization: Bearer <token>`.
+- Login: `POST /api/auth/login` con `{ "email": "...", "password": "..." }`.
+- Usuario actual: `GET /api/auth/me`.
+- `X-User-Id` solo se usa como fallback si `app.security.allow-x-user-id-fallback=true` (desactivado por defecto).
+- Para desarrollo local podés crear usuarios en `POST /api/dev/users` y luego autenticarte con `/api/auth/login`.
+
+### Variables relevantes
+- `JWT_SECRET` (default inseguro solo local: `change_me`).
+- `app.jwt.expiration-seconds` (default `43200`).
+- `app.security.allow-x-user-id-fallback` (default `false`).

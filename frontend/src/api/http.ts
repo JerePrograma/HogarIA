@@ -6,10 +6,13 @@ export const http = axios.create({
 });
 
 http.interceptors.request.use((config) => {
+  const token = localStorage.getItem('authToken');
+  if (token) config.headers.Authorization = `Bearer ${token}`;
+
   const id = localStorage.getItem('devUserId');
-  if (id) {
-    config.headers['X-User-Id'] = id;
-  }
+  const allowDevFallback = import.meta.env.VITE_ALLOW_DEV_X_USER_ID === 'true';
+  if (allowDevFallback && id) config.headers['X-User-Id'] = id;
+
   return config;
 });
 
@@ -22,6 +25,8 @@ export const getApiErrorMessage = (error: unknown): string => {
   const data = error.response.data as { message?: string; error?: string } | undefined;
   const backendMessage = data?.message ?? data?.error;
   if (backendMessage) return backendMessage;
+  if (status === 401) return 'Sesión inválida o expirada. Iniciá sesión nuevamente.';
+  if (status === 403) return 'No tenés permisos para acceder a este recurso.';
   if (status === 404) return 'Recurso no encontrado (404).';
   if (status === 400) return 'Solicitud inválida (400). Revisá los campos.';
   if (status === 500) return 'Error interno del servidor (500).';
