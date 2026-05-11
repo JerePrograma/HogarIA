@@ -24,6 +24,8 @@ public class ExternalLoansService {
   private static final String SYSTEM = "CJPRESTAMOS";
   private static final String LOAN_ENTITY = "LOAN";
   private static final String PAYMENT_ENTITY = "PAYMENT";
+  private static final String PAYMENT_PRINCIPAL_RECOVERY_EVENT = "PAYMENT_PRINCIPAL_RECOVERY";
+  private static final String PAYMENT_INTEREST_INCOME_EVENT = "PAYMENT_INTEREST_INCOME";
 
   private final CjPrestamosClient client;
   private final CjPrestamosProperties properties;
@@ -92,33 +94,43 @@ public class ExternalLoansService {
       for (CjPrestamosPaymentRemoteResponse payment : payments) {
         String paymentId = String.valueOf(payment.id());
         try {
-          if (idempotencyService.isAlreadyProcessed(userId, profileId, SYSTEM, PAYMENT_ENTITY, paymentId, "PAYMENT")) {
-            skippedDuplicates++; continue;
-          }
           BigDecimal principalRecovered = payment.principalRecovered();
           BigDecimal interestCollected = payment.interestCollected();
           if (principalRecovered == null || interestCollected == null) {
             throw new BadRequestException("cjprestamos no envió split principal/interés para pago " + paymentId);
           }
 
+          boolean paymentDuplicate = true;
+
           if (principalRecovered.signum() > 0) {
-            transactionRepository.save(MoneyTransaction.builder().profileId(profileId).accountId(cfg.getAccountId())
-                .categoryId(cfg.getPrincipalRecoveryCategoryId()).movementType(MoneyTransaction.MovementType.ADJUSTMENT)
-                .realDate(payment.fechaPago()).budgetDate(payment.fechaPago()).amount(principalRecovered)
-                .currency("ARS").origin(MoneyTransaction.Origin.SYSTEM)
-                .description("Recupero capital CJ pago #" + payment.id()).status(MoneyTransaction.Status.CONFIRMED).build());
-            movementsCreated++;
+            if (idempotencyService.isAlreadyProcessed(userId, profileId, SYSTEM, PAYMENT_ENTITY, paymentId, PAYMENT_PRINCIPAL_RECOVERY_EVENT)) {
+              skippedDuplicates++;
+            } else {
+              MoneyTransaction principalTx = transactionRepository.save(MoneyTransaction.builder().profileId(profileId).accountId(cfg.getAccountId())
+                  .categoryId(cfg.getPrincipalRecoveryCategoryId()).movementType(MoneyTransaction.MovementType.ADJUSTMENT)
+                  .realDate(payment.fechaPago()).budgetDate(payment.fechaPago()).amount(principalRecovered)
+                  .currency("ARS").origin(MoneyTransaction.Origin.SYSTEM)
+                  .description("Recupero capital CJ pago #" + payment.id()).status(MoneyTransaction.Status.CONFIRMED).build());
+              movementsCreated++;
+              paymentDuplicate = false;
+              idempotencyService.markProcessed(profileId, SYSTEM, PAYMENT_ENTITY, paymentId, PAYMENT_PRINCIPAL_RECOVERY_EVENT, "payment-principal-" + paymentId, principalTx.getId(), null);
+            }
           }
           if (interestCollected.signum() > 0) {
-            transactionRepository.save(MoneyTransaction.builder().profileId(profileId).accountId(cfg.getAccountId())
-                .categoryId(cfg.getInterestIncomeCategoryId()).movementType(MoneyTransaction.MovementType.INCOME)
-                .realDate(payment.fechaPago()).budgetDate(payment.fechaPago()).amount(interestCollected)
-                .currency("ARS").origin(MoneyTransaction.Origin.SYSTEM)
-                .description("Interés CJ pago #" + payment.id()).status(MoneyTransaction.Status.CONFIRMED).build());
-            movementsCreated++;
+            if (idempotencyService.isAlreadyProcessed(userId, profileId, SYSTEM, PAYMENT_ENTITY, paymentId, PAYMENT_INTEREST_INCOME_EVENT)) {
+              skippedDuplicates++;
+            } else {
+              MoneyTransaction interestTx = transactionRepository.save(MoneyTransaction.builder().profileId(profileId).accountId(cfg.getAccountId())
+                  .categoryId(cfg.getInterestIncomeCategoryId()).movementType(MoneyTransaction.MovementType.INCOME)
+                  .realDate(payment.fechaPago()).budgetDate(payment.fechaPago()).amount(interestCollected)
+                  .currency("ARS").origin(MoneyTransaction.Origin.SYSTEM)
+                  .description("Interés CJ pago #" + payment.id()).status(MoneyTransaction.Status.CONFIRMED).build());
+              movementsCreated++;
+              paymentDuplicate = false;
+              idempotencyService.markProcessed(profileId, SYSTEM, PAYMENT_ENTITY, paymentId, PAYMENT_INTEREST_INCOME_EVENT, "payment-interest-" + paymentId, interestTx.getId(), null);
+            }
           }
-          paymentsSynced++;
-          idempotencyService.markProcessed(profileId, SYSTEM, PAYMENT_ENTITY, paymentId, "PAYMENT", "payment-" + paymentId, null, null);
+          if (!paymentDuplicate) paymentsSynced++;
         } catch (Exception ex) { errors.add("payment " + paymentId + ": " + ex.getMessage()); }
       }
     }
