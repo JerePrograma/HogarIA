@@ -31,8 +31,8 @@ public class ExternalSyncIdempotencyService {
       String externalEventType) {
     ensureProfileBelongsToUser(userId, profileId);
     return repository
-        .findByExternalSystemAndExternalEntityTypeAndExternalEntityIdAndExternalEventType(
-            externalSystem, externalEntityType, externalEntityId, externalEventType)
+        .findByProfileIdAndExternalSystemAndExternalEntityTypeAndExternalEntityIdAndExternalEventType(
+            profileId, externalSystem, externalEntityType, externalEntityId, externalEventType)
         .filter(mapping -> STATUS_PROCESSED.equals(mapping.getStatus()))
         .isPresent();
   }
@@ -80,8 +80,8 @@ public class ExternalSyncIdempotencyService {
       String externalEntityId,
       String externalEventType) {
     return repository
-        .findByExternalSystemAndExternalEntityTypeAndExternalEntityIdAndExternalEventType(
-            externalSystem, externalEntityType, externalEntityId, externalEventType)
+        .findByProfileIdAndExternalSystemAndExternalEntityTypeAndExternalEntityIdAndExternalEventType(
+            profileId, externalSystem, externalEntityType, externalEntityId, externalEventType)
         .orElseGet(
             () ->
                 ExternalSyncMapping.builder()
