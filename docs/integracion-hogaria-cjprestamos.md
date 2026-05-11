@@ -42,6 +42,8 @@ Base: `/api/profiles/{profileId}/external-loans`
 - `GET /api/profiles/{profileId}/external-loans/sync-config`
 - `PUT /api/profiles/{profileId}/external-loans/sync-config`
 - `POST /api/profiles/{profileId}/external-loans/sync`
+- `POST /api/profiles/{profileId}/external-loans/sync/dry-run`
+- `GET /api/profiles/{profileId}/external-loans/health`
 
 ## 5) Endpoints remotos de cjprestamos consumidos
 - `GET /api/integration/hogaria/loans/active`
@@ -93,3 +95,26 @@ cd /workspace/HogarIA && sed -n '1,260p' README.md
 # Revisar documento de integración
 cd /workspace/HogarIA && sed -n '1,260p' docs/integracion-hogaria-cjprestamos.md
 ```
+
+
+## 11) Operación mínima para fase 2 (manual/dry-run)
+1. **Habilitar read-only**: `CJP_INTEGRATION_ENABLED=true` y `CJP_SYNC_ENABLED=false`.
+2. **Ejecutar dry-run**: `POST /api/profiles/{profileId}/external-loans/sync/dry-run` y revisar `movementsCreated`, `skippedDuplicates`, `errors`.
+3. **Habilitar sync real manual**: cambiar a `CJP_SYNC_ENABLED=true` y ejecutar `POST /api/profiles/{profileId}/external-loans/sync`.
+4. **Diagnóstico previo**: ejecutar `GET /api/profiles/{profileId}/external-loans/health`.
+
+### Si falla Basic Auth
+- Verificar `CJP_USERNAME` y `CJP_PASSWORD` en backend HogarIA.
+- Verificar que cjprestamos reciba credenciales vigentes para el endpoint de integración.
+- Revisar respuesta `UNAUTHORIZED` y mensajes con `endpoint` + `status` en logs.
+
+### Si aparecen duplicados
+- Revisar `skippedDuplicates` en dry-run/sync.
+- Confirmar que las claves de idempotencia por `profileId` se estén registrando en `external_sync_mapping`.
+- Ejecutar primero dry-run y comparar `plannedMovements` antes de sync real.
+
+### Checklist previa a fase 2
+- `cd backend && mvn test`
+- `cd frontend && npm run build`
+- `GET /api/profiles/{profileId}/external-loans/health` devuelve `OK`.
+- `POST /api/profiles/{profileId}/external-loans/sync/dry-run` sin errores críticos.

@@ -5,7 +5,10 @@ import com.hogaria.entity.ExternalLoanSyncConfig;
 import com.hogaria.exception.BadRequestException;
 import com.hogaria.exception.ForbiddenException;
 import com.hogaria.integration.cjprestamos.CjPrestamosClient;
+import com.hogaria.integration.cjprestamos.CjPrestamosIntegrationConfigValidator;
+import com.hogaria.integration.cjprestamos.CjPrestamosIntegrationException;
 import com.hogaria.integration.cjprestamos.CjPrestamosProperties;
+import com.hogaria.integration.cjprestamos.dto.ExternalIntegrationDiagnosticResponse;
 import com.hogaria.integration.cjprestamos.dto.ExternalLoanManualSyncResponse;
 import com.hogaria.integration.cjprestamos.dto.ExternalLoansSummaryResponse;
 import com.hogaria.integration.cjprestamos.mapper.CjPrestamosBridgeMapper;
@@ -16,14 +19,18 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 @Service
 public class ExternalLoansService {
   private static final String SYSTEM = "CJPRESTAMOS";
+  private static final Logger log = LoggerFactory.getLogger(ExternalLoansService.class);
 
   private final CjPrestamosClient client;
   private final CjPrestamosProperties properties;
+  private final CjPrestamosIntegrationConfigValidator integrationConfigValidator;
   private final FinancialProfileRepository profileRepository;
   private final CjPrestamosBridgeMapper mapper;
   private final ExternalLoanSyncConfigRepository syncConfigRepository;
@@ -31,7 +38,7 @@ public class ExternalLoansService {
   private final CategoryRepository categoryRepository;
   private final ExternalLoanSyncEventProcessor eventProcessor;
 
-  public ExternalLoansService(CjPrestamosClient client, CjPrestamosProperties properties, FinancialProfileRepository profileRepository, CjPrestamosBridgeMapper mapper, ExternalLoanSyncConfigRepository syncConfigRepository, AccountRepository accountRepository, CategoryRepository categoryRepository, ExternalLoanSyncEventProcessor eventProcessor) {
+  public ExternalLoansService(CjPrestamosClient client, CjPrestamosProperties properties, FinancialProfileRepository profileRepository, CjPrestamosBridgeMapper mapper, ExternalLoanSyncConfigRepository syncConfigRepository, AccountRepository accountRepository, CategoryRepository categoryRepository, ExternalLoanSyncEventProcessor eventProcessor, CjPrestamosIntegrationConfigValidator integrationConfigValidator) {
     this.client = client;
     this.properties = properties;
     this.profileRepository = profileRepository;
@@ -40,29 +47,50 @@ public class ExternalLoansService {
     this.accountRepository = accountRepository;
     this.categoryRepository = categoryRepository;
     this.eventProcessor = eventProcessor;
+    this.integrationConfigValidator = integrationConfigValidator;
   }
 
   public ExternalLoansSummaryResponse getSummary(UUID userId, UUID profileId) {
     ensureProfileBelongsToUser(userId, profileId);
     if (!properties.enabled()) return ExternalLoansSummaryResponse.disabled();
-    return ExternalLoansSummaryResponse.enabled(
+    integrationConfigValidator.validateEnabledIntegration(properties);
+    log.info("external-loans summary start profileId={} syncEnabled={}", profileId, properties.syncEnabled());
+    var response = ExternalLoansSummaryResponse.enabled(
         mapper.toExternalDashboard(client.getDashboardSummary(profileId, userId)),
         mapper.toExternalCashControl(client.getCashControl(profileId, userId)),
         mapper.toExternalLoans(client.getActiveLoans(profileId, userId)),
         !properties.syncEnabled());
+    log.info("external-loans summary end profileId={} loansCount={}", profileId, response.activeLoans().size());
+    return response;
   }
 
-  public ExternalLoanManualSyncResponse sync(UUID userId, UUID profileId) {
-    return runSync(userId, profileId, false);
+  public ExternalIntegrationDiagnosticResponse checkIntegration(UUID userId, UUID profileId) {
+    ensureProfileBelongsToUser(userId, profileId);
+    if (!properties.enabled()) {
+      return ExternalIntegrationDiagnosticResponse.misconfigured("Integración deshabilitada (CJP_INTEGRATION_ENABLED=false)");
+    }
+    if (!properties.hasCompleteCredentials()) {
+      return ExternalIntegrationDiagnosticResponse.misconfigured("Configuración incompleta. Faltan: " + properties.missingRequiredFields());
+    }
+    try {
+      client.getDashboardSummary(profileId, userId);
+      return ExternalIntegrationDiagnosticResponse.ok("Conectividad y autenticación OK");
+    } catch (CjPrestamosIntegrationException ex) {
+      String msg = ex.getMessage() == null ? "Error remoto" : ex.getMessage();
+      if (msg.contains("Autenticación/autorización")) return ExternalIntegrationDiagnosticResponse.unauthorized(msg);
+      if (msg.contains("No se pudo conectar") || msg.contains("no disponible")) return ExternalIntegrationDiagnosticResponse.unavailable(msg);
+      return ExternalIntegrationDiagnosticResponse.unavailable(msg);
+    }
   }
 
-  public ExternalLoanManualSyncResponse dryRunSync(UUID userId, UUID profileId) {
-    return runSync(userId, profileId, true);
-  }
+  public ExternalLoanManualSyncResponse sync(UUID userId, UUID profileId) { return runSync(userId, profileId, false); }
+  public ExternalLoanManualSyncResponse dryRunSync(UUID userId, UUID profileId) { return runSync(userId, profileId, true); }
 
   private ExternalLoanManualSyncResponse runSync(UUID userId, UUID profileId, boolean dryRun) {
     ensureProfileBelongsToUser(userId, profileId);
+    integrationConfigValidator.validateEnabledIntegration(properties);
     if (!dryRun && !properties.syncEnabled()) throw new BadRequestException("La sincronización contable está deshabilitada. La integración está en modo solo lectura.");
+    log.info("external-loans {} start profileId={}", dryRun ? "dry-run" : "sync", profileId);
     ExternalLoanSyncConfig cfg = syncConfigRepository.findByProfileId(profileId)
         .orElseThrow(() -> new BadRequestException("No existe configuración de sincronización externa"));
     if (!Boolean.TRUE.equals(cfg.getEnabled())) throw new BadRequestException("La sincronización externa está deshabilitada");
@@ -133,37 +161,15 @@ public class ExternalLoansService {
         } catch (Exception ex) { errors.add("payment " + paymentId + ": " + ex.getMessage()); }
       }
     }
+    log.info("external-loans {} end profileId={} loans={} payments={} movementsCreated={} skipped={} errors={}",
+        dryRun ? "dry-run" : "sync", profileId, detectedLoans.size(), detectedPayments.size(), movementsCreated, skippedDuplicates, errors.size());
     return new ExternalLoanManualSyncResponse(dryRun, loansSynced, paymentsSynced, movementsCreated, skippedDuplicates, errors, detectedLoans, detectedPayments, plannedMovements,
         java.util.Map.of("DISBURSEMENT", disbursement, "PAYMENT_PRINCIPAL_RECOVERY", paymentPrincipalRecovery, "PAYMENT_INTEREST_INCOME", paymentInterestIncome));
   }
 
-  private boolean isDuplicate(UUID userId, UUID profileId, String entityType, String entityId, String eventType) {
-    return eventProcessor.isAlreadyProcessed(userId, profileId, entityType, entityId, eventType);
-  }
-
-
-  private void validateCompleteConfig(ExternalLoanSyncConfig cfg) {
-    if (cfg.getAccountId() == null
-        || cfg.getLoanDisbursementCategoryId() == null
-        || cfg.getPrincipalRecoveryCategoryId() == null
-        || cfg.getInterestIncomeCategoryId() == null) {
-      throw new BadRequestException("Configuración de sincronización incompleta");
-    }
-  }
-
-  private void validateConfigReferences(UUID profileId, ExternalLoanSyncConfig cfg) {
-    if (!accountRepository.existsByIdAndProfileId(cfg.getAccountId(), profileId)) throw new BadRequestException("La cuenta configurada no pertenece al perfil");
-    validateCategory(profileId, cfg.getLoanDisbursementCategoryId());
-    validateCategory(profileId, cfg.getPrincipalRecoveryCategoryId());
-    validateCategory(profileId, cfg.getInterestIncomeCategoryId());
-  }
-
-  private void validateCategory(UUID profileId, UUID categoryId) {
-    Category category = categoryRepository.findById(categoryId).orElseThrow(() -> new BadRequestException("Categoría configurada inexistente"));
-    if (category.getProfileId() != null && !category.getProfileId().equals(profileId)) throw new BadRequestException("Categoría configurada no pertenece al perfil");
-  }
-
-  private void ensureProfileBelongsToUser(UUID userId, UUID profileId) {
-    if (!profileRepository.existsByIdAndUserId(profileId, userId)) throw new ForbiddenException("Profile no pertenece al usuario");
-  }
+  private boolean isDuplicate(UUID userId, UUID profileId, String entityType, String entityId, String eventType) { return eventProcessor.isAlreadyProcessed(userId, profileId, entityType, entityId, eventType); }
+  private void validateCompleteConfig(ExternalLoanSyncConfig cfg) { if (cfg.getAccountId() == null || cfg.getLoanDisbursementCategoryId() == null || cfg.getPrincipalRecoveryCategoryId() == null || cfg.getInterestIncomeCategoryId() == null) throw new BadRequestException("Configuración de sincronización incompleta"); }
+  private void validateConfigReferences(UUID profileId, ExternalLoanSyncConfig cfg) { if (!accountRepository.existsByIdAndProfileId(cfg.getAccountId(), profileId)) throw new BadRequestException("La cuenta configurada no pertenece al perfil"); validateCategory(profileId, cfg.getLoanDisbursementCategoryId()); validateCategory(profileId, cfg.getPrincipalRecoveryCategoryId()); validateCategory(profileId, cfg.getInterestIncomeCategoryId()); }
+  private void validateCategory(UUID profileId, UUID categoryId) { Category category = categoryRepository.findById(categoryId).orElseThrow(() -> new BadRequestException("Categoría configurada inexistente")); if (category.getProfileId() != null && !category.getProfileId().equals(profileId)) throw new BadRequestException("Categoría configurada no pertenece al perfil"); }
+  private void ensureProfileBelongsToUser(UUID userId, UUID profileId) { if (!profileRepository.existsByIdAndUserId(profileId, userId)) throw new ForbiddenException("Profile no pertenece al usuario"); }
 }

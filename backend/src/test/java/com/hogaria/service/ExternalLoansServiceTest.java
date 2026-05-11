@@ -8,6 +8,7 @@ import com.hogaria.entity.ExternalLoanSyncConfig;
 import com.hogaria.exception.BadRequestException;
 import com.hogaria.exception.ForbiddenException;
 import com.hogaria.integration.cjprestamos.CjPrestamosClient;
+import com.hogaria.integration.cjprestamos.CjPrestamosIntegrationConfigValidator;
 import com.hogaria.integration.cjprestamos.CjPrestamosIntegrationException;
 import com.hogaria.integration.cjprestamos.CjPrestamosProperties;
 import com.hogaria.integration.cjprestamos.mapper.CjPrestamosBridgeMapper;
@@ -36,12 +37,13 @@ class ExternalLoansServiceTest {
   @Mock ExternalLoanSyncConfigRepository syncConfigRepository;
   @Mock AccountRepository accountRepository;
   @Mock CategoryRepository categoryRepository;
-    @Mock ExternalLoanSyncEventProcessor eventProcessor;
+  @Mock ExternalLoanSyncEventProcessor eventProcessor;
+  @Mock CjPrestamosIntegrationConfigValidator configValidator;
 
   ExternalLoansService service;
 
   @BeforeEach void setUp() {
-    service = new ExternalLoansService(client, properties, profileRepository, new CjPrestamosBridgeMapper(), syncConfigRepository, accountRepository, categoryRepository, eventProcessor);
+    service = new ExternalLoansService(client, properties, profileRepository, new CjPrestamosBridgeMapper(), syncConfigRepository, accountRepository, categoryRepository, eventProcessor, configValidator);
     lenient().when(properties.syncEnabled()).thenReturn(true);
   }
 
@@ -151,7 +153,7 @@ class ExternalLoansServiceTest {
     when(properties.syncEnabled()).thenReturn(false);
 
     assertThrows(BadRequestException.class, () -> service.sync(userId, profileId));
-    verifyNoInteractions(eventProcessor);
+    verifyNoInteractions(eventProcessor, client);
   }
 
   @Test void syncFailsFastWhenConfigIncomplete() {
@@ -160,7 +162,7 @@ class ExternalLoansServiceTest {
     when(syncConfigRepository.findByProfileId(profileId)).thenReturn(Optional.of(ExternalLoanSyncConfig.builder().profileId(profileId).enabled(true).build()));
 
     assertThrows(BadRequestException.class, () -> service.sync(userId, profileId));
-    verifyNoInteractions(eventProcessor);
+    verifyNoInteractions(eventProcessor, client);
   }
 
   @Test void dryRunDoesNotPersistAndDetectsDuplicates() {
