@@ -10,8 +10,9 @@ import lombok.*;
     name = "external_sync_mapping",
     uniqueConstraints =
         @UniqueConstraint(
-            name = "uk_external_sync_mapping_external_event",
+            name = "uk_external_sync_mapping_external_event_profile",
             columnNames = {
+              "profile_id",
               "external_system",
               "external_entity_type",
               "external_entity_id",
