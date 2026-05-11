@@ -3,6 +3,9 @@ package com.hogaria.integration.cjprestamos.remote;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import com.fasterxml.jackson.databind.json.JsonMapper;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 
 class CjPrestamosRemoteDeserializationTest {
@@ -40,10 +43,14 @@ class CjPrestamosRemoteDeserializationTest {
   }
 
   @Test void deserializesPayments() throws Exception {
-    String json = "[{\"id\":9,\"prestamoId\":1,\"fechaPago\":\"2026-06-03\",\"monto\":88,\"principalRecovered\":50,\"interestCollected\":38,\"referenciaManual\":\"TRX-1\",\"observaciones\":\"ok\",\"estado\":\"CONFIRMADO\"}]";
+    String json = readFixture("payments-with-split.json");
     var value = mapper.readValue(json, CjPrestamosPaymentRemoteResponse[].class);
     assertEquals("TRX-1", value[0].referenciaManual());
     assertEquals(0, value[0].principalRecovered().compareTo(new java.math.BigDecimal("50")));
     assertEquals(0, value[0].interestCollected().compareTo(new java.math.BigDecimal("38")));
+  }
+
+  private String readFixture(String fixtureName) throws Exception {
+    return Files.readString(Path.of("src/test/resources/fixtures/cjprestamos", fixtureName), StandardCharsets.UTF_8);
   }
 }

@@ -18,8 +18,10 @@ import org.springframework.web.client.RestClientResponseException;
 @Component
 public class HttpCjPrestamosClient implements CjPrestamosClient {
   private final RestClient restClient;
+  private final String apiPrefix;
 
   public HttpCjPrestamosClient(CjPrestamosProperties properties, RestTemplateBuilder restTemplateBuilder) {
+    this.apiPrefix = properties.resolvedApiPrefix();
     this.restClient = RestClient.builder(restTemplateBuilder
         .setConnectTimeout(java.time.Duration.ofMillis(properties.connectTimeoutMs()))
         .setReadTimeout(java.time.Duration.ofMillis(properties.readTimeoutMs()))
@@ -27,11 +29,11 @@ public class HttpCjPrestamosClient implements CjPrestamosClient {
         .build()).baseUrl(properties.baseUrl()).build();
   }
 
-  @Override public List<CjPrestamosLoanActiveRemoteResponse> getActiveLoans(UUID profileId, UUID userId) { return getList("/api/integration/hogaria/loans/active", CjPrestamosLoanActiveRemoteResponse[].class, profileId, userId); }
-  @Override public CjPrestamosDashboardRemoteResponse getDashboardSummary(UUID profileId, UUID userId) { return getObject("/api/integration/hogaria/dashboard", CjPrestamosDashboardRemoteResponse.class, profileId, userId); }
-  @Override public CjPrestamosCashControlRemoteResponse getCashControl(UUID profileId, UUID userId) { return getObject("/api/integration/hogaria/control-caja", CjPrestamosCashControlRemoteResponse.class, profileId, userId); }
-  @Override public List<CjPrestamosInstallmentRemoteResponse> getLoanInstallments(UUID profileId, UUID userId, Long externalLoanId) { return getList("/api/integration/hogaria/loans/" + externalLoanId + "/installments", CjPrestamosInstallmentRemoteResponse[].class, profileId, userId); }
-  @Override public List<CjPrestamosPaymentRemoteResponse> getLoanPayments(UUID profileId, UUID userId, Long externalLoanId) { return getList("/api/integration/hogaria/loans/" + externalLoanId + "/payments", CjPrestamosPaymentRemoteResponse[].class, profileId, userId); }
+  @Override public List<CjPrestamosLoanActiveRemoteResponse> getActiveLoans(UUID profileId, UUID userId) { return getList(apiPrefix + "/loans/active", CjPrestamosLoanActiveRemoteResponse[].class, profileId, userId); }
+  @Override public CjPrestamosDashboardRemoteResponse getDashboardSummary(UUID profileId, UUID userId) { return getObject(apiPrefix + "/dashboard", CjPrestamosDashboardRemoteResponse.class, profileId, userId); }
+  @Override public CjPrestamosCashControlRemoteResponse getCashControl(UUID profileId, UUID userId) { return getObject(apiPrefix + "/control-caja", CjPrestamosCashControlRemoteResponse.class, profileId, userId); }
+  @Override public List<CjPrestamosInstallmentRemoteResponse> getLoanInstallments(UUID profileId, UUID userId, Long externalLoanId) { return getList(apiPrefix + "/loans/" + externalLoanId + "/installments", CjPrestamosInstallmentRemoteResponse[].class, profileId, userId); }
+  @Override public List<CjPrestamosPaymentRemoteResponse> getLoanPayments(UUID profileId, UUID userId, Long externalLoanId) { return getList(apiPrefix + "/loans/" + externalLoanId + "/payments", CjPrestamosPaymentRemoteResponse[].class, profileId, userId); }
 
   private <T> T getObject(String path, Class<T> clazz, UUID profileId, UUID userId) {
     try {

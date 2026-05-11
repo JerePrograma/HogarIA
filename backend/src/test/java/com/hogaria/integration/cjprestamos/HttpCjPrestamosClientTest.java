@@ -18,6 +18,7 @@ import java.util.List;
 import java.util.Queue;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -28,6 +29,10 @@ class HttpCjPrestamosClientTest {
   private String baseUrl;
   private final Queue<StubResponse> responses = new ArrayDeque<>();
   private final AtomicInteger receivedCalls = new AtomicInteger(0);
+  private final AtomicReference<String> lastPath = new AtomicReference<>();
+  private final AtomicReference<String> lastAuthorization = new AtomicReference<>();
+  private final AtomicReference<String> lastProfileHeader = new AtomicReference<>();
+  private final AtomicReference<String> lastUserHeader = new AtomicReference<>();
 
   @BeforeEach
   void setUp() throws IOException {
@@ -54,6 +59,22 @@ class HttpCjPrestamosClientTest {
     assertEquals("María Gómez", loans.getFirst().personaNombre());
     assertEquals(12, loans.getFirst().cantidadCuotas());
     assertEquals(1, receivedCalls.get());
+    assertEquals("/api/integration/hogaria/loans/active", lastPath.get());
+  }
+
+  @Test
+  void supportsV1PrefixAndRequiredHeaders() {
+    responses.add(StubResponse.ok("[]"));
+    var profileId = UUID.randomUUID();
+    var userId = UUID.randomUUID();
+    var client = buildClient(1000, 1000, "/api/v1/integration/hogaria");
+
+    client.getActiveLoans(profileId, userId);
+
+    assertEquals("/api/v1/integration/hogaria/loans/active", lastPath.get());
+    assertEquals("Basic dXNlcjpwYXNz", lastAuthorization.get());
+    assertEquals(profileId.toString(), lastProfileHeader.get());
+    assertEquals(userId.toString(), lastUserHeader.get());
   }
 
   @Test
@@ -129,12 +150,20 @@ class HttpCjPrestamosClientTest {
   }
 
   private HttpCjPrestamosClient buildClient(int connectTimeoutMs, int readTimeoutMs) {
-    var properties = new CjPrestamosProperties(true, false, baseUrl, "user", "pass", connectTimeoutMs, readTimeoutMs);
+    return buildClient(connectTimeoutMs, readTimeoutMs, null);
+  }
+
+  private HttpCjPrestamosClient buildClient(int connectTimeoutMs, int readTimeoutMs, String apiPrefix) {
+    var properties = new CjPrestamosProperties(true, false, baseUrl, apiPrefix, "user", "pass", connectTimeoutMs, readTimeoutMs);
     return new HttpCjPrestamosClient(properties, new RestTemplateBuilder().setConnectTimeout(Duration.ofMillis(connectTimeoutMs)).setReadTimeout(Duration.ofMillis(readTimeoutMs)));
   }
 
   private void handle(HttpExchange exchange) throws IOException {
     receivedCalls.incrementAndGet();
+    lastPath.set(exchange.getRequestURI().getPath());
+    lastAuthorization.set(exchange.getRequestHeaders().getFirst("Authorization"));
+    lastProfileHeader.set(exchange.getRequestHeaders().getFirst("X-Profile-Id"));
+    lastUserHeader.set(exchange.getRequestHeaders().getFirst("X-User-Id"));
     StubResponse response = responses.isEmpty() ? StubResponse.ok("[]") : responses.poll();
     if (response.delayMs > 0) {
       try { Thread.sleep(response.delayMs); } catch (InterruptedException ignored) { Thread.currentThread().interrupt(); }

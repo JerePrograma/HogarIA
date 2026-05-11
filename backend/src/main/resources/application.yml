@@ -22,6 +22,7 @@ app:
       enabled: ${CJP_INTEGRATION_ENABLED:false}
       sync-enabled: ${CJP_SYNC_ENABLED:false}
       base-url: ${CJP_BASE_URL:http://localhost:8081}
+      api-prefix: ${CJP_API_PREFIX:/api/v1/integration/hogaria}
       username: ${CJP_USERNAME:}
       password: ${CJP_PASSWORD:}
       connect-timeout-ms: ${CJP_CONNECT_TIMEOUT_MS:3000}
