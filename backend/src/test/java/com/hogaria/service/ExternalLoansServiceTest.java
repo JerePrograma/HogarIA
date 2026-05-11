@@ -163,4 +163,25 @@ class ExternalLoansServiceTest {
     verifyNoInteractions(eventProcessor);
   }
 
+  @Test void dryRunDoesNotPersistAndDetectsDuplicates() {
+    UUID userId = UUID.randomUUID(); UUID profileId = UUID.randomUUID(); UUID accountId = UUID.randomUUID(); UUID c1 = UUID.randomUUID(); UUID c2 = UUID.randomUUID(); UUID c3 = UUID.randomUUID();
+    when(profileRepository.existsByIdAndUserId(profileId, userId)).thenReturn(true);
+    when(syncConfigRepository.findByProfileId(profileId)).thenReturn(Optional.of(ExternalLoanSyncConfig.builder().profileId(profileId).enabled(true).accountId(accountId).loanDisbursementCategoryId(c1).principalRecoveryCategoryId(c2).interestIncomeCategoryId(c3).build()));
+    when(accountRepository.existsByIdAndProfileId(accountId, profileId)).thenReturn(true);
+    when(categoryRepository.findById(any())).thenAnswer(inv -> Optional.of(Category.builder().id(inv.getArgument(0)).profileId(profileId).build()));
+    when(client.getActiveLoans(profileId, userId)).thenReturn(List.of(new CjPrestamosLoanActiveRemoteResponse(1L, 1L, "Ana", new BigDecimal("100"), 1, "MENSUAL", "ACTIVE", BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, LocalDateTime.now(), LocalDateTime.now())));
+    when(client.getLoanPayments(profileId, userId, 1L)).thenReturn(List.of(new CjPrestamosPaymentRemoteResponse(9L, 1L, LocalDate.now(), new BigDecimal("50"), new BigDecimal("30"), new BigDecimal("20"), "r", null, "OK")));
+    when(eventProcessor.isAlreadyProcessed(any(), any(), eq("LOAN"), eq("1"), eq("DISBURSEMENT"))).thenReturn(true);
+    when(eventProcessor.isAlreadyProcessed(any(), any(), eq("PAYMENT"), eq("9"), eq("PAYMENT_PRINCIPAL_RECOVERY"))).thenReturn(false);
+    when(eventProcessor.isAlreadyProcessed(any(), any(), eq("PAYMENT"), eq("9"), eq("PAYMENT_INTEREST_INCOME"))).thenReturn(false);
+
+    var response = service.dryRunSync(userId, profileId);
+    assertTrue(response.dryRun());
+    assertEquals(2, response.movementsCreated());
+    assertEquals(1, response.skippedDuplicates());
+    verify(eventProcessor, never()).processDisbursement(any(), any(), any(), any(), any(), any(), any());
+    verify(eventProcessor, never()).processPaymentPrincipal(any(), any(), any(), any(), any(), any());
+    verify(eventProcessor, never()).processPaymentInterest(any(), any(), any(), any(), any(), any());
+  }
+
 }

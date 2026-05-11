@@ -53,8 +53,16 @@ public class ExternalLoansService {
   }
 
   public ExternalLoanManualSyncResponse sync(UUID userId, UUID profileId) {
+    return runSync(userId, profileId, false);
+  }
+
+  public ExternalLoanManualSyncResponse dryRunSync(UUID userId, UUID profileId) {
+    return runSync(userId, profileId, true);
+  }
+
+  private ExternalLoanManualSyncResponse runSync(UUID userId, UUID profileId, boolean dryRun) {
     ensureProfileBelongsToUser(userId, profileId);
-    if (!properties.syncEnabled()) throw new BadRequestException("La sincronización contable está deshabilitada. La integración está en modo solo lectura.");
+    if (!dryRun && !properties.syncEnabled()) throw new BadRequestException("La sincronización contable está deshabilitada. La integración está en modo solo lectura.");
     ExternalLoanSyncConfig cfg = syncConfigRepository.findByProfileId(profileId)
         .orElseThrow(() -> new BadRequestException("No existe configuración de sincronización externa"));
     if (!Boolean.TRUE.equals(cfg.getEnabled())) throw new BadRequestException("La sincronización externa está deshabilitada");
@@ -66,15 +74,24 @@ public class ExternalLoansService {
     List<CjPrestamosLoanActiveRemoteResponse> loans = client.getActiveLoans(profileId, userId);
 
     int loansSynced = 0, paymentsSynced = 0, movementsCreated = 0, skippedDuplicates = 0;
+    int disbursement = 0, paymentPrincipalRecovery = 0, paymentInterestIncome = 0;
     List<String> errors = new ArrayList<>();
+    List<String> detectedLoans = new ArrayList<>();
+    List<String> detectedPayments = new ArrayList<>();
+    List<String> plannedMovements = new ArrayList<>();
 
     for (CjPrestamosLoanActiveRemoteResponse loan : loans) {
       String loanId = String.valueOf(loan.id());
+      detectedLoans.add(loanId);
       try {
-        boolean created = eventProcessor.processDisbursement(userId, profileId, cfg, loanId, loan.personaNombre(), loan.createdAt().toLocalDate(), loan.montoInicial());
+        boolean created = dryRun
+            ? !isDuplicate(userId, profileId, "LOAN", loanId, "DISBURSEMENT")
+            : eventProcessor.processDisbursement(userId, profileId, cfg, loanId, loan.personaNombre(), loan.createdAt().toLocalDate(), loan.montoInicial());
         if (created) {
           movementsCreated++;
           loansSynced++;
+          disbursement++;
+          plannedMovements.add("DISBURSEMENT loan " + loanId + " amount=" + loan.montoInicial());
         } else {
           skippedDuplicates++;
         }
@@ -83,6 +100,7 @@ public class ExternalLoansService {
       List<CjPrestamosPaymentRemoteResponse> payments = client.getLoanPayments(profileId, userId, loan.id());
       for (CjPrestamosPaymentRemoteResponse payment : payments) {
         String paymentId = String.valueOf(payment.id());
+        detectedPayments.add(paymentId);
         try {
           BigDecimal principalRecovered = payment.principalRecovered();
           BigDecimal interestCollected = payment.interestCollected();
@@ -90,8 +108,12 @@ public class ExternalLoansService {
             throw new BadRequestException("cjprestamos no envió split principal/interés para pago " + paymentId);
           }
 
-          boolean createdPrincipal = eventProcessor.processPaymentPrincipal(userId, profileId, cfg, paymentId, payment.fechaPago(), principalRecovered);
-          boolean createdInterest = eventProcessor.processPaymentInterest(userId, profileId, cfg, paymentId, payment.fechaPago(), interestCollected);
+          boolean createdPrincipal = dryRun
+              ? (principalRecovered.signum() > 0 && !isDuplicate(userId, profileId, "PAYMENT", paymentId, "PAYMENT_PRINCIPAL_RECOVERY"))
+              : eventProcessor.processPaymentPrincipal(userId, profileId, cfg, paymentId, payment.fechaPago(), principalRecovered);
+          boolean createdInterest = dryRun
+              ? (interestCollected.signum() > 0 && !isDuplicate(userId, profileId, "PAYMENT", paymentId, "PAYMENT_INTEREST_INCOME"))
+              : eventProcessor.processPaymentInterest(userId, profileId, cfg, paymentId, payment.fechaPago(), interestCollected);
 
           if (principalRecovered.signum() > 0 && !createdPrincipal) skippedDuplicates++;
           if (interestCollected.signum() > 0 && !createdInterest) skippedDuplicates++;
@@ -99,11 +121,24 @@ public class ExternalLoansService {
             paymentsSynced++;
             movementsCreated += createdPrincipal ? 1 : 0;
             movementsCreated += createdInterest ? 1 : 0;
+            if (createdPrincipal) {
+              paymentPrincipalRecovery++;
+              plannedMovements.add("PAYMENT_PRINCIPAL_RECOVERY payment " + paymentId + " amount=" + principalRecovered);
+            }
+            if (createdInterest) {
+              paymentInterestIncome++;
+              plannedMovements.add("PAYMENT_INTEREST_INCOME payment " + paymentId + " amount=" + interestCollected);
+            }
           }
         } catch (Exception ex) { errors.add("payment " + paymentId + ": " + ex.getMessage()); }
       }
     }
-    return new ExternalLoanManualSyncResponse(loansSynced, paymentsSynced, movementsCreated, skippedDuplicates, errors);
+    return new ExternalLoanManualSyncResponse(dryRun, loansSynced, paymentsSynced, movementsCreated, skippedDuplicates, errors, detectedLoans, detectedPayments, plannedMovements,
+        java.util.Map.of("DISBURSEMENT", disbursement, "PAYMENT_PRINCIPAL_RECOVERY", paymentPrincipalRecovery, "PAYMENT_INTEREST_INCOME", paymentInterestIncome));
+  }
+
+  private boolean isDuplicate(UUID userId, UUID profileId, String entityType, String entityId, String eventType) {
+    return eventProcessor.isAlreadyProcessed(userId, profileId, entityType, entityId, eventType);
   }
 
 

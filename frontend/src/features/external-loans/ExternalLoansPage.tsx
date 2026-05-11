@@ -9,7 +9,7 @@ import { ErrorState } from '../../components/ui/ErrorState';
 import { ExternalLoansActiveTable } from './components/ExternalLoansActiveTable';
 import { ExternalLoansCashControlCards } from './components/ExternalLoansCashControlCards';
 import { ExternalLoansSummaryCards } from './components/ExternalLoansSummaryCards';
-import { useExternalLoanSyncConfig, useSaveExternalLoanSyncConfig, useSyncExternalLoans } from './hooks/useExternalLoanSync';
+import { useDryRunExternalLoans, useExternalLoanSyncConfig, useSaveExternalLoanSyncConfig, useSyncExternalLoans } from './hooks/useExternalLoanSync';
 import { useExternalLoansSummary } from './hooks/useExternalLoansSummary';
 import type { ExternalLoanSyncConfigPayload } from './types';
 
@@ -19,6 +19,7 @@ export function ExternalLoansPage() {
   const syncConfigQuery = useExternalLoanSyncConfig(profileId);
   const saveConfigMutation = useSaveExternalLoanSyncConfig(profileId);
   const syncMutation = useSyncExternalLoans(profileId);
+  const dryRunMutation = useDryRunExternalLoans(profileId);
   const accountsQuery = useQuery({
     queryKey: ['accounts', profileId],
     queryFn: () => listAccounts(profileId),
@@ -145,10 +146,24 @@ export function ExternalLoansPage() {
                 <button type='button' onClick={handleSaveConfig} disabled={saveConfigMutation.isPending || !hasSyncConfig}>
                   Guardar configuración
                 </button>
+                <button type='button' onClick={() => dryRunMutation.mutate()} disabled={dryRunMutation.isPending || !hasSyncConfig}>
+                  Simular sincronización
+                </button>
                 <button type='button' onClick={() => syncMutation.mutate()} disabled={syncMutation.isPending || !canSync}>
                   Sincronizar movimientos
                 </button>
               </div>
+
+              {dryRunMutation.data && (
+                <div className='stack-sm'>
+                  <p><strong>Simulación</strong>: {dryRunMutation.data.movementsCreated} movimientos potenciales.</p>
+                  <p>Préstamos detectados: {dryRunMutation.data.detectedLoans.join(', ') || 'Ninguno'}</p>
+                  <p>Pagos detectados: {dryRunMutation.data.detectedPayments.join(', ') || 'Ninguno'}</p>
+                  <p>Duplicados ya procesados: {dryRunMutation.data.skippedDuplicates}</p>
+                  <p>Por tipo: DISBURSEMENT={dryRunMutation.data.summaryByType.DISBURSEMENT ?? 0}, PAYMENT_PRINCIPAL_RECOVERY={dryRunMutation.data.summaryByType.PAYMENT_PRINCIPAL_RECOVERY ?? 0}, PAYMENT_INTEREST_INCOME={dryRunMutation.data.summaryByType.PAYMENT_INTEREST_INCOME ?? 0}</p>
+                  <p>Errores que bloquearían sync real: {dryRunMutation.data.errors.length > 0 ? dryRunMutation.data.errors.join(' | ') : 'Sin errores'}</p>
+                </div>
+              )}
               {syncMutation.data && (
                 <div className='stack-sm'>
                   <p>Préstamos sincronizados: {syncMutation.data.loansSynced}</p>

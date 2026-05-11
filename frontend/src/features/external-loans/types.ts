@@ -68,9 +68,14 @@ export type ExternalLoanSyncConfigPayload = {
 };
 
 export type ExternalLoanManualSyncResponse = {
+  dryRun: boolean;
   loansSynced: number;
   paymentsSynced: number;
   movementsCreated: number;
   skippedDuplicates: number;
   errors: string[];
+  detectedLoans: string[];
+  detectedPayments: string[];
+  plannedMovements: string[];
+  summaryByType: Record<string, number>;
 };

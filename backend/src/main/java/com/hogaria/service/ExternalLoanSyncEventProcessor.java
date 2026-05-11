@@ -30,6 +30,10 @@ public class ExternalLoanSyncEventProcessor {
     this.idempotencyService = idempotencyService;
   }
 
+  public boolean isAlreadyProcessed(UUID userId, UUID profileId, String entityType, String entityId, String eventType) {
+    return idempotencyService.isAlreadyProcessed(userId, profileId, SYSTEM, entityType, entityId, eventType);
+  }
+
   @Transactional(propagation = Propagation.REQUIRES_NEW)
   public boolean processDisbursement(UUID userId, UUID profileId, ExternalLoanSyncConfig cfg, String loanId, String personName, LocalDate date, BigDecimal amount) {
     if (idempotencyService.isAlreadyProcessed(userId, profileId, SYSTEM, LOAN_ENTITY, loanId, DISBURSEMENT_EVENT)) {

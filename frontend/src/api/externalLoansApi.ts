@@ -28,3 +28,8 @@ export const syncExternalLoans = async (profileId: string): Promise<ExternalLoan
   const response = await http.post<ExternalLoanManualSyncResponse>(`/api/profiles/${profileId}/external-loans/sync`);
   return response.data;
 };
+
+export const dryRunExternalLoans = async (profileId: string): Promise<ExternalLoanManualSyncResponse> => {
+  const response = await http.post<ExternalLoanManualSyncResponse>(`/api/profiles/${profileId}/external-loans/sync/dry-run`);
+  return response.data;
+};
