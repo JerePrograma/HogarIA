@@ -43,6 +43,7 @@ class ExternalLoansServiceTest {
 
   @BeforeEach void setUp() {
     service = new ExternalLoansService(client, properties, profileRepository, new CjPrestamosBridgeMapper(), syncConfigRepository, accountRepository, categoryRepository, transactionRepository, idempotencyService);
+    lenient().when(properties.syncEnabled()).thenReturn(true);
   }
 
   @Test void returnsDisabledWhenIntegrationOff() { UUID userId = UUID.randomUUID(); UUID profileId = UUID.randomUUID(); when(profileRepository.existsByIdAndUserId(profileId, userId)).thenReturn(true); when(properties.enabled()).thenReturn(false); var response = service.getSummary(userId, profileId); assertEquals("DISABLED", response.status()); verifyNoInteractions(client); }
@@ -131,6 +132,24 @@ class ExternalLoansServiceTest {
     assertEquals(1, response.paymentsSynced());
     verify(idempotencyService, times(1)).markProcessed(eq(profileId), eq("CJPRESTAMOS"), eq("PAYMENT"), eq("9"), eq("PAYMENT_PRINCIPAL_RECOVERY"), eq("payment-principal-9"), any(), isNull());
     verify(idempotencyService, never()).markProcessed(eq(profileId), eq("CJPRESTAMOS"), eq("PAYMENT"), eq("9"), eq("PAYMENT_INTEREST_INCOME"), any(), any(), any());
+  }
+
+  @Test void syncReturnsControlledErrorWhenSyncFeatureDisabled() {
+    UUID userId = UUID.randomUUID(); UUID profileId = UUID.randomUUID();
+    when(profileRepository.existsByIdAndUserId(profileId, userId)).thenReturn(true);
+    when(properties.syncEnabled()).thenReturn(false);
+
+    var ex = assertThrows(BadRequestException.class, () -> service.sync(userId, profileId));
+    assertEquals("La sincronización contable está deshabilitada. La integración está en modo solo lectura.", ex.getMessage());
+  }
+
+  @Test void syncDoesNotCreateTransactionsWhenSyncFeatureDisabled() {
+    UUID userId = UUID.randomUUID(); UUID profileId = UUID.randomUUID();
+    when(profileRepository.existsByIdAndUserId(profileId, userId)).thenReturn(true);
+    when(properties.syncEnabled()).thenReturn(false);
+
+    assertThrows(BadRequestException.class, () -> service.sync(userId, profileId));
+    verifyNoInteractions(transactionRepository);
   }
 
 }
