@@ -54,7 +54,7 @@ public class CjPrestamosBridgeMapper {
 
   public ExternalLoanPaymentResponse toExternalPayment(CjPrestamosPaymentRemoteResponse remote) {
     return new ExternalLoanPaymentResponse(
-        remote.id(), remote.prestamoId(), remote.fechaPago(), remote.monto(), remote.referenciaManual(), remote.observaciones(), remote.estado());
+        remote.id(), remote.prestamoId(), remote.fechaPago(), remote.monto(), remote.principalRecovered(), remote.interestCollected(), remote.referenciaManual(), remote.observaciones(), remote.estado());
   }
 
   public List<ExternalLoanPaymentResponse> toExternalPayments(List<CjPrestamosPaymentRemoteResponse> remote) {

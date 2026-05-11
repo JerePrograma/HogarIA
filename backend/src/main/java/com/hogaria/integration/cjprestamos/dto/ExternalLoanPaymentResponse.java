@@ -8,6 +8,8 @@ public record ExternalLoanPaymentResponse(
     Long externalLoanId,
     LocalDate paymentDate,
     BigDecimal amount,
+    BigDecimal principalRecovered,
+    BigDecimal interestCollected,
     String manualReference,
     String notes,
     String status

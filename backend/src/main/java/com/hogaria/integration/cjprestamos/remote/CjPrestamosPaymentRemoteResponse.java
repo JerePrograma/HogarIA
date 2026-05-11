@@ -8,6 +8,8 @@ public record CjPrestamosPaymentRemoteResponse(
     Long prestamoId,
     LocalDate fechaPago,
     BigDecimal monto,
+    BigDecimal principalRecovered,
+    BigDecimal interestCollected,
     String referenciaManual,
     String observaciones,
     String estado
