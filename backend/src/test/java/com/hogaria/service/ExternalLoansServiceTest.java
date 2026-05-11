@@ -58,12 +58,12 @@ class ExternalLoansServiceTest {
     when(accountRepository.existsByIdAndProfileId(accountId, profileId)).thenReturn(true);
     when(categoryRepository.findById(any())).thenAnswer(inv -> Optional.of(Category.builder().id(inv.getArgument(0)).profileId(profileId).build()));
     when(client.getActiveLoans(profileId, userId)).thenReturn(List.of(new CjPrestamosLoanActiveRemoteResponse(1L, 1L, "Ana", new BigDecimal("100"), 1, "MENSUAL", "ACTIVE", BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, LocalDateTime.now(), LocalDateTime.now())));
-    when(client.getLoanPayments(profileId, userId, 1L)).thenReturn(List.of(new CjPrestamosPaymentRemoteResponse(9L, 1L, LocalDate.now(), new BigDecimal("50"), "r", "sin split", "OK")));
+    when(client.getLoanPayments(profileId, userId, 1L)).thenReturn(List.of(new CjPrestamosPaymentRemoteResponse(9L, 1L, LocalDate.now(), new BigDecimal("50"), null, null, "r", "sin split", "OK")));
     when(idempotencyService.isAlreadyProcessed(any(), any(), any(), any(), any(), any())).thenReturn(false);
 
     var response = service.sync(userId, profileId);
     assertFalse(response.errors().isEmpty());
-    assertTrue(response.errors().stream().anyMatch(e -> e.contains("Falta split principal/interés")));
+    assertTrue(response.errors().stream().anyMatch(e -> e.contains("cjprestamos no envió split principal/interés para pago 9")));
   }
 
   @Test void syncCreatesIncomeForInterestAndNotDuplicate() {
@@ -73,7 +73,7 @@ class ExternalLoansServiceTest {
     when(accountRepository.existsByIdAndProfileId(accountId, profileId)).thenReturn(true);
     when(categoryRepository.findById(any())).thenAnswer(inv -> Optional.of(Category.builder().id(inv.getArgument(0)).profileId(profileId).build()));
     when(client.getActiveLoans(profileId, userId)).thenReturn(List.of(new CjPrestamosLoanActiveRemoteResponse(1L, 1L, "Ana", new BigDecimal("100"), 1, "MENSUAL", "ACTIVE", BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, LocalDateTime.now(), LocalDateTime.now())));
-    when(client.getLoanPayments(profileId, userId, 1L)).thenReturn(List.of(new CjPrestamosPaymentRemoteResponse(9L, 1L, LocalDate.now(), new BigDecimal("50"), "r", "principalRecovered=30;interestCollected=20", "OK")));
+    when(client.getLoanPayments(profileId, userId, 1L)).thenReturn(List.of(new CjPrestamosPaymentRemoteResponse(9L, 1L, LocalDate.now(), new BigDecimal("50"), new BigDecimal("30"), new BigDecimal("20"), "r", null, "OK")));
     when(idempotencyService.isAlreadyProcessed(any(), any(), any(), any(), eq("9"), any())).thenReturn(false);
     when(idempotencyService.isAlreadyProcessed(any(), any(), any(), any(), eq("1"), any())).thenReturn(true);
 

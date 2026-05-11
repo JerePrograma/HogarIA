@@ -16,7 +16,6 @@ import com.hogaria.repository.*;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Objects;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 
@@ -96,9 +95,11 @@ public class ExternalLoansService {
           if (idempotencyService.isAlreadyProcessed(userId, profileId, SYSTEM, PAYMENT_ENTITY, paymentId, "PAYMENT")) {
             skippedDuplicates++; continue;
           }
-          BigDecimal principalRecovered = parseDecimal(payment.observaciones(), "principalRecovered");
-          BigDecimal interestCollected = parseDecimal(payment.observaciones(), "interestCollected");
-          if (principalRecovered == null || interestCollected == null) throw new BadRequestException("Falta split principal/interés en cjprestamos para pago " + paymentId);
+          BigDecimal principalRecovered = payment.principalRecovered();
+          BigDecimal interestCollected = payment.interestCollected();
+          if (principalRecovered == null || interestCollected == null) {
+            throw new BadRequestException("cjprestamos no envió split principal/interés para pago " + paymentId);
+          }
 
           if (principalRecovered.signum() > 0) {
             transactionRepository.save(MoneyTransaction.builder().profileId(profileId).accountId(cfg.getAccountId())
@@ -122,15 +123,6 @@ public class ExternalLoansService {
       }
     }
     return new ExternalLoanManualSyncResponse(loansSynced, paymentsSynced, movementsCreated, skippedDuplicates, errors);
-  }
-
-  private BigDecimal parseDecimal(String observations, String key) {
-    if (observations == null) return null;
-    for (String token : observations.split(";")) {
-      String[] parts = token.split("=");
-      if (parts.length == 2 && Objects.equals(parts[0].trim(), key)) return new BigDecimal(parts[1].trim());
-    }
-    return null;
   }
 
   private void validateConfigReferences(UUID profileId, ExternalLoanSyncConfig cfg) {

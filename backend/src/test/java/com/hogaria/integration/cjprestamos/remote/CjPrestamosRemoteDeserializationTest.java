@@ -40,8 +40,10 @@ class CjPrestamosRemoteDeserializationTest {
   }
 
   @Test void deserializesPayments() throws Exception {
-    String json = "[{\"id\":9,\"prestamoId\":1,\"fechaPago\":\"2026-06-03\",\"monto\":88,\"referenciaManual\":\"TRX-1\",\"observaciones\":\"ok\",\"estado\":\"CONFIRMADO\"}]";
+    String json = "[{\"id\":9,\"prestamoId\":1,\"fechaPago\":\"2026-06-03\",\"monto\":88,\"principalRecovered\":50,\"interestCollected\":38,\"referenciaManual\":\"TRX-1\",\"observaciones\":\"ok\",\"estado\":\"CONFIRMADO\"}]";
     var value = mapper.readValue(json, CjPrestamosPaymentRemoteResponse[].class);
     assertEquals("TRX-1", value[0].referenciaManual());
+    assertEquals(0, value[0].principalRecovered().compareTo(new java.math.BigDecimal("50")));
+    assertEquals(0, value[0].interestCollected().compareTo(new java.math.BigDecimal("38")));
   }
 }
