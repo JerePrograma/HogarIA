@@ -50,6 +50,23 @@ class ExternalLoansServiceTest {
   @Test void throwsWhenProfileDoesNotBelongToUser() { UUID userId = UUID.randomUUID(); UUID profileId = UUID.randomUUID(); when(profileRepository.existsByIdAndUserId(profileId, userId)).thenReturn(false); assertThrows(ForbiddenException.class, () -> service.getSummary(userId, profileId)); verifyNoInteractions(client); }
   @Test void returnsDashboardWhenClientResponds() { UUID userId = UUID.randomUUID(); UUID profileId = UUID.randomUUID(); when(profileRepository.existsByIdAndUserId(profileId, userId)).thenReturn(true); when(properties.enabled()).thenReturn(true); var dashboard = new CjPrestamosDashboardRemoteResponse(new BigDecimal("1000"), new BigDecimal("80"), new BigDecimal("120"), new BigDecimal("50"), 3L); var cash = new CjPrestamosCashControlRemoteResponse(BigDecimal.TEN, BigDecimal.ONE, BigDecimal.ONE, BigDecimal.ONE, BigDecimal.ONE, BigDecimal.ONE, BigDecimal.ONE, BigDecimal.ONE, BigDecimal.ONE, BigDecimal.ONE, BigDecimal.ONE, BigDecimal.ONE, BigDecimal.ZERO, 2L, 1L, new BigDecimal("0.9"), new BigDecimal("0.2")); var loans = List.of(new CjPrestamosLoanActiveRemoteResponse(10L, 22L, "Ana", new BigDecimal("200"), 12, "MENSUAL", "ACTIVE", new BigDecimal("50"), new BigDecimal("150"), new BigDecimal("10"), new BigDecimal("20"), LocalDateTime.now(), LocalDateTime.now())); when(client.getDashboardSummary(profileId, userId)).thenReturn(dashboard); when(client.getCashControl(profileId, userId)).thenReturn(cash); when(client.getActiveLoans(profileId, userId)).thenReturn(loans);
     var response = service.getSummary(userId, profileId); assertEquals("ENABLED", response.status()); assertEquals(3L, response.dashboard().activeLoans()); assertEquals(10L, response.activeLoans().getFirst().externalLoanId()); }
+
+  @Test void summaryMarksReadOnlyWhenSyncDisabled() {
+    UUID userId = UUID.randomUUID(); UUID profileId = UUID.randomUUID();
+    when(profileRepository.existsByIdAndUserId(profileId, userId)).thenReturn(true);
+    when(properties.enabled()).thenReturn(true);
+    when(properties.syncEnabled()).thenReturn(false);
+    var dashboard = new CjPrestamosDashboardRemoteResponse(new BigDecimal("1000"), new BigDecimal("80"), new BigDecimal("120"), new BigDecimal("50"), 3L);
+    var cash = new CjPrestamosCashControlRemoteResponse(BigDecimal.TEN, BigDecimal.ONE, BigDecimal.ONE, BigDecimal.ONE, BigDecimal.ONE, BigDecimal.ONE, BigDecimal.ONE, BigDecimal.ONE, BigDecimal.ONE, BigDecimal.ONE, BigDecimal.ONE, BigDecimal.ONE, BigDecimal.ZERO, 2L, 1L, new BigDecimal("0.9"), new BigDecimal("0.2"));
+    when(client.getDashboardSummary(profileId, userId)).thenReturn(dashboard);
+    when(client.getCashControl(profileId, userId)).thenReturn(cash);
+    when(client.getActiveLoans(profileId, userId)).thenReturn(List.of());
+
+    var response = service.getSummary(userId, profileId);
+
+    assertTrue(response.readOnly());
+  }
+
   @Test void propagatesRemoteError() { UUID userId = UUID.randomUUID(); UUID profileId = UUID.randomUUID(); when(profileRepository.existsByIdAndUserId(profileId, userId)).thenReturn(true); when(properties.enabled()).thenReturn(true); when(client.getDashboardSummary(profileId, userId)).thenThrow(new CjPrestamosIntegrationException("timeout")); assertThrows(CjPrestamosIntegrationException.class, () -> service.getSummary(userId, profileId)); }
 
   @Test void syncFailsWhenMissingPrincipalInterestSplit() {
