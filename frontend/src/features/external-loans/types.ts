@@ -50,9 +50,9 @@ export type ExternalLoanSyncConfig = {
   id?: string;
   profileId?: string;
   accountId: string | null;
-  principalOutCategoryId: string | null;
-  principalInCategoryId: string | null;
-  interestCategoryId: string | null;
+  loanDisbursementCategoryId: string | null;
+  principalRecoveryCategoryId: string | null;
+  interestIncomeCategoryId: string | null;
   enabled: boolean;
   createdAt?: string;
   updatedAt?: string;
@@ -60,16 +60,16 @@ export type ExternalLoanSyncConfig = {
 
 export type ExternalLoanSyncConfigPayload = {
   accountId: string | null;
-  principalOutCategoryId: string | null;
-  principalInCategoryId: string | null;
-  interestCategoryId: string | null;
+  loanDisbursementCategoryId: string | null;
+  principalRecoveryCategoryId: string | null;
+  interestIncomeCategoryId: string | null;
   enabled: boolean;
 };
 
 export type ExternalLoanManualSyncResponse = {
-  syncedLoans: number;
-  syncedPayments: number;
-  createdTransactions: number;
+  loansSynced: number;
+  paymentsSynced: number;
+  movementsCreated: number;
   skippedDuplicates: number;
   errors: string[];
 };
