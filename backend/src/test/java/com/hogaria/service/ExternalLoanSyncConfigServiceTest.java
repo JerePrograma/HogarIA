@@ -75,4 +75,32 @@ class ExternalLoanSyncConfigServiceTest {
 
     assertThrows(BadRequestException.class, () -> service.upsert(userId, profileId, req));
   }
+
+
+  @Test void upsertDisabledAllowsNullReferences() {
+    UUID userId = UUID.randomUUID(); UUID profileId = UUID.randomUUID();
+    var req = new ExternalLoanSyncConfigUpsertRequest(null, null, null, null, false);
+    when(profileRepository.existsByIdAndUserId(profileId, userId)).thenReturn(true);
+    when(repository.findByProfileId(profileId)).thenReturn(Optional.empty());
+    when(repository.save(any())).thenAnswer(i -> i.getArgument(0));
+
+    var response = service.upsert(userId, profileId, req);
+
+    assertFalse(response.enabled());
+    assertNull(response.accountId());
+    assertNull(response.loanDisbursementCategoryId());
+    assertNull(response.principalRecoveryCategoryId());
+    assertNull(response.interestIncomeCategoryId());
+    verifyNoInteractions(accountRepository, categoryRepository);
+  }
+
+  @Test void upsertEnabledRequiresAllReferences() {
+    UUID userId = UUID.randomUUID(); UUID profileId = UUID.randomUUID();
+    var req = new ExternalLoanSyncConfigUpsertRequest(null, UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), true);
+    when(profileRepository.existsByIdAndUserId(profileId, userId)).thenReturn(true);
+
+    assertThrows(BadRequestException.class, () -> service.upsert(userId, profileId, req));
+    verifyNoInteractions(accountRepository, categoryRepository, repository);
+  }
+
 }

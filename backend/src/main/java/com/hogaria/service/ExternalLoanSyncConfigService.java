@@ -31,13 +31,14 @@ public class ExternalLoanSyncConfigService {
 
   public ExternalLoanSyncConfigResponse upsert(UUID userId, UUID profileId, ExternalLoanSyncConfigUpsertRequest request) {
     ensureProfile(userId, profileId);
+    if (Boolean.TRUE.equals(request.enabled()) && hasMissingReferences(request)) {
+      throw new BadRequestException("No se puede habilitar sin todas las referencias configuradas");
+    }
+
     validateAccount(profileId, request.accountId());
     validateCategory(profileId, request.loanDisbursementCategoryId());
     validateCategory(profileId, request.principalRecoveryCategoryId());
     validateCategory(profileId, request.interestIncomeCategoryId());
-    if (Boolean.TRUE.equals(request.enabled()) && hasMissingReferences(request)) {
-      throw new BadRequestException("No se puede habilitar sin todas las referencias configuradas");
-    }
 
     var config = repository.findByProfileId(profileId).orElseGet(() -> ExternalLoanSyncConfig.builder().profileId(profileId).build());
     config.setAccountId(request.accountId());
@@ -60,10 +61,12 @@ public class ExternalLoanSyncConfigService {
   }
 
   private void validateAccount(UUID profileId, UUID accountId) {
+    if (accountId == null) return;
     if (!accountRepository.existsByIdAndProfileId(accountId, profileId)) throw new BadRequestException("La cuenta no pertenece al perfil");
   }
 
   private void validateCategory(UUID profileId, UUID categoryId) {
+    if (categoryId == null) return;
     Category category = categoryRepository.findById(categoryId).orElseThrow(() -> new BadRequestException("Categoria no encontrada"));
     if (!Objects.equals(category.getProfileId(), profileId) && category.getProfileId() != null) {
       throw new BadRequestException("La categoria debe pertenecer al perfil o ser global");

@@ -10,10 +10,10 @@ import lombok.*;
 public class ExternalLoanSyncConfig {
   @Id @GeneratedValue private UUID id;
   @Column(name = "profile_id", nullable = false, unique = true) private UUID profileId;
-  @Column(name = "account_id", nullable = false) private UUID accountId;
-  @Column(name = "loan_disbursement_category_id", nullable = false) private UUID loanDisbursementCategoryId;
-  @Column(name = "principal_recovery_category_id", nullable = false) private UUID principalRecoveryCategoryId;
-  @Column(name = "interest_income_category_id", nullable = false) private UUID interestIncomeCategoryId;
+  @Column(name = "account_id") private UUID accountId;
+  @Column(name = "loan_disbursement_category_id") private UUID loanDisbursementCategoryId;
+  @Column(name = "principal_recovery_category_id") private UUID principalRecoveryCategoryId;
+  @Column(name = "interest_income_category_id") private UUID interestIncomeCategoryId;
   @Builder.Default @Column(nullable = false) private Boolean enabled = false;
   @Column(name = "created_at", nullable = false) private LocalDateTime createdAt;
   @Column(name = "updated_at", nullable = false) private LocalDateTime updatedAt;
