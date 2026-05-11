@@ -36,13 +36,12 @@ class ExternalLoansServiceTest {
   @Mock ExternalLoanSyncConfigRepository syncConfigRepository;
   @Mock AccountRepository accountRepository;
   @Mock CategoryRepository categoryRepository;
-  @Mock MoneyTransactionRepository transactionRepository;
-  @Mock ExternalSyncIdempotencyService idempotencyService;
+    @Mock ExternalLoanSyncEventProcessor eventProcessor;
 
   ExternalLoansService service;
 
   @BeforeEach void setUp() {
-    service = new ExternalLoansService(client, properties, profileRepository, new CjPrestamosBridgeMapper(), syncConfigRepository, accountRepository, categoryRepository, transactionRepository, idempotencyService);
+    service = new ExternalLoansService(client, properties, profileRepository, new CjPrestamosBridgeMapper(), syncConfigRepository, accountRepository, categoryRepository, eventProcessor);
     lenient().when(properties.syncEnabled()).thenReturn(true);
   }
 
@@ -77,7 +76,6 @@ class ExternalLoansServiceTest {
     when(categoryRepository.findById(any())).thenAnswer(inv -> Optional.of(Category.builder().id(inv.getArgument(0)).profileId(profileId).build()));
     when(client.getActiveLoans(profileId, userId)).thenReturn(List.of(new CjPrestamosLoanActiveRemoteResponse(1L, 1L, "Ana", new BigDecimal("100"), 1, "MENSUAL", "ACTIVE", BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, LocalDateTime.now(), LocalDateTime.now())));
     when(client.getLoanPayments(profileId, userId, 1L)).thenReturn(List.of(new CjPrestamosPaymentRemoteResponse(9L, 1L, LocalDate.now(), new BigDecimal("50"), null, null, "r", "sin split", "OK")));
-    when(idempotencyService.isAlreadyProcessed(any(), any(), any(), any(), any(), any())).thenReturn(false);
 
     var response = service.sync(userId, profileId);
     assertFalse(response.errors().isEmpty());
@@ -92,13 +90,9 @@ class ExternalLoansServiceTest {
     when(categoryRepository.findById(any())).thenAnswer(inv -> Optional.of(Category.builder().id(inv.getArgument(0)).profileId(profileId).build()));
     when(client.getActiveLoans(profileId, userId)).thenReturn(List.of(new CjPrestamosLoanActiveRemoteResponse(1L, 1L, "Ana", new BigDecimal("100"), 1, "MENSUAL", "ACTIVE", BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, LocalDateTime.now(), LocalDateTime.now())));
     when(client.getLoanPayments(profileId, userId, 1L)).thenReturn(List.of(new CjPrestamosPaymentRemoteResponse(9L, 1L, LocalDate.now(), new BigDecimal("50"), new BigDecimal("30"), new BigDecimal("20"), "r", null, "OK")));
-    when(idempotencyService.isAlreadyProcessed(any(), any(), any(), any(), eq("9"), any())).thenReturn(false);
-    when(idempotencyService.isAlreadyProcessed(any(), any(), any(), any(), eq("1"), eq("DISBURSEMENT"))).thenReturn(true);
-    when(transactionRepository.save(any())).thenAnswer(inv -> {
-      var tx = inv.getArgument(0, com.hogaria.entity.MoneyTransaction.class);
-      tx.setId(UUID.randomUUID());
-      return tx;
-    });
+    when(eventProcessor.processDisbursement(any(), any(), any(), any(), any(), any(), any())).thenReturn(false);
+    when(eventProcessor.processPaymentPrincipal(any(), any(), any(), any(), any(), any())).thenReturn(true);
+    when(eventProcessor.processPaymentInterest(any(), any(), any(), any(), any(), any())).thenReturn(true);
 
     var response = service.sync(userId, profileId);
     assertEquals(1, response.paymentsSynced());
@@ -114,18 +108,14 @@ class ExternalLoansServiceTest {
     when(categoryRepository.findById(any())).thenAnswer(inv -> Optional.of(Category.builder().id(inv.getArgument(0)).profileId(profileId).build()));
     when(client.getActiveLoans(profileId, userId)).thenReturn(List.of(new CjPrestamosLoanActiveRemoteResponse(1L, 1L, "Ana", new BigDecimal("100"), 1, "MENSUAL", "ACTIVE", BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, LocalDateTime.now(), LocalDateTime.now())));
     when(client.getLoanPayments(profileId, userId, 1L)).thenReturn(List.of(new CjPrestamosPaymentRemoteResponse(9L, 1L, LocalDate.now(), new BigDecimal("50"), new BigDecimal("30"), new BigDecimal("20"), "r", null, "OK")));
-    when(idempotencyService.isAlreadyProcessed(any(), any(), any(), any(), eq("1"), eq("DISBURSEMENT"))).thenReturn(true);
-    when(idempotencyService.isAlreadyProcessed(any(), any(), any(), any(), eq("9"), any())).thenReturn(false);
-    when(transactionRepository.save(any())).thenAnswer(inv -> {
-      var tx = inv.getArgument(0, com.hogaria.entity.MoneyTransaction.class);
-      tx.setId(UUID.randomUUID());
-      return tx;
-    });
+    when(eventProcessor.processDisbursement(any(), any(), any(), any(), any(), any(), any())).thenReturn(false);
+    when(eventProcessor.processPaymentPrincipal(any(), any(), any(), any(), any(), any())).thenReturn(true);
+    when(eventProcessor.processPaymentInterest(any(), any(), any(), any(), any(), any())).thenReturn(true);
 
     service.sync(userId, profileId);
 
-    verify(idempotencyService).markProcessed(eq(profileId), eq("CJPRESTAMOS"), eq("PAYMENT"), eq("9"), eq("PAYMENT_PRINCIPAL_RECOVERY"), eq("payment-principal-9"), any(), isNull());
-    verify(idempotencyService).markProcessed(eq(profileId), eq("CJPRESTAMOS"), eq("PAYMENT"), eq("9"), eq("PAYMENT_INTEREST_INCOME"), eq("payment-interest-9"), any(), isNull());
+    verify(eventProcessor).processPaymentPrincipal(any(), any(), any(), eq("9"), any(), any());
+    verify(eventProcessor).processPaymentInterest(any(), any(), any(), eq("9"), any(), any());
   }
 
   @Test void syncOmitsZeroComponentMappings() {
@@ -136,19 +126,14 @@ class ExternalLoansServiceTest {
     when(categoryRepository.findById(any())).thenAnswer(inv -> Optional.of(Category.builder().id(inv.getArgument(0)).profileId(profileId).build()));
     when(client.getActiveLoans(profileId, userId)).thenReturn(List.of(new CjPrestamosLoanActiveRemoteResponse(1L, 1L, "Ana", new BigDecimal("100"), 1, "MENSUAL", "ACTIVE", BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, LocalDateTime.now(), LocalDateTime.now())));
     when(client.getLoanPayments(profileId, userId, 1L)).thenReturn(List.of(new CjPrestamosPaymentRemoteResponse(9L, 1L, LocalDate.now(), new BigDecimal("50"), new BigDecimal("50"), BigDecimal.ZERO, "r", null, "OK")));
-    when(idempotencyService.isAlreadyProcessed(any(), any(), any(), any(), eq("1"), eq("DISBURSEMENT"))).thenReturn(true);
-    when(idempotencyService.isAlreadyProcessed(any(), any(), any(), any(), eq("9"), any())).thenReturn(false);
-    when(transactionRepository.save(any())).thenAnswer(inv -> {
-      var tx = inv.getArgument(0, com.hogaria.entity.MoneyTransaction.class);
-      tx.setId(UUID.randomUUID());
-      return tx;
-    });
+    when(eventProcessor.processDisbursement(any(), any(), any(), any(), any(), any(), any())).thenReturn(false);
+    when(eventProcessor.processPaymentPrincipal(any(), any(), any(), any(), any(), any())).thenReturn(true);
 
     var response = service.sync(userId, profileId);
 
     assertEquals(1, response.paymentsSynced());
-    verify(idempotencyService, times(1)).markProcessed(eq(profileId), eq("CJPRESTAMOS"), eq("PAYMENT"), eq("9"), eq("PAYMENT_PRINCIPAL_RECOVERY"), eq("payment-principal-9"), any(), isNull());
-    verify(idempotencyService, never()).markProcessed(eq(profileId), eq("CJPRESTAMOS"), eq("PAYMENT"), eq("9"), eq("PAYMENT_INTEREST_INCOME"), any(), any(), any());
+    verify(eventProcessor, times(1)).processPaymentPrincipal(any(), any(), any(), eq("9"), any(), any());
+    verify(eventProcessor, times(1)).processPaymentInterest(any(), any(), any(), eq("9"), any(), eq(BigDecimal.ZERO));
   }
 
   @Test void syncReturnsControlledErrorWhenSyncFeatureDisabled() {
@@ -166,7 +151,16 @@ class ExternalLoansServiceTest {
     when(properties.syncEnabled()).thenReturn(false);
 
     assertThrows(BadRequestException.class, () -> service.sync(userId, profileId));
-    verifyNoInteractions(transactionRepository);
+    verifyNoInteractions(eventProcessor);
+  }
+
+  @Test void syncFailsFastWhenConfigIncomplete() {
+    UUID userId = UUID.randomUUID(); UUID profileId = UUID.randomUUID();
+    when(profileRepository.existsByIdAndUserId(profileId, userId)).thenReturn(true);
+    when(syncConfigRepository.findByProfileId(profileId)).thenReturn(Optional.of(ExternalLoanSyncConfig.builder().profileId(profileId).enabled(true).build()));
+
+    assertThrows(BadRequestException.class, () -> service.sync(userId, profileId));
+    verifyNoInteractions(eventProcessor);
   }
 
 }
