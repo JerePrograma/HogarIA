@@ -23,6 +23,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         <NavLink to={`${base}/goals`}>Objetivos</NavLink>
         <NavLink to={`${base}/habits`}>Hábitos</NavLink>
         <NavLink to={`${base}/inflation`}>Inflación</NavLink>
+        <NavLink to={`${base}/prestamos-externos`}>Préstamos externos</NavLink>
       </>}
       <NavLink to='/profiles'>Perfiles</NavLink>
       <button className='button-secondary' onClick={() => { localStorage.removeItem('devUserId'); localStorage.removeItem('selectedProfileId'); nav('/dev-user'); }}>Cambiar usuario</button>
