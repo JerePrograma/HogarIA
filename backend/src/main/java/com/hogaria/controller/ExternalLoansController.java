@@ -1,6 +1,7 @@
 package com.hogaria.controller;
 
 import com.hogaria.dto.ExternalLoanSyncConfigDtos.*;
+import com.hogaria.integration.cjprestamos.dto.ExternalIntegrationDiagnosticResponse;
 import com.hogaria.integration.cjprestamos.dto.ExternalLoanManualSyncResponse;
 import com.hogaria.integration.cjprestamos.dto.ExternalLoansSummaryResponse;
 import com.hogaria.security.CurrentUserResolver;
@@ -31,6 +32,11 @@ public class ExternalLoansController {
   @PostMapping("/sync")
   public ExternalLoanManualSyncResponse sync(@PathVariable UUID profileId, @RequestHeader("X-User-Id") String xUserId) {
     return service.sync(currentUserResolver.parse(xUserId), profileId);
+  }
+
+  @GetMapping("/health")
+  public ExternalIntegrationDiagnosticResponse health(@PathVariable UUID profileId, @RequestHeader("X-User-Id") String xUserId) {
+    return service.checkIntegration(currentUserResolver.parse(xUserId), profileId);
   }
 
   @PostMapping("/sync/dry-run")
