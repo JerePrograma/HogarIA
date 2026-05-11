@@ -33,8 +33,8 @@ class ExternalSyncIdempotencyServiceTest {
     UUID userId = UUID.randomUUID();
     UUID profileId = UUID.randomUUID();
     when(profileRepository.existsByIdAndUserId(profileId, userId)).thenReturn(true);
-    when(repository.findByExternalSystemAndExternalEntityTypeAndExternalEntityIdAndExternalEventType(
-            "CJPRESTAMOS", "LOAN", "123", "RECOVERY"))
+    when(repository.findByProfileIdAndExternalSystemAndExternalEntityTypeAndExternalEntityIdAndExternalEventType(
+            profileId, "CJPRESTAMOS", "LOAN", "123", "RECOVERY"))
         .thenReturn(Optional.of(ExternalSyncMapping.builder().status("PROCESSED").build()));
 
     assertTrue(service.isAlreadyProcessed(userId, profileId, "CJPRESTAMOS", "LOAN", "123", "RECOVERY"));
@@ -45,8 +45,8 @@ class ExternalSyncIdempotencyServiceTest {
     UUID userId = UUID.randomUUID();
     UUID profileId = UUID.randomUUID();
     when(profileRepository.existsByIdAndUserId(profileId, userId)).thenReturn(true);
-    when(repository.findByExternalSystemAndExternalEntityTypeAndExternalEntityIdAndExternalEventType(
-            "CJPRESTAMOS", "LOAN", "123", "RECOVERY"))
+    when(repository.findByProfileIdAndExternalSystemAndExternalEntityTypeAndExternalEntityIdAndExternalEventType(
+            profileId, "CJPRESTAMOS", "LOAN", "123", "RECOVERY"))
         .thenReturn(Optional.of(ExternalSyncMapping.builder().status("FAILED").build()));
 
     assertFalse(service.isAlreadyProcessed(userId, profileId, "CJPRESTAMOS", "LOAN", "123", "RECOVERY"));
@@ -77,8 +77,8 @@ class ExternalSyncIdempotencyServiceTest {
             .status("FAILED")
             .build();
 
-    when(repository.findByExternalSystemAndExternalEntityTypeAndExternalEntityIdAndExternalEventType(
-            "CJPRESTAMOS", "INSTALLMENT", "999", "PAID"))
+    when(repository.findByProfileIdAndExternalSystemAndExternalEntityTypeAndExternalEntityIdAndExternalEventType(
+            profileId, "CJPRESTAMOS", "INSTALLMENT", "999", "PAID"))
         .thenReturn(Optional.of(existing));
     when(repository.save(any(ExternalSyncMapping.class))).thenAnswer(i -> i.getArgument(0));
 
@@ -97,5 +97,35 @@ class ExternalSyncIdempotencyServiceTest {
     assertEquals("PROCESSED", result.getStatus());
     assertNotNull(result.getSyncedAt());
     verify(repository, times(1)).save(existing);
+  }
+
+  @Test
+  void sameExternalIdInDifferentProfilesIsNotDuplicate() {
+    UUID userId = UUID.randomUUID();
+    UUID profileA = UUID.randomUUID();
+    UUID profileB = UUID.randomUUID();
+    when(profileRepository.existsByIdAndUserId(profileA, userId)).thenReturn(true);
+    when(profileRepository.existsByIdAndUserId(profileB, userId)).thenReturn(true);
+    when(repository.findByProfileIdAndExternalSystemAndExternalEntityTypeAndExternalEntityIdAndExternalEventType(
+            profileA, "CJPRESTAMOS", "LOAN", "123", "RECOVERY"))
+        .thenReturn(Optional.of(ExternalSyncMapping.builder().status("PROCESSED").build()));
+    when(repository.findByProfileIdAndExternalSystemAndExternalEntityTypeAndExternalEntityIdAndExternalEventType(
+            profileB, "CJPRESTAMOS", "LOAN", "123", "RECOVERY"))
+        .thenReturn(Optional.empty());
+
+    assertTrue(service.isAlreadyProcessed(userId, profileA, "CJPRESTAMOS", "LOAN", "123", "RECOVERY"));
+    assertFalse(service.isAlreadyProcessed(userId, profileB, "CJPRESTAMOS", "LOAN", "123", "RECOVERY"));
+  }
+
+  @Test
+  void sameExternalIdInSameProfileIsDuplicate() {
+    UUID userId = UUID.randomUUID();
+    UUID profileId = UUID.randomUUID();
+    when(profileRepository.existsByIdAndUserId(profileId, userId)).thenReturn(true);
+    when(repository.findByProfileIdAndExternalSystemAndExternalEntityTypeAndExternalEntityIdAndExternalEventType(
+            profileId, "CJPRESTAMOS", "LOAN", "123", "RECOVERY"))
+        .thenReturn(Optional.of(ExternalSyncMapping.builder().status("PROCESSED").build()));
+
+    assertTrue(service.isAlreadyProcessed(userId, profileId, "CJPRESTAMOS", "LOAN", "123", "RECOVERY"));
   }
 }
