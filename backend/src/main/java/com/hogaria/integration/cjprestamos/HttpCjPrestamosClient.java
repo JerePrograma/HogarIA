@@ -1,6 +1,10 @@
 package com.hogaria.integration.cjprestamos;
 
-import com.hogaria.integration.cjprestamos.dto.*;
+import com.hogaria.integration.cjprestamos.remote.CjPrestamosCashControlRemoteResponse;
+import com.hogaria.integration.cjprestamos.remote.CjPrestamosDashboardRemoteResponse;
+import com.hogaria.integration.cjprestamos.remote.CjPrestamosInstallmentRemoteResponse;
+import com.hogaria.integration.cjprestamos.remote.CjPrestamosLoanActiveRemoteResponse;
+import com.hogaria.integration.cjprestamos.remote.CjPrestamosPaymentRemoteResponse;
 import java.net.URI;
 import java.util.List;
 import java.util.UUID;
@@ -23,11 +27,11 @@ public class HttpCjPrestamosClient implements CjPrestamosClient {
         .build()).baseUrl(properties.baseUrl()).build();
   }
 
-  @Override public List<ExternalLoanResponse> getActiveLoans(UUID profileId, UUID userId) { return getList("/api/integration/hogaria/loans/active", ExternalLoanResponse[].class, profileId, userId); }
-  @Override public ExternalLoanSummaryResponse getDashboardSummary(UUID profileId, UUID userId) { return getObject("/api/integration/hogaria/dashboard", ExternalLoanSummaryResponse.class, profileId, userId); }
-  @Override public ExternalLoanCashControlResponse getCashControl(UUID profileId, UUID userId) { return getObject("/api/integration/hogaria/control-caja", ExternalLoanCashControlResponse.class, profileId, userId); }
-  @Override public List<ExternalLoanInstallmentResponse> getLoanInstallments(UUID profileId, UUID userId, UUID loanId) { return getList("/api/integration/hogaria/loans/" + loanId + "/installments", ExternalLoanInstallmentResponse[].class, profileId, userId); }
-  @Override public List<ExternalLoanPaymentResponse> getLoanPayments(UUID profileId, UUID userId, UUID loanId) { return getList("/api/integration/hogaria/loans/" + loanId + "/payments", ExternalLoanPaymentResponse[].class, profileId, userId); }
+  @Override public List<CjPrestamosLoanActiveRemoteResponse> getActiveLoans(UUID profileId, UUID userId) { return getList("/api/integration/hogaria/loans/active", CjPrestamosLoanActiveRemoteResponse[].class, profileId, userId); }
+  @Override public CjPrestamosDashboardRemoteResponse getDashboardSummary(UUID profileId, UUID userId) { return getObject("/api/integration/hogaria/dashboard", CjPrestamosDashboardRemoteResponse.class, profileId, userId); }
+  @Override public CjPrestamosCashControlRemoteResponse getCashControl(UUID profileId, UUID userId) { return getObject("/api/integration/hogaria/control-caja", CjPrestamosCashControlRemoteResponse.class, profileId, userId); }
+  @Override public List<CjPrestamosInstallmentRemoteResponse> getLoanInstallments(UUID profileId, UUID userId, Long externalLoanId) { return getList("/api/integration/hogaria/loans/" + externalLoanId + "/installments", CjPrestamosInstallmentRemoteResponse[].class, profileId, userId); }
+  @Override public List<CjPrestamosPaymentRemoteResponse> getLoanPayments(UUID profileId, UUID userId, Long externalLoanId) { return getList("/api/integration/hogaria/loans/" + externalLoanId + "/payments", CjPrestamosPaymentRemoteResponse[].class, profileId, userId); }
 
   private <T> T getObject(String path, Class<T> clazz, UUID profileId, UUID userId) {
     try {

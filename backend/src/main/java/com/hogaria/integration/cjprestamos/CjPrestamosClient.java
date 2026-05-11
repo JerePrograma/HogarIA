@@ -1,22 +1,22 @@
 package com.hogaria.integration.cjprestamos;
 
-import com.hogaria.integration.cjprestamos.dto.ExternalLoanCashControlResponse;
-import com.hogaria.integration.cjprestamos.dto.ExternalLoanInstallmentResponse;
-import com.hogaria.integration.cjprestamos.dto.ExternalLoanPaymentResponse;
-import com.hogaria.integration.cjprestamos.dto.ExternalLoanResponse;
-import com.hogaria.integration.cjprestamos.dto.ExternalLoanSummaryResponse;
+import com.hogaria.integration.cjprestamos.remote.CjPrestamosCashControlRemoteResponse;
+import com.hogaria.integration.cjprestamos.remote.CjPrestamosDashboardRemoteResponse;
+import com.hogaria.integration.cjprestamos.remote.CjPrestamosInstallmentRemoteResponse;
+import com.hogaria.integration.cjprestamos.remote.CjPrestamosLoanActiveRemoteResponse;
+import com.hogaria.integration.cjprestamos.remote.CjPrestamosPaymentRemoteResponse;
 import java.util.List;
 import java.util.UUID;
 
 public interface CjPrestamosClient {
 
-  List<ExternalLoanResponse> getActiveLoans(UUID profileId, UUID userId);
+  List<CjPrestamosLoanActiveRemoteResponse> getActiveLoans(UUID profileId, UUID userId);
 
-  ExternalLoanSummaryResponse getDashboardSummary(UUID profileId, UUID userId);
+  CjPrestamosDashboardRemoteResponse getDashboardSummary(UUID profileId, UUID userId);
 
-  ExternalLoanCashControlResponse getCashControl(UUID profileId, UUID userId);
+  CjPrestamosCashControlRemoteResponse getCashControl(UUID profileId, UUID userId);
 
-  List<ExternalLoanInstallmentResponse> getLoanInstallments(UUID profileId, UUID userId, UUID loanId);
+  List<CjPrestamosInstallmentRemoteResponse> getLoanInstallments(UUID profileId, UUID userId, Long externalLoanId);
 
-  List<ExternalLoanPaymentResponse> getLoanPayments(UUID profileId, UUID userId, UUID loanId);
+  List<CjPrestamosPaymentRemoteResponse> getLoanPayments(UUID profileId, UUID userId, Long externalLoanId);
 }
