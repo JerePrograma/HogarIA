@@ -41,9 +41,9 @@ export function ExternalLoansPage() {
     }
     setForm({
       accountId: syncConfig.accountId ?? null,
-      principalOutCategoryId: syncConfig.principalOutCategoryId ?? null,
-      principalInCategoryId: syncConfig.principalInCategoryId ?? null,
-      interestCategoryId: syncConfig.interestCategoryId ?? null,
+      loanDisbursementCategoryId: syncConfig.loanDisbursementCategoryId ?? null,
+      principalRecoveryCategoryId: syncConfig.principalRecoveryCategoryId ?? null,
+      interestIncomeCategoryId: syncConfig.interestIncomeCategoryId ?? null,
       enabled: Boolean(syncConfig.enabled),
     });
   }, [syncConfig]);
@@ -52,9 +52,9 @@ export function ExternalLoansPage() {
   const canSync =
     Boolean(form?.enabled) &&
     Boolean(form?.accountId) &&
-    Boolean(form?.principalOutCategoryId) &&
-    Boolean(form?.principalInCategoryId) &&
-    Boolean(form?.interestCategoryId);
+    Boolean(form?.loanDisbursementCategoryId) &&
+    Boolean(form?.principalRecoveryCategoryId) &&
+    Boolean(form?.interestIncomeCategoryId);
 
   const handleSaveConfig = () => {
     if (form) saveConfigMutation.mutate(form);
@@ -94,7 +94,7 @@ export function ExternalLoansPage() {
               </label>
               <label className='field'>
                 <span>Categoría capital prestado</span>
-                <select value={form.principalOutCategoryId ?? ''} onChange={(event) => setForm((current) => (current ? { ...current, principalOutCategoryId: event.target.value || null } : current))}>
+                <select value={form.loanDisbursementCategoryId ?? ''} onChange={(event) => setForm((current) => (current ? { ...current, loanDisbursementCategoryId: event.target.value || null } : current))}>
                   <option value=''>Seleccionar categoría</option>
                   {(categoriesQuery.data ?? []).map((category) => (
                     <option key={category.id} value={category.id}>
@@ -105,7 +105,7 @@ export function ExternalLoansPage() {
               </label>
               <label className='field'>
                 <span>Categoría capital recuperado</span>
-                <select value={form.principalInCategoryId ?? ''} onChange={(event) => setForm((current) => (current ? { ...current, principalInCategoryId: event.target.value || null } : current))}>
+                <select value={form.principalRecoveryCategoryId ?? ''} onChange={(event) => setForm((current) => (current ? { ...current, principalRecoveryCategoryId: event.target.value || null } : current))}>
                   <option value=''>Seleccionar categoría</option>
                   {(categoriesQuery.data ?? []).map((category) => (
                     <option key={category.id} value={category.id}>
@@ -116,7 +116,7 @@ export function ExternalLoansPage() {
               </label>
               <label className='field'>
                 <span>Categoría interés cobrado</span>
-                <select value={form.interestCategoryId ?? ''} onChange={(event) => setForm((current) => (current ? { ...current, interestCategoryId: event.target.value || null } : current))}>
+                <select value={form.interestIncomeCategoryId ?? ''} onChange={(event) => setForm((current) => (current ? { ...current, interestIncomeCategoryId: event.target.value || null } : current))}>
                   <option value=''>Seleccionar categoría</option>
                   {(categoriesQuery.data ?? []).map((category) => (
                     <option key={category.id} value={category.id}>
@@ -146,9 +146,9 @@ export function ExternalLoansPage() {
               </div>
               {syncMutation.data && (
                 <div className='stack-sm'>
-                  <p>Préstamos sincronizados: {syncMutation.data.syncedLoans}</p>
-                  <p>Pagos sincronizados: {syncMutation.data.syncedPayments}</p>
-                  <p>Movimientos creados: {syncMutation.data.createdTransactions}</p>
+                  <p>Préstamos sincronizados: {syncMutation.data.loansSynced}</p>
+                  <p>Pagos sincronizados: {syncMutation.data.paymentsSynced}</p>
+                  <p>Movimientos creados: {syncMutation.data.movementsCreated}</p>
                   <p>Duplicados omitidos: {syncMutation.data.skippedDuplicates}</p>
                   <p>Errores: {syncMutation.data.errors.length > 0 ? syncMutation.data.errors.join(' | ') : 'Sin errores'}</p>
                 </div>
