@@ -1,6 +1,7 @@
 package com.hogaria.controller;
 
 import com.hogaria.dto.ExternalLoanSyncConfigDtos.*;
+import com.hogaria.integration.cjprestamos.dto.ExternalLoanManualSyncResponse;
 import com.hogaria.integration.cjprestamos.dto.ExternalLoansSummaryResponse;
 import com.hogaria.security.CurrentUserResolver;
 import com.hogaria.service.ExternalLoanSyncConfigService;
@@ -25,6 +26,11 @@ public class ExternalLoansController {
   @GetMapping("/summary")
   public ExternalLoansSummaryResponse summary(@PathVariable UUID profileId, @RequestHeader("X-User-Id") String xUserId) {
     return service.getSummary(currentUserResolver.parse(xUserId), profileId);
+  }
+
+  @PostMapping("/sync")
+  public ExternalLoanManualSyncResponse sync(@PathVariable UUID profileId, @RequestHeader("X-User-Id") String xUserId) {
+    return service.sync(currentUserResolver.parse(xUserId), profileId);
   }
 
   @GetMapping("/sync-config")
