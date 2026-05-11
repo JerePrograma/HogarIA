@@ -84,3 +84,18 @@ Este bridge debe ser reemplazado gradualmente por el bounded context interno `lo
 2. sincronizar/replicar semántica de métricas relevantes,
 3. migrar consumidores internos a fuente local,
 4. retirar dependencia del bridge externo.
+
+## 11) Estado de implementación en HogarIA (temporal)
+Implementado en backend HogarIA:
+- Configuración en `application.yml` bajo `app.integrations.cjprestamos` con variables de entorno `CJP_*`.
+- Cliente HTTP `HttpCjPrestamosClient` para endpoints read-only de cjprestamos.
+- Servicio `ExternalLoansService` con validación de pertenencia `profileId` + `userId`.
+- Endpoint `GET /api/profiles/{profileId}/external-loans/summary`.
+- Validación temporal de `X-User-Id` para resolver usuario actual.
+- Respuesta explícita cuando la integración está deshabilitada (`status=DISABLED`).
+- Manejo de errores de integración: timeout/API caída, 401/403, 5xx, body inválido.
+
+No implementado en esta fase (intencional):
+- Persistencia local de datos de cjprestamos.
+- Creación de `MoneyTransaction`.
+- Creación de `MonthlyPlanItem`.
