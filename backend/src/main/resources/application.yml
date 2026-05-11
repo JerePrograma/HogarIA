@@ -17,6 +17,15 @@ app:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173}
   jwt:
     secret: ${JWT_SECRET:change_me}
+  integrations:
+    cjprestamos:
+      enabled: ${CJP_INTEGRATION_ENABLED:false}
+      base-url: ${CJP_BASE_URL:http://localhost:8081}
+      username: ${CJP_USERNAME:}
+      password: ${CJP_PASSWORD:}
+      connect-timeout-ms: ${CJP_CONNECT_TIMEOUT_MS:3000}
+      read-timeout-ms: ${CJP_READ_TIMEOUT_MS:5000}
+
 ---
 spring:
   config:
