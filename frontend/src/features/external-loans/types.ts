@@ -45,3 +45,31 @@ export type ExternalLoansSummaryResponse = {
   cashControl: ExternalLoanCashControl;
   activeLoans: ExternalLoan[];
 };
+
+export type ExternalLoanSyncConfig = {
+  id?: string;
+  profileId?: string;
+  accountId: string | null;
+  principalOutCategoryId: string | null;
+  principalInCategoryId: string | null;
+  interestCategoryId: string | null;
+  enabled: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export type ExternalLoanSyncConfigPayload = {
+  accountId: string | null;
+  principalOutCategoryId: string | null;
+  principalInCategoryId: string | null;
+  interestCategoryId: string | null;
+  enabled: boolean;
+};
+
+export type ExternalLoanManualSyncResponse = {
+  syncedLoans: number;
+  syncedPayments: number;
+  createdTransactions: number;
+  skippedDuplicates: number;
+  errors: string[];
+};
