@@ -3,6 +3,7 @@ import {
   getExternalLoanSyncConfig,
   saveExternalLoanSyncConfig,
   syncExternalLoans,
+  dryRunExternalLoans,
 } from '../../../api/externalLoansApi';
 import type {
   ExternalLoanManualSyncResponse,
@@ -37,5 +38,12 @@ export function useSyncExternalLoans(profileId: string) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['external-loans-summary', profileId] });
     },
+  });
+}
+
+
+export function useDryRunExternalLoans(profileId: string) {
+  return useMutation<ExternalLoanManualSyncResponse>({
+    mutationFn: () => dryRunExternalLoans(profileId),
   });
 }

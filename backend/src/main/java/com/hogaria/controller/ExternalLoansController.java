@@ -33,6 +33,11 @@ public class ExternalLoansController {
     return service.sync(currentUserResolver.parse(xUserId), profileId);
   }
 
+  @PostMapping("/sync/dry-run")
+  public ExternalLoanManualSyncResponse dryRunSync(@PathVariable UUID profileId, @RequestHeader("X-User-Id") String xUserId) {
+    return service.dryRunSync(currentUserResolver.parse(xUserId), profileId);
+  }
+
   @GetMapping("/sync-config")
   public ExternalLoanSyncConfigResponse getSyncConfig(@PathVariable UUID profileId, @RequestHeader("X-User-Id") String xUserId) {
     return syncConfigService.get(currentUserResolver.parse(xUserId), profileId);
