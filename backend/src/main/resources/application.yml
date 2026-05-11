@@ -20,6 +20,7 @@ app:
   integrations:
     cjprestamos:
       enabled: ${CJP_INTEGRATION_ENABLED:false}
+      sync-enabled: ${CJP_SYNC_ENABLED:false}
       base-url: ${CJP_BASE_URL:http://localhost:8081}
       username: ${CJP_USERNAME:}
       password: ${CJP_PASSWORD:}

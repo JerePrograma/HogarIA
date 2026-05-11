@@ -55,11 +55,13 @@ public class ExternalLoansService {
     return ExternalLoansSummaryResponse.enabled(
         mapper.toExternalDashboard(client.getDashboardSummary(profileId, userId)),
         mapper.toExternalCashControl(client.getCashControl(profileId, userId)),
-        mapper.toExternalLoans(client.getActiveLoans(profileId, userId)));
+        mapper.toExternalLoans(client.getActiveLoans(profileId, userId)),
+        !properties.syncEnabled());
   }
 
   public ExternalLoanManualSyncResponse sync(UUID userId, UUID profileId) {
     ensureProfileBelongsToUser(userId, profileId);
+    if (!properties.syncEnabled()) throw new BadRequestException("La sincronización contable está deshabilitada. La integración está en modo solo lectura.");
     ExternalLoanSyncConfig cfg = syncConfigRepository.findByProfileId(profileId)
         .orElseThrow(() -> new BadRequestException("No existe configuración de sincronización externa"));
     if (!Boolean.TRUE.equals(cfg.getEnabled())) throw new BadRequestException("La sincronización externa está deshabilitada");

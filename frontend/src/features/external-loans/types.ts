@@ -41,6 +41,7 @@ export type ExternalLoan = {
 export type ExternalLoansSummaryResponse = {
   status: 'ENABLED' | 'DISABLED' | string;
   message: string;
+  readOnly: boolean;
   dashboard: ExternalLoanDashboard;
   cashControl: ExternalLoanCashControl;
   activeLoans: ExternalLoan[];

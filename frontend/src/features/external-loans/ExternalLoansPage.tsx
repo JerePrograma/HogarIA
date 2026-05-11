@@ -33,6 +33,7 @@ export function ExternalLoansPage() {
   const summary = summaryQuery.data;
   const integrationDisabled = summary?.status === 'DISABLED';
   const syncConfig = syncConfigQuery.data;
+  const readOnlyMode = Boolean(summary?.readOnly);
   const [form, setForm] = useState<ExternalLoanSyncConfigPayload | null>(null);
   useEffect(() => {
     if (!syncConfig) {
@@ -50,6 +51,7 @@ export function ExternalLoansPage() {
 
   const hasSyncConfig = Boolean(form);
   const canSync =
+    !readOnlyMode &&
     Boolean(form?.enabled) &&
     Boolean(form?.accountId) &&
     Boolean(form?.loanDisbursementCategoryId) &&
@@ -136,6 +138,9 @@ export function ExternalLoansPage() {
                 <span>Habilitar sincronización</span>
               </label>
               <p className='muted'>El capital recuperado no se registra como ingreso económico; el interés cobrado sí.</p>
+              {readOnlyMode && (
+                <p>Modo solo lectura: los préstamos externos se consultan, pero no se crean movimientos en HogarIA.</p>
+              )}
               <div className='page-actions'>
                 <button type='button' onClick={handleSaveConfig} disabled={saveConfigMutation.isPending || !hasSyncConfig}>
                   Guardar configuración
