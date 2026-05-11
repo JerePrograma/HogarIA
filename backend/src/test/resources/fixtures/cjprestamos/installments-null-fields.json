@@ -1,0 +1,12 @@
+[
+  {
+    "id": 9001,
+    "prestamoId": 101,
+    "numeroCuota": 1,
+    "fechaVencimiento": "2026-02-10",
+    "montoProgramado": 15000.00,
+    "montoPagado": null,
+    "saldoPendiente": null,
+    "estado": "PENDIENTE"
+  }
+]

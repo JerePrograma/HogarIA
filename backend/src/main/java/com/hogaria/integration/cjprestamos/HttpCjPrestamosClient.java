@@ -37,6 +37,7 @@ public class HttpCjPrestamosClient implements CjPrestamosClient {
     try {
       return restClient.get().uri(URI.create(path)).header("X-Profile-Id", profileId.toString()).header("X-User-Id", userId.toString())
           .retrieve().onStatus(HttpStatusCode::isError, (req, res) -> { throw new CjPrestamosIntegrationException("Error remoto cjprestamos: " + res.getStatusCode().value()); }).body(clazz);
+    } catch (CjPrestamosIntegrationException e) { throw e;
     } catch (RestClientResponseException e) { throw new CjPrestamosIntegrationException(mapHttpError(e.getRawStatusCode()), e);
     } catch (RestClientException e) { throw new CjPrestamosIntegrationException("No se pudo conectar con cjprestamos", e);
     } catch (Exception e) { throw new CjPrestamosIntegrationException("Respuesta inválida de cjprestamos", e); }

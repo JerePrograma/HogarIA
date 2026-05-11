@@ -1,0 +1,17 @@
+[
+  {
+    "id": 101,
+    "personaId": 501,
+    "personaNombre": "María Gómez",
+    "montoInicial": 150000.50,
+    "cantidadCuotas": 12,
+    "frecuenciaTipo": "MENSUAL",
+    "estado": "ACTIVE",
+    "totalCobrado": 70000.25,
+    "totalPendiente": 80000.25,
+    "gananciaRealizada": 12000.00,
+    "gananciaProyectada": 20000.00,
+    "createdAt": "2026-01-05T10:30:00",
+    "updatedAt": "2026-04-01T14:20:00"
+  }
+]
