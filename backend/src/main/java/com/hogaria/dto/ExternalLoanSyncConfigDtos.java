@@ -6,10 +6,10 @@ import java.util.UUID;
 
 public class ExternalLoanSyncConfigDtos {
   public record ExternalLoanSyncConfigUpsertRequest(
-      @NotNull UUID accountId,
-      @NotNull UUID loanDisbursementCategoryId,
-      @NotNull UUID principalRecoveryCategoryId,
-      @NotNull UUID interestIncomeCategoryId,
+      UUID accountId,
+      UUID loanDisbursementCategoryId,
+      UUID principalRecoveryCategoryId,
+      UUID interestIncomeCategoryId,
       @NotNull Boolean enabled) {}
 
   public record ExternalLoanSyncConfigResponse(
