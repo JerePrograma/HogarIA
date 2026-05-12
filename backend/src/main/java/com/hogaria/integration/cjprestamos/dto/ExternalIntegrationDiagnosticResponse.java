@@ -1,19 +1,34 @@
 package com.hogaria.integration.cjprestamos.dto;
 
-public record ExternalIntegrationDiagnosticResponse(String status, String message) {
-  public static ExternalIntegrationDiagnosticResponse ok(String message) {
-    return new ExternalIntegrationDiagnosticResponse("OK", message);
-  }
+import java.util.List;
 
-  public static ExternalIntegrationDiagnosticResponse unavailable(String message) {
-    return new ExternalIntegrationDiagnosticResponse("UNAVAILABLE", message);
-  }
-
-  public static ExternalIntegrationDiagnosticResponse unauthorized(String message) {
-    return new ExternalIntegrationDiagnosticResponse("UNAUTHORIZED", message);
-  }
-
-  public static ExternalIntegrationDiagnosticResponse misconfigured(String message) {
-    return new ExternalIntegrationDiagnosticResponse("MISCONFIGURED", message);
+public record ExternalIntegrationDiagnosticResponse(
+    String status,
+    String message,
+    boolean integrationEnabled,
+    boolean syncEnabled,
+    String baseUrl,
+    String apiPrefix,
+    boolean hasUsername,
+    boolean hasPassword,
+    int connectTimeoutMs,
+    int readTimeoutMs,
+    boolean remoteCheckExecuted,
+    List<String> missingFields
+) {
+  public static ExternalIntegrationDiagnosticResponse of(
+      String status,
+      String message,
+      boolean integrationEnabled,
+      boolean syncEnabled,
+      String baseUrl,
+      String apiPrefix,
+      boolean hasUsername,
+      boolean hasPassword,
+      int connectTimeoutMs,
+      int readTimeoutMs,
+      boolean remoteCheckExecuted,
+      List<String> missingFields) {
+    return new ExternalIntegrationDiagnosticResponse(status, message, integrationEnabled, syncEnabled, baseUrl, apiPrefix, hasUsername, hasPassword, connectTimeoutMs, readTimeoutMs, remoteCheckExecuted, missingFields);
   }
 }

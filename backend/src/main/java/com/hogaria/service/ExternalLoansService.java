@@ -19,6 +19,7 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.util.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -54,32 +55,42 @@ public class ExternalLoansService {
     ensureProfileBelongsToUser(userId, profileId);
     if (!properties.enabled()) return ExternalLoansSummaryResponse.disabled();
     integrationConfigValidator.validateEnabledIntegration(properties);
-    log.info("external-loans summary start profileId={} syncEnabled={}", profileId, properties.syncEnabled());
+    long startedAt = System.currentTimeMillis();
+    log.info("external-loans operation=summary profileId={} userId={} remoteBaseUrl={} apiPrefix={} status=START", profileId, userId, sanitizeUrl(properties.baseUrl()), properties.resolvedApiPrefix());
     var response = ExternalLoansSummaryResponse.enabled(
         mapper.toExternalDashboard(client.getDashboardSummary(profileId, userId)),
         mapper.toExternalCashControl(client.getCashControl(profileId, userId)),
         mapper.toExternalLoans(client.getActiveLoans(profileId, userId)),
         !properties.syncEnabled());
-    log.info("external-loans summary end profileId={} loansCount={}", profileId, response.activeLoans().size());
+    log.info("external-loans operation=summary profileId={} userId={} remoteBaseUrl={} apiPrefix={} durationMs={} status=OK createdMovements=0 skippedDuplicates=0 errors=0 loansCount={}",
+        profileId, userId, sanitizeUrl(properties.baseUrl()), properties.resolvedApiPrefix(), System.currentTimeMillis()-startedAt, response.activeLoans().size());
     return response;
   }
 
   public ExternalIntegrationDiagnosticResponse checkIntegration(UUID userId, UUID profileId) {
     ensureProfileBelongsToUser(userId, profileId);
-    if (!properties.enabled()) {
-      return ExternalIntegrationDiagnosticResponse.misconfigured("Integración deshabilitada (CJP_INTEGRATION_ENABLED=false)");
+    long startedAt = System.currentTimeMillis();
+    boolean integrationEnabled = properties.enabled();
+    boolean syncEnabled = properties.syncEnabled();
+    String apiPrefix = properties.resolvedApiPrefix();
+    String baseUrl = sanitizeUrl(properties.baseUrl());
+    boolean hasUsername = StringUtils.hasText(properties.username());
+    boolean hasPassword = StringUtils.hasText(properties.password());
+    List<String> missingFields = parseMissingFields();
+
+    if (!integrationEnabled) {
+      return diagnosticAndLog("MISCONFIGURED", "Integración deshabilitada (CJP_INTEGRATION_ENABLED=false)", userId, profileId, startedAt, false, 0, 0, integrationEnabled, syncEnabled, baseUrl, apiPrefix, hasUsername, hasPassword, missingFields);
     }
-    if (!properties.hasCompleteCredentials()) {
-      return ExternalIntegrationDiagnosticResponse.misconfigured("Configuración incompleta. Faltan: " + properties.missingRequiredFields());
+    if (!missingFields.isEmpty()) {
+      return diagnosticAndLog("MISCONFIGURED", "Configuración incompleta. Faltan: " + String.join(", ", missingFields), userId, profileId, startedAt, false, 0, 0, integrationEnabled, syncEnabled, baseUrl, apiPrefix, hasUsername, hasPassword, missingFields);
     }
     try {
       client.getDashboardSummary(profileId, userId);
-      return ExternalIntegrationDiagnosticResponse.ok("Conectividad y autenticación OK");
+      return diagnosticAndLog("OK", "Conectividad y autenticación OK", userId, profileId, startedAt, true, 0, 0, integrationEnabled, syncEnabled, baseUrl, apiPrefix, hasUsername, hasPassword, missingFields);
     } catch (CjPrestamosIntegrationException ex) {
       String msg = ex.getMessage() == null ? "Error remoto" : ex.getMessage();
-      if (msg.contains("Autenticación/autorización")) return ExternalIntegrationDiagnosticResponse.unauthorized(msg);
-      if (msg.contains("No se pudo conectar") || msg.contains("no disponible")) return ExternalIntegrationDiagnosticResponse.unavailable(msg);
-      return ExternalIntegrationDiagnosticResponse.unavailable(msg);
+      String status = msg.contains("Autenticación/autorización") ? "UNAUTHORIZED" : "UNAVAILABLE";
+      return diagnosticAndLog(status, msg, userId, profileId, startedAt, true, 0, 1, integrationEnabled, syncEnabled, baseUrl, apiPrefix, hasUsername, hasPassword, missingFields);
     }
   }
 
@@ -90,7 +101,9 @@ public class ExternalLoansService {
     ensureProfileBelongsToUser(userId, profileId);
     integrationConfigValidator.validateEnabledIntegration(properties);
     if (!dryRun && !properties.syncEnabled()) throw new BadRequestException("La sincronización contable está deshabilitada. La integración está en modo solo lectura.");
-    log.info("external-loans {} start profileId={}", dryRun ? "dry-run" : "sync", profileId);
+    long startedAt = System.currentTimeMillis();
+    String operation = dryRun ? "dry-run" : "sync";
+    log.info("external-loans operation={} profileId={} userId={} remoteBaseUrl={} apiPrefix={} status=START", operation, profileId, userId, sanitizeUrl(properties.baseUrl()), properties.resolvedApiPrefix());
     ExternalLoanSyncConfig cfg = syncConfigRepository.findByProfileId(profileId)
         .orElseThrow(() -> new BadRequestException("No existe configuración de sincronización externa"));
     if (!Boolean.TRUE.equals(cfg.getEnabled())) throw new BadRequestException("La sincronización externa está deshabilitada");
@@ -161,8 +174,8 @@ public class ExternalLoansService {
         } catch (Exception ex) { errors.add("payment " + paymentId + ": " + ex.getMessage()); }
       }
     }
-    log.info("external-loans {} end profileId={} loans={} payments={} movementsCreated={} skipped={} errors={}",
-        dryRun ? "dry-run" : "sync", profileId, detectedLoans.size(), detectedPayments.size(), movementsCreated, skippedDuplicates, errors.size());
+    log.info("external-loans operation={} profileId={} userId={} remoteBaseUrl={} apiPrefix={} durationMs={} status={} createdMovements={} skippedDuplicates={} errors={} loans={} payments={}",
+        operation, profileId, userId, sanitizeUrl(properties.baseUrl()), properties.resolvedApiPrefix(), System.currentTimeMillis()-startedAt, errors.isEmpty() ? "OK" : "PARTIAL", movementsCreated, skippedDuplicates, errors.size(), detectedLoans.size(), detectedPayments.size());
     return new ExternalLoanManualSyncResponse(dryRun, loansSynced, paymentsSynced, movementsCreated, skippedDuplicates, errors, detectedLoans, detectedPayments, plannedMovements,
         java.util.Map.of("DISBURSEMENT", disbursement, "PAYMENT_PRINCIPAL_RECOVERY", paymentPrincipalRecovery, "PAYMENT_INTEREST_INCOME", paymentInterestIncome));
   }
@@ -172,4 +185,22 @@ public class ExternalLoansService {
   private void validateConfigReferences(UUID profileId, ExternalLoanSyncConfig cfg) { if (!accountRepository.existsByIdAndProfileId(cfg.getAccountId(), profileId)) throw new BadRequestException("La cuenta configurada no pertenece al perfil"); validateCategory(profileId, cfg.getLoanDisbursementCategoryId()); validateCategory(profileId, cfg.getPrincipalRecoveryCategoryId()); validateCategory(profileId, cfg.getInterestIncomeCategoryId()); }
   private void validateCategory(UUID profileId, UUID categoryId) { Category category = categoryRepository.findById(categoryId).orElseThrow(() -> new BadRequestException("Categoría configurada inexistente")); if (category.getProfileId() != null && !category.getProfileId().equals(profileId)) throw new BadRequestException("Categoría configurada no pertenece al perfil"); }
   private void ensureProfileBelongsToUser(UUID userId, UUID profileId) { if (!profileRepository.existsByIdAndUserId(profileId, userId)) throw new ForbiddenException("Profile no pertenece al usuario"); }
+
+  private ExternalIntegrationDiagnosticResponse diagnosticAndLog(String status, String message, UUID userId, UUID profileId, long startedAt, boolean remoteCheckExecuted, int createdMovements, int errors, boolean integrationEnabled, boolean syncEnabled, String baseUrl, String apiPrefix, boolean hasUsername, boolean hasPassword, List<String> missingFields) {
+    log.info("external-loans operation=health profileId={} userId={} remoteBaseUrl={} apiPrefix={} durationMs={} status={} createdMovements={} skippedDuplicates=0 errors={} integrationEnabled={} syncEnabled={} remoteCheckExecuted={}",
+        profileId, userId, baseUrl, apiPrefix, System.currentTimeMillis() - startedAt, status, createdMovements, errors, integrationEnabled, syncEnabled, remoteCheckExecuted);
+    return ExternalIntegrationDiagnosticResponse.of(status, message, integrationEnabled, syncEnabled, baseUrl, apiPrefix, hasUsername, hasPassword, properties.connectTimeoutMs(), properties.readTimeoutMs(), remoteCheckExecuted, missingFields);
+  }
+
+  private List<String> parseMissingFields() {
+    String missing = properties.missingRequiredFields();
+    if (!StringUtils.hasText(missing)) return List.of();
+    return java.util.Arrays.stream(missing.split(",")).map(String::trim).filter(StringUtils::hasText).toList();
+  }
+
+  private String sanitizeUrl(String baseUrl) {
+    if (!StringUtils.hasText(baseUrl)) return "";
+    return baseUrl.replaceAll("(?i)://[^/@:]+:[^/@]+@", "://***:***@");
+  }
+
 }

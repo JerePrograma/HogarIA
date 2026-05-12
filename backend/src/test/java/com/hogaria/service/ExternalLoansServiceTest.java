@@ -211,4 +211,50 @@ class ExternalLoansServiceTest {
     verifyNoInteractions(eventProcessor);
   }
 
+  @Test void healthWhenIntegrationDisabledDoesNotCallRemote() {
+    UUID userId = UUID.randomUUID(); UUID profileId = UUID.randomUUID();
+    when(profileRepository.existsByIdAndUserId(profileId, userId)).thenReturn(true);
+    when(properties.enabled()).thenReturn(false);
+    when(properties.syncEnabled()).thenReturn(false);
+    when(properties.resolvedApiPrefix()).thenReturn("/api/integration/hogaria");
+
+    var response = service.checkIntegration(userId, profileId);
+    assertEquals("MISCONFIGURED", response.status());
+    assertFalse(response.remoteCheckExecuted());
+    verifyNoInteractions(client);
+  }
+
+  @Test void healthWithIncompleteConfigReturnsControlledStatus() {
+    UUID userId = UUID.randomUUID(); UUID profileId = UUID.randomUUID();
+    when(profileRepository.existsByIdAndUserId(profileId, userId)).thenReturn(true);
+    when(properties.enabled()).thenReturn(true);
+    when(properties.syncEnabled()).thenReturn(true);
+    when(properties.resolvedApiPrefix()).thenReturn("/api/integration/hogaria");
+    when(properties.missingRequiredFields()).thenReturn("CJP_BASE_URL, CJP_USERNAME");
+
+    var response = service.checkIntegration(userId, profileId);
+    assertEquals("MISCONFIGURED", response.status());
+    assertEquals(List.of("CJP_BASE_URL", "CJP_USERNAME"), response.missingFields());
+    assertFalse(response.remoteCheckExecuted());
+    verifyNoInteractions(client);
+  }
+
+  @Test void healthDoesNotExposePassword() {
+    UUID userId = UUID.randomUUID(); UUID profileId = UUID.randomUUID();
+    when(profileRepository.existsByIdAndUserId(profileId, userId)).thenReturn(true);
+    when(properties.enabled()).thenReturn(true);
+    when(properties.syncEnabled()).thenReturn(true);
+    when(properties.resolvedApiPrefix()).thenReturn("/api/integration/hogaria");
+    when(properties.baseUrl()).thenReturn("http://localhost:8081");
+    when(properties.username()).thenReturn("user");
+    when(properties.password()).thenReturn("supersecret");
+    when(properties.connectTimeoutMs()).thenReturn(3000);
+    when(properties.readTimeoutMs()).thenReturn(5000);
+    when(client.getDashboardSummary(profileId, userId)).thenReturn(null);
+
+    var response = service.checkIntegration(userId, profileId);
+    assertTrue(response.hasPassword());
+    assertFalse(response.message().contains("supersecret"));
+  }
+
 }
