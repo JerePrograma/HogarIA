@@ -186,4 +186,29 @@ class ExternalLoansServiceTest {
     verify(eventProcessor, never()).processPaymentInterest(any(), any(), any(), any(), any(), any());
   }
 
+
+  @Test void syncDisabledDoesNotWriteAnything() {
+    UUID userId = UUID.randomUUID(); UUID profileId = UUID.randomUUID();
+    when(profileRepository.existsByIdAndUserId(profileId, userId)).thenReturn(true);
+    when(properties.syncEnabled()).thenReturn(false);
+    assertThrows(BadRequestException.class, () -> service.sync(userId, profileId));
+    verifyNoInteractions(eventProcessor, client);
+  }
+
+  @Test void incompleteConfigDoesNotCallRemoteClient() {
+    UUID userId = UUID.randomUUID(); UUID profileId = UUID.randomUUID();
+    when(profileRepository.existsByIdAndUserId(profileId, userId)).thenReturn(true);
+    when(syncConfigRepository.findByProfileId(profileId)).thenReturn(Optional.of(ExternalLoanSyncConfig.builder().profileId(profileId).enabled(true).build()));
+    assertThrows(BadRequestException.class, () -> service.sync(userId, profileId));
+    verifyNoInteractions(client);
+  }
+
+  @Test void incompleteConfigDoesNotWriteAnything() {
+    UUID userId = UUID.randomUUID(); UUID profileId = UUID.randomUUID();
+    when(profileRepository.existsByIdAndUserId(profileId, userId)).thenReturn(true);
+    when(syncConfigRepository.findByProfileId(profileId)).thenReturn(Optional.of(ExternalLoanSyncConfig.builder().profileId(profileId).enabled(true).build()));
+    assertThrows(BadRequestException.class, () -> service.sync(userId, profileId));
+    verifyNoInteractions(eventProcessor);
+  }
+
 }
