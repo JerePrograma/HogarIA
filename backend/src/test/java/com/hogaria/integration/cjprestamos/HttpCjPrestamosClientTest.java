@@ -14,6 +14,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Queue;
 import java.util.UUID;
@@ -30,6 +31,7 @@ class HttpCjPrestamosClientTest {
   private final Queue<StubResponse> responses = new ArrayDeque<>();
   private final AtomicInteger receivedCalls = new AtomicInteger(0);
   private final AtomicReference<String> lastPath = new AtomicReference<>();
+  private final List<String> receivedPaths = new ArrayList<>();
   private final AtomicReference<String> lastAuthorization = new AtomicReference<>();
   private final AtomicReference<String> lastProfileHeader = new AtomicReference<>();
   private final AtomicReference<String> lastUserHeader = new AtomicReference<>();
@@ -40,6 +42,7 @@ class HttpCjPrestamosClientTest {
     server.createContext("/", this::handle);
     server.start();
     baseUrl = "http://localhost:" + server.getAddress().getPort();
+    receivedPaths.clear();
   }
 
   @AfterEach
@@ -65,13 +68,26 @@ class HttpCjPrestamosClientTest {
   @Test
   void supportsV1PrefixAndRequiredHeaders() {
     responses.add(StubResponse.ok("[]"));
+    responses.add(StubResponse.ok("{\"montoInvertido\":1,\"montoGanado\":1,\"montoPorGanar\":1,\"deudaTotal\":1,\"prestamosActivos\":1}"));
+    responses.add(StubResponse.ok("{\"cajaDisponible\":1,\"inversionActiva\":1,\"capitalRecuperado\":1,\"capitalPendiente\":1,\"gananciaRealizada\":1,\"gananciaProyectada\":1,\"ingresosMesActual\":1,\"egresosMesActual\":1,\"balanceMesActual\":1,\"proyeccionCobro30Dias\":1,\"proyeccionCobro60Dias\":1,\"proyeccionCobro90Dias\":1,\"carteraEnMora\":1,\"cuotasPendientes\":1,\"cuotasVencenProximos7Dias\":1,\"recuperoCapitalPorcentaje\":1,\"rendimientoEsperadoPorcentaje\":1}"));
+    responses.add(StubResponse.ok("[]"));
+    responses.add(StubResponse.ok("[]"));
     var profileId = UUID.randomUUID();
     var userId = UUID.randomUUID();
     var client = buildClient(1000, 1000, "/api/v1/integration/hogaria");
 
     client.getActiveLoans(profileId, userId);
+    client.getDashboardSummary(profileId, userId);
+    client.getCashControl(profileId, userId);
+    client.getLoanInstallments(profileId, userId, 7L);
+    client.getLoanPayments(profileId, userId, 7L);
 
-    assertEquals("/api/v1/integration/hogaria/loans/active", lastPath.get());
+    assertEquals(List.of(
+        "/api/v1/integration/hogaria/loans/active",
+        "/api/v1/integration/hogaria/dashboard",
+        "/api/v1/integration/hogaria/control-caja",
+        "/api/v1/integration/hogaria/loans/7/installments",
+        "/api/v1/integration/hogaria/loans/7/payments"), receivedPaths);
     assertEquals("Basic dXNlcjpwYXNz", lastAuthorization.get());
     assertEquals(profileId.toString(), lastProfileHeader.get());
     assertEquals(userId.toString(), lastUserHeader.get());
@@ -161,6 +177,7 @@ class HttpCjPrestamosClientTest {
   private void handle(HttpExchange exchange) throws IOException {
     receivedCalls.incrementAndGet();
     lastPath.set(exchange.getRequestURI().getPath());
+    receivedPaths.add(exchange.getRequestURI().getPath());
     lastAuthorization.set(exchange.getRequestHeaders().getFirst("Authorization"));
     lastProfileHeader.set(exchange.getRequestHeaders().getFirst("X-Profile-Id"));
     lastUserHeader.set(exchange.getRequestHeaders().getFirst("X-User-Id"));
