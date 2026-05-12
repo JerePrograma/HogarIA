@@ -46,3 +46,7 @@ logs/
 !*.yaml
 !*.json
 !*.md
+
+# TypeScript incremental build cache
+*.tsbuildinfo
+frontend/*.tsbuildinfo
