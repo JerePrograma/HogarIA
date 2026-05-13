@@ -14,17 +14,27 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.dao.DataAccessException;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
+import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
 
-@SpringBootTest(
-    properties = {
-      "spring.datasource.url=jdbc:h2:mem:syncit;MODE=PostgreSQL;DB_CLOSE_DELAY=-1",
-      "spring.datasource.driverClassName=org.h2.Driver",
-      "spring.datasource.username=sa",
-      "spring.datasource.password=",
-      "spring.jpa.hibernate.ddl-auto=create-drop",
-      "spring.flyway.enabled=false"
-    })
+@SpringBootTest
+@Testcontainers(disabledWithoutDocker = true)
 class ExternalLoanSyncEventProcessorIntegrationTest {
+
+  @Container
+  static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16-alpine");
+
+  @DynamicPropertySource
+  static void configureDatasource(DynamicPropertyRegistry registry) {
+    registry.add("spring.datasource.url", postgres::getJdbcUrl);
+    registry.add("spring.datasource.username", postgres::getUsername);
+    registry.add("spring.datasource.password", postgres::getPassword);
+    registry.add("spring.jpa.hibernate.ddl-auto", () -> "validate");
+    registry.add("spring.flyway.enabled", () -> "true");
+  }
 
   private static final String SYSTEM = "CJPRESTAMOS";
   private static final String ENTITY_TYPE = "LOAN";
