@@ -3,7 +3,7 @@ package com.hogaria.controller;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -26,6 +26,8 @@ import java.util.UUID;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -33,6 +35,7 @@ import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -75,6 +78,12 @@ class ExternalLoansSyncSafetyPostgresIT {
 
   private UUID userId;
   private UUID profileId;
+
+  private RequestPostProcessor authenticatedUser() {
+    return authentication(
+        new UsernamePasswordAuthenticationToken(
+            userId, null, List.of(new SimpleGrantedAuthority("ROLE_USER"))));
+  }
 
   @BeforeEach
   void setUp() {
@@ -212,7 +221,10 @@ class ExternalLoansSyncSafetyPostgresIT {
   @Test
   void syncBloqueadoPorReadOnly_devuelve400SinWrites() throws Exception {
     mockMvc
-        .perform(post("/api/profiles/{profileId}/external-loans/sync", profileId).with(user("auditoria").roles("USER")).header("X-User-Id", userId))
+        .perform(
+            post("/api/profiles/{profileId}/external-loans/sync", profileId)
+                .with(authenticatedUser())
+                .header("X-User-Id", userId))
         .andExpect(status().isBadRequest())
         .andExpect(
             jsonPath("$.message")
@@ -226,7 +238,10 @@ class ExternalLoansSyncSafetyPostgresIT {
   @Test
   void dryRunPlanificaSinPersistir() throws Exception {
     mockMvc
-        .perform(post("/api/profiles/{profileId}/external-loans/sync/dry-run", profileId).with(user("auditoria").roles("USER")).header("X-User-Id", userId))
+        .perform(
+            post("/api/profiles/{profileId}/external-loans/sync/dry-run", profileId)
+                .with(authenticatedUser())
+                .header("X-User-Id", userId))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.dryRun").value(true))
         .andExpect(jsonPath("$.movementsCreated").value(2))
