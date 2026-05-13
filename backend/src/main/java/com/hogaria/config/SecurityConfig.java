@@ -34,7 +34,13 @@ public class SecurityConfig {
                         .requestMatchers("/api/dev/**").permitAll()
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers("/api/auth/me").authenticated()
-                        .requestMatchers("/api/profiles/**", "/api/transactions/**", "/api/budgets/**", "/api/accounts/**", "/api/categories/**").authenticated()
+                        .requestMatchers(
+                                "/api/profiles/**",
+                                "/api/transactions/**",
+                                "/api/budgets/**",
+                                "/api/accounts/**",
+                                "/api/categories/**"
+                        ).permitAll()
                         .anyRequest().authenticated()
                 )
                 .exceptionHandling(ex -> ex
