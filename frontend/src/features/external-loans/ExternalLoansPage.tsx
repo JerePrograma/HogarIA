@@ -12,6 +12,11 @@ import { ExternalLoansSummaryCards } from './components/ExternalLoansSummaryCard
 import { useDryRunExternalLoans, useExternalLoanSyncConfig, useSaveExternalLoanSyncConfig, useSyncExternalLoans } from './hooks/useExternalLoanSync';
 import { useExternalLoansSummary } from './hooks/useExternalLoansSummary';
 import type { ExternalLoanSyncConfigPayload } from './types';
+import type { Category } from '../../domain/types';
+
+
+const EXPENSE_CATEGORY_TYPES: Category['type'][] = ['FIXED_EXPENSE', 'VARIABLE_EXPENSE', 'DEBT', 'INVESTMENT'];
+const INCOME_CATEGORY_TYPES: Category['type'][] = ['INCOME'];
 
 export function ExternalLoansPage() {
   const { profileId = '' } = useParams();
@@ -32,6 +37,9 @@ export function ExternalLoansPage() {
   });
 
   const summary = summaryQuery.data;
+  const categories = categoriesQuery.data ?? [];
+  const expenseCategories = categories.filter((category) => EXPENSE_CATEGORY_TYPES.includes(category.type));
+  const incomeCategories = categories.filter((category) => INCOME_CATEGORY_TYPES.includes(category.type));
   const integrationDisabled = summary?.status === 'DISABLED';
   const syncConfig = syncConfigQuery.data;
   const readOnlyMode = Boolean(summary?.readOnly);
@@ -99,7 +107,7 @@ export function ExternalLoansPage() {
                 <span>Categoría capital prestado</span>
                 <select value={form.loanDisbursementCategoryId ?? ''} onChange={(event) => setForm((current) => (current ? { ...current, loanDisbursementCategoryId: event.target.value || null } : current))}>
                   <option value=''>Seleccionar categoría</option>
-                  {(categoriesQuery.data ?? []).map((category) => (
+                  {expenseCategories.map((category) => (
                     <option key={category.id} value={category.id}>
                       {category.name}
                     </option>
@@ -110,7 +118,7 @@ export function ExternalLoansPage() {
                 <span>Categoría capital recuperado</span>
                 <select value={form.principalRecoveryCategoryId ?? ''} onChange={(event) => setForm((current) => (current ? { ...current, principalRecoveryCategoryId: event.target.value || null } : current))}>
                   <option value=''>Seleccionar categoría</option>
-                  {(categoriesQuery.data ?? []).map((category) => (
+                  {expenseCategories.map((category) => (
                     <option key={category.id} value={category.id}>
                       {category.name}
                     </option>
@@ -121,7 +129,7 @@ export function ExternalLoansPage() {
                 <span>Categoría interés cobrado</span>
                 <select value={form.interestIncomeCategoryId ?? ''} onChange={(event) => setForm((current) => (current ? { ...current, interestIncomeCategoryId: event.target.value || null } : current))}>
                   <option value=''>Seleccionar categoría</option>
-                  {(categoriesQuery.data ?? []).map((category) => (
+                  {incomeCategories.map((category) => (
                     <option key={category.id} value={category.id}>
                       {category.name}
                     </option>
@@ -138,7 +146,7 @@ export function ExternalLoansPage() {
                 />
                 <span>Habilitar sincronización</span>
               </label>
-              <p className='muted'>El capital recuperado no se registra como ingreso económico; el interés cobrado sí.</p>
+              <p className='muted'>Mapeo sugerido: "capital prestado" se exporta como gasto, "capital recuperado" como recupero (no ingreso), y "interés cobrado" como ingreso.</p>
               {readOnlyMode && (
                 <p>Modo solo lectura: los préstamos externos se consultan, pero no se crean movimientos en HogarIA.</p>
               )}
