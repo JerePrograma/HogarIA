@@ -1,4 +1,6 @@
+import { useQuery } from '@tanstack/react-query';
 import { Navigate, Route, Routes, useParams } from 'react-router-dom';
+import { listProfiles } from '../api/profilesApi';
 import { DevUserPage } from '../features/dev-user/DevUserPage';
 import { ProfilesPage } from '../features/profiles/ProfilesPage';
 import { AccountsPage } from '../features/accounts/AccountsPage';
@@ -13,11 +15,40 @@ import { BudgetExcelImportPage } from '../features/imports/BudgetExcelImportPage
 import { MonthlyPlanningPage } from '../features/planning/MonthlyPlanningPage';
 import { ExternalLoansPage } from '../features/external-loans/ExternalLoansPage';
 
-const DevGuard = ({ children }: { children: JSX.Element }) => localStorage.getItem('devUserId') ? children : <Navigate to='/dev-user' />;
+const DevGuard = ({ children }: { children: JSX.Element }) =>
+  localStorage.getItem('devUserId') ? children : <Navigate to='/dev-user' />;
+
 const ProfileGuard = ({ children }: { children: JSX.Element }) => {
   const { profileId } = useParams();
-  if (profileId) localStorage.setItem('selectedProfileId', profileId);
-  if (!profileId && !localStorage.getItem('selectedProfileId')) return <Navigate to='/profiles' />;
+
+  const profilesQuery = useQuery({
+    queryKey: ['profiles'],
+    queryFn: listProfiles,
+  });
+
+  if (profileId) {
+    localStorage.setItem('selectedProfileId', profileId);
+  }
+
+  const selectedProfileId = profileId ?? localStorage.getItem('selectedProfileId');
+
+  if (!selectedProfileId) {
+    return <Navigate to='/profiles' />;
+  }
+
+  if (profilesQuery.isLoading) {
+    return <p>Cargando perfiles...</p>;
+  }
+
+  if (profilesQuery.isSuccess) {
+    const profileExists = profilesQuery.data.some((profile) => profile.id === selectedProfileId);
+
+    if (!profileExists) {
+      localStorage.removeItem('selectedProfileId');
+      return <Navigate to='/profiles' replace />;
+    }
+  }
+
   return children;
 };
 
