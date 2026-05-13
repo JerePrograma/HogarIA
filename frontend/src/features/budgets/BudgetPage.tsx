@@ -1,5 +1,6 @@
 // src/features/budgets/BudgetPage.tsx
 
+import axios from 'axios';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useParams } from 'react-router-dom';
@@ -67,6 +68,13 @@ export function BudgetPage() {
     queryFn: () => listCategories(profileId, true),
     enabled: Boolean(profileId),
   });
+
+
+  const isNotFound = (error: unknown) => axios.isAxiosError(error) && error.response?.status === 404;
+
+  const budgetYearMissing = budgetYearQuery.isError && isNotFound(budgetYearQuery.error);
+  const budgetMonthMissing = budgetMonthQuery.isError && isNotFound(budgetMonthQuery.error);
+  const comparisonMissing = comparisonQuery.isError && isNotFound(comparisonQuery.error);
 
   const budgetableCategories = (categoriesQuery.data ?? []).filter(
     (category: Category) => category.active,
@@ -160,14 +168,31 @@ export function BudgetPage() {
         </div>
 
         <p>
-          Año: {budgetYearQuery.data ? 'OK' : 'No existe'} | Mes:{' '}
-          {budgetMonthQuery.data ? 'OK' : 'No existe'}
+          Año: {budgetYearQuery.data ? 'OK' : budgetYearMissing ? 'No existe' : 'Error'} | Mes:{' '}
+          {budgetMonthQuery.data ? 'OK' : budgetMonthMissing ? 'No existe' : 'Error'}
         </p>
 
         {!budgetMonthQuery.data && (
           <p className="empty-state">
             Primero creá el mes para poder cargar importes presupuestados.
           </p>
+        )}
+
+
+        {budgetYearQuery.isError && !budgetYearMissing && (
+          <p className="error-box">No se pudo consultar el presupuesto anual.</p>
+        )}
+
+        {budgetMonthQuery.isError && !budgetMonthMissing && (
+          <p className="error-box">No se pudo consultar el presupuesto mensual.</p>
+        )}
+
+        {comparisonQuery.isError && !comparisonMissing && (
+          <p className="error-box">No se pudo consultar la comparación presupuesto vs real.</p>
+        )}
+
+        {comparisonMissing && (
+          <p className="empty-state">No hay presupuesto cargado para este período.</p>
         )}
 
         <h3>Carga presupuestaria</h3>
