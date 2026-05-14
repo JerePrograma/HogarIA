@@ -32,7 +32,7 @@ public class ExternalLoanSyncConfigService {
   public ExternalLoanSyncConfigResponse upsert(UUID userId, UUID profileId, ExternalLoanSyncConfigUpsertRequest request) {
     ensureProfile(userId, profileId);
     if (Boolean.TRUE.equals(request.enabled()) && hasMissingReferences(request)) {
-      throw new BadRequestException("No se puede habilitar sin todas las referencias configuradas");
+      throw new BadRequestException("No se puede habilitar: faltan accountId, loanDisbursementCategoryId, principalRecoveryCategoryId o interestIncomeCategoryId");
     }
 
     validateAccount(profileId, request.accountId());
