@@ -33,14 +33,7 @@ public class SecurityConfig {
                         .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/actuator/health", "/api/auth/login").permitAll()
                         .requestMatchers("/api/dev/**").permitAll()
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                        .requestMatchers("/api/auth/me").authenticated()
-                        .requestMatchers(
-                                "/api/profiles/**",
-                                "/api/transactions/**",
-                                "/api/budgets/**",
-                                "/api/accounts/**",
-                                "/api/categories/**"
-                        ).permitAll()
+                        .requestMatchers("/api/**").authenticated()
                         .anyRequest().authenticated()
                 )
                 .exceptionHandling(ex -> ex

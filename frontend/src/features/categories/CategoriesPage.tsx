@@ -19,12 +19,42 @@ import {
 } from '../../domain/financeLabels';
 import type { Category, CategoryScope, CategoryType } from '../../domain/types';
 
+const categoryTypeOptions: Array<{ value: CategoryType; label: string }> = [
+  { value: 'INCOME', label: 'Ingreso' },
+  { value: 'FIXED_EXPENSE', label: 'Gasto fijo' },
+  { value: 'VARIABLE_EXPENSE', label: 'Gasto variable' },
+  { value: 'SAVING', label: 'Ahorro' },
+  { value: 'DEBT', label: 'Deuda' },
+  { value: 'INVESTMENT', label: 'Inversión' },
+];
+
+const categoryScopeOptions: Array<{ value: Exclude<CategoryScope, 'GLOBAL'>; label: string }> = [
+  { value: 'PERSONAL', label: 'Personal' },
+  { value: 'FAMILY', label: 'Familiar' },
+  { value: 'BUSINESS', label: 'Negocio' },
+];
+
+type EditableScope = Exclude<CategoryScope, 'GLOBAL'>;
+
+type EditForm = {
+  id: string;
+  name: string;
+  type: CategoryType;
+  scope: EditableScope;
+};
+
+const isEditableScope = (scope: CategoryScope): scope is EditableScope => scope !== 'GLOBAL';
+
 export function CategoriesPage() {
   const { profileId = '' } = useParams();
   const queryClient = useQueryClient();
 
   const [includeGlobal, setIncludeGlobal] = useState(true);
   const [name, setName] = useState('');
+  const [type, setType] = useState<CategoryType>('VARIABLE_EXPENSE');
+  const [scope, setScope] = useState<EditableScope>('PERSONAL');
+
+  const [editForm, setEditForm] = useState<EditForm | null>(null);
 
   const categoriesQuery = useQuery<Category[]>({
     queryKey: ['categories', profileId, includeGlobal],
@@ -36,16 +66,34 @@ export function CategoriesPage() {
   const activeCategories = categories.filter((category) => category.active);
   const globalCategories = categories.filter((category) => category.scope === 'GLOBAL');
 
+  const invalidateCategories = () =>
+    queryClient.invalidateQueries({ queryKey: ['categories', profileId] });
+
   const createMutation = useMutation({
     mutationFn: () =>
       createCategory(profileId, {
         name: name.trim(),
-        type: 'VARIABLE_EXPENSE',
-        scope: 'PERSONAL',
+        type,
+        scope,
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['categories', profileId] });
+      invalidateCategories();
       setName('');
+      setType('VARIABLE_EXPENSE');
+      setScope('PERSONAL');
+    },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: (payload: EditForm) =>
+      updateCategory(payload.id, {
+        name: payload.name.trim(),
+        type: payload.type,
+        scope: payload.scope,
+      }),
+    onSuccess: () => {
+      invalidateCategories();
+      setEditForm(null);
     },
   });
 
@@ -54,19 +102,44 @@ export function CategoriesPage() {
       updateCategory(category.id, {
         name: category.name,
         type: category.type,
-        scope: category.scope,
+        scope: isEditableScope(category.scope) ? category.scope : 'PERSONAL',
         parentId: category.parentId ?? undefined,
         active: !category.active,
       }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['categories', profileId] }),
+    onSuccess: invalidateCategories,
   });
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => deleteCategory(id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['categories', profileId] }),
+    onSuccess: invalidateCategories,
   });
 
-  const canCreate = name.trim().length > 0 && !createMutation.isPending;
+  const canCreate = Boolean(profileId) && name.trim().length > 0 && !createMutation.isPending;
+
+  const canSaveEdit =
+    Boolean(editForm) &&
+    editForm.name.trim().length > 0 &&
+    !updateMutation.isPending;
+
+  const startEdit = (category: Category) => {
+    if (category.scope === 'GLOBAL') return;
+
+    setEditForm({
+      id: category.id,
+      name: category.name,
+      type: category.type as CategoryType,
+      scope: isEditableScope(category.scope) ? category.scope : 'PERSONAL',
+    });
+  };
+
+  const cancelEdit = () => {
+    setEditForm(null);
+  };
+
+  const saveEdit = () => {
+    if (!editForm || !canSaveEdit) return;
+    updateMutation.mutate(editForm);
+  };
 
   return (
     <AppLayout>
@@ -82,9 +155,26 @@ export function CategoriesPage() {
         </section>
 
         <section className="metric-grid">
-          <MetricCard title="Total categorías" value={categories.length} helper="Incluye personales y globales visibles." tone="info" />
-          <MetricCard title="Activas" value={activeCategories.length} helper="Disponibles para operar." tone="success" />
-          <MetricCard title="Globales" value={globalCategories.length} helper="Catálogo compartido." tone="neutral" />
+          <MetricCard
+            title="Total categorías"
+            value={categories.length}
+            helper="Incluye personales y globales visibles."
+            tone="info"
+          />
+
+          <MetricCard
+            title="Activas"
+            value={activeCategories.length}
+            helper="Disponibles para operar."
+            tone="success"
+          />
+
+          <MetricCard
+            title="Globales"
+            value={globalCategories.length}
+            helper="Catálogo compartido."
+            tone="neutral"
+          />
         </section>
 
         <section className="panel">
@@ -93,7 +183,7 @@ export function CategoriesPage() {
               <p className="eyebrow">Alta rápida</p>
               <h2>Crear categoría</h2>
               <p className="secondary-text">
-                Se crea como gasto variable personal. Después puede ampliarse con selector de tipo y alcance.
+                Definí el tipo contable de la categoría para ingresos, gastos, ahorro, deuda o inversión.
               </p>
             </div>
           </div>
@@ -107,17 +197,49 @@ export function CategoriesPage() {
             <span>Incluir categorías globales</span>
           </label>
 
-          <div className="form-row mt-4">
+          <div className="form-grid mt-4">
             <label>
               Nombre
               <input
                 className="input-ui"
                 value={name}
                 onChange={(event) => setName(event.target.value)}
-                placeholder="Nombre de la categoría"
+                placeholder="Ej: CJ - Interés cobrado"
               />
             </label>
 
+            <label>
+              Tipo
+              <select
+                className="input-ui"
+                value={type}
+                onChange={(event) => setType(event.target.value as CategoryType)}
+              >
+                {categoryTypeOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label>
+              Alcance
+              <select
+                className="input-ui"
+                value={scope}
+                onChange={(event) => setScope(event.target.value as EditableScope)}
+              >
+                {categoryScopeOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          <div className="form-actions">
             <button
               type="button"
               className="boton-principal"
@@ -126,6 +248,10 @@ export function CategoriesPage() {
             >
               {createMutation.isPending ? 'Creando...' : 'Crear categoría'}
             </button>
+
+            {!canCreate ? (
+              <span className="muted">Completá el nombre para crear la categoría.</span>
+            ) : null}
           </div>
 
           {createMutation.isError ? (
@@ -155,6 +281,10 @@ export function CategoriesPage() {
             <EmptyState title="Sin categorías" message="Todavía no hay categorías cargadas." />
           ) : null}
 
+          {updateMutation.isError ? (
+            <p className="mensaje-error">No se pudo actualizar la categoría.</p>
+          ) : null}
+
           {categories.length > 0 ? (
             <div className="tabla-ui">
               <table className="table-compact">
@@ -169,49 +299,142 @@ export function CategoriesPage() {
                 </thead>
 
                 <tbody>
-                  {categories.map((category) => (
-                    <tr key={category.id}>
-                      <td>
-                        <strong>{category.name}</strong>
-                      </td>
-                      <td>{labelOrValue(categoryTypeLabels, category.type as CategoryType)}</td>
-                      <td>{labelOrValue(categoryScopeLabels, category.scope as CategoryScope)}</td>
-                      <td>
-                        <StatusBadge
-                          tone={category.active ? 'ok' : 'watch'}
-                          label={category.active ? 'Activa' : 'Inactiva'}
-                        />
-                      </td>
-                      <td>
-                        {category.scope === 'GLOBAL' ? (
-                          <span className="compact-muted">Solo lectura</span>
-                        ) : (
-                          <div className="row-actions">
-                            <button
-                              type="button"
-                              className="boton-secundario"
-                              onClick={() => toggleMutation.mutate(category)}
-                              disabled={toggleMutation.isPending}
-                            >
-                              {category.active ? 'Desactivar' : 'Activar'}
-                            </button>
+                  {categories.map((category) => {
+                    const isEditing = editForm?.id === category.id;
 
-                            <button
-                              type="button"
-                              className="boton-danger"
-                              onClick={() =>
-                                window.confirm('¿Desactivar categoría?') &&
-                                deleteMutation.mutate(category.id)
+                    return (
+                      <tr key={category.id}>
+                        <td>
+                          {isEditing ? (
+                            <input
+                              className="input-ui"
+                              value={editForm.name}
+                              onChange={(event) =>
+                                setEditForm((current) =>
+                                  current ? { ...current, name: event.target.value } : current,
+                                )
                               }
-                              disabled={deleteMutation.isPending}
+                            />
+                          ) : (
+                            <strong>{category.name}</strong>
+                          )}
+                        </td>
+
+                        <td>
+                          {isEditing ? (
+                            <select
+                              className="input-ui"
+                              value={editForm.type}
+                              onChange={(event) =>
+                                setEditForm((current) =>
+                                  current
+                                    ? { ...current, type: event.target.value as CategoryType }
+                                    : current,
+                                )
+                              }
                             >
-                              Eliminar
-                            </button>
-                          </div>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
+                              {categoryTypeOptions.map((option) => (
+                                <option key={option.value} value={option.value}>
+                                  {option.label}
+                                </option>
+                              ))}
+                            </select>
+                          ) : (
+                            labelOrValue(categoryTypeLabels, category.type as CategoryType)
+                          )}
+                        </td>
+
+                        <td>
+                          {isEditing ? (
+                            <select
+                              className="input-ui"
+                              value={editForm.scope}
+                              onChange={(event) =>
+                                setEditForm((current) =>
+                                  current
+                                    ? { ...current, scope: event.target.value as EditableScope }
+                                    : current,
+                                )
+                              }
+                            >
+                              {categoryScopeOptions.map((option) => (
+                                <option key={option.value} value={option.value}>
+                                  {option.label}
+                                </option>
+                              ))}
+                            </select>
+                          ) : (
+                            labelOrValue(categoryScopeLabels, category.scope as CategoryScope)
+                          )}
+                        </td>
+
+                        <td>
+                          <StatusBadge
+                            tone={category.active ? 'ok' : 'watch'}
+                            label={category.active ? 'Activa' : 'Inactiva'}
+                          />
+                        </td>
+
+                        <td>
+                          {category.scope === 'GLOBAL' ? (
+                            <span className="compact-muted">Solo lectura</span>
+                          ) : isEditing ? (
+                            <div className="row-actions">
+                              <button
+                                type="button"
+                                className="boton-principal"
+                                onClick={saveEdit}
+                                disabled={!canSaveEdit}
+                              >
+                                {updateMutation.isPending ? 'Guardando...' : 'Guardar'}
+                              </button>
+
+                              <button
+                                type="button"
+                                className="boton-secundario"
+                                onClick={cancelEdit}
+                                disabled={updateMutation.isPending}
+                              >
+                                Cancelar
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="row-actions">
+                              <button
+                                type="button"
+                                className="boton-secundario"
+                                onClick={() => startEdit(category)}
+                                disabled={Boolean(editForm)}
+                              >
+                                Editar
+                              </button>
+
+                              <button
+                                type="button"
+                                className="boton-secundario"
+                                onClick={() => toggleMutation.mutate(category)}
+                                disabled={toggleMutation.isPending || Boolean(editForm)}
+                              >
+                                {category.active ? 'Desactivar' : 'Activar'}
+                              </button>
+
+                              <button
+                                type="button"
+                                className="boton-danger"
+                                onClick={() =>
+                                  window.confirm('¿Desactivar categoría?') &&
+                                  deleteMutation.mutate(category.id)
+                                }
+                                disabled={deleteMutation.isPending || Boolean(editForm)}
+                              >
+                                Eliminar
+                              </button>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

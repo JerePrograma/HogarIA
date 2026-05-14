@@ -36,6 +36,27 @@ app:
 spring:
   config:
     activate:
+      on-profile: local
+
+app:
+  security:
+    allow-x-user-id-fallback: true
+
+  integrations:
+    cjprestamos:
+      enabled: ${CJP_INTEGRATION_ENABLED:true}
+      sync-enabled: ${CJP_SYNC_ENABLED:true}
+      base-url: ${CJP_BASE_URL:http://localhost:8081}
+      api-prefix: ${CJP_API_PREFIX:/api/v1/integration/hogaria}
+      username: ${CJP_USERNAME:hogaria_tech}
+      password: ${CJP_PASSWORD:cambiar-en-entorno}
+      connect-timeout-ms: ${CJP_CONNECT_TIMEOUT_MS:3000}
+      read-timeout-ms: ${CJP_READ_TIMEOUT_MS:5000}
+
+---
+spring:
+  config:
+    activate:
       on-profile: test
   datasource:
     url: jdbc:tc:postgresql:16:///hogaria
