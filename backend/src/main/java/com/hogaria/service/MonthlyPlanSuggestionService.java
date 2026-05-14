@@ -21,8 +21,9 @@ public class MonthlyPlanSuggestionService {
     profileRepo.findByIdAndUserId(profileId,userId).orElseThrow(()->new ForbiddenException("El perfil no pertenece al usuario actual."));
     var matches=new ArrayList<Match>();
     txRepo.findByProfileId(profileId).forEach(tx->matches.add(scoreTx(req,tx)));
-    itemRepo.findByProfileIdAndPeriodYearAndPeriodMonth(profileId, LocalDate.now().getYear(), LocalDate.now().getMonthValue());
-    itemRepo.findAll().stream().filter(i->profileId.equals(i.getProfileId())).filter(i->i.getStatus()!=MonthlyPlanItem.Status.CANCELLED).forEach(i->matches.add(scoreItem(req,i)));
+    itemRepo.findByProfileId(profileId).stream()
+        .filter(i->i.getStatus()!=MonthlyPlanItem.Status.CANCELLED)
+        .forEach(i->matches.add(scoreItem(req,i)));
     matches.removeIf(m->m.score<25 || (m.accountId==null && m.categoryId==null));
     if(matches.isEmpty()) return new PlanningSuggestionResponse(null,null,SuggestionConfidence.NONE,List.of("Sin sugerencias confiables por ahora."));
     matches.sort(Comparator.comparingInt((Match m)->m.score).reversed().thenComparing((Match m)->m.recency, Comparator.reverseOrder()));
