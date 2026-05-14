@@ -6,6 +6,7 @@ import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface ExternalSyncMappingRepository extends JpaRepository<ExternalSyncMapping, UUID> {
+  java.util.List<ExternalSyncMapping> findByProfileId(UUID profileId);
   Optional<ExternalSyncMapping>
       findByProfileIdAndExternalSystemAndExternalEntityTypeAndExternalEntityIdAndExternalEventType(
           UUID profileId,
