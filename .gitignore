@@ -50,3 +50,7 @@ logs/
 # TypeScript incremental build cache
 *.tsbuildinfo
 frontend/*.tsbuildinfo
+
+# TypeScript build cache
+frontend/tsconfig.tsbuildinfo
+
