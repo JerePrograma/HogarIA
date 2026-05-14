@@ -26,4 +26,23 @@ class DashboardServiceTest {
     assertEquals("CRITICAL",res.operationalSummary().financialRiskLevel());
     assertTrue(res.operationalSummary().alerts().stream().anyMatch(a->a.contains("ítems sin cotizar")));
   }
+
+  @Test void includesInvestmentAsMonthlyExpense(){
+    var u=UUID.randomUUID(); var p=UUID.randomUUID(); var incomeCat=UUID.randomUUID(); var investmentCat=UUID.randomUUID();
+    when(profileRepository.findByIdAndUserId(p,u)).thenReturn(Optional.of(new FinancialProfile()));
+    when(transactionRepository.findByProfileIdAndBudgetDateBetween(eq(p),any(),any())).thenReturn(List.of(
+        MoneyTransaction.builder().profileId(p).categoryId(incomeCat).movementType(MoneyTransaction.MovementType.INCOME).amount(new BigDecimal("1000")).status(MoneyTransaction.Status.CONFIRMED).budgetDate(LocalDate.now()).build(),
+        MoneyTransaction.builder().profileId(p).categoryId(investmentCat).movementType(MoneyTransaction.MovementType.EXPENSE).amount(new BigDecimal("300")).status(MoneyTransaction.Status.CONFIRMED).budgetDate(LocalDate.now()).build()
+    ));
+    when(categoryRepository.findAllById(any())).thenReturn(List.of(
+        Category.builder().id(incomeCat).type(Category.Type.INCOME).name("Ingreso").build(),
+        Category.builder().id(investmentCat).type(Category.Type.INVESTMENT).name("Inversión").build()
+    ));
+    when(monthlyPlanItemRepository.findByProfileIdAndPeriodYearAndPeriodMonth(p,2026,5)).thenReturn(List.of());
+
+    var res=service.getMonthlySummary(u,p,2026,5);
+
+    assertEquals(new BigDecimal("300"),res.monthlyBalance().totalExpenses());
+    assertEquals(new BigDecimal("700"),res.monthlyBalance().balance());
+  }
 }
