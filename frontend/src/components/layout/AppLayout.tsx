@@ -63,7 +63,6 @@ export function AppLayout({ children }: { children: ReactNode }) {
       {
         title: 'Herramientas',
         items: [
-          { label: 'Carga guiada', to: `${base}/imports/budget-excel` },
           { label: 'Objetivos', to: `${base}/goals` },
           { label: 'Hábitos', to: `${base}/habits` },
           { label: 'Inflación', to: `${base}/inflation` },
