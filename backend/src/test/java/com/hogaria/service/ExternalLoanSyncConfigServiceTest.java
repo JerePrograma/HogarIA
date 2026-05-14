@@ -99,7 +99,8 @@ class ExternalLoanSyncConfigServiceTest {
     var req = new ExternalLoanSyncConfigUpsertRequest(null, UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), true);
     when(profileRepository.existsByIdAndUserId(profileId, userId)).thenReturn(true);
 
-    assertThrows(BadRequestException.class, () -> service.upsert(userId, profileId, req));
+    var ex = assertThrows(BadRequestException.class, () -> service.upsert(userId, profileId, req));
+    assertTrue(ex.getMessage().contains("accountId"));
     verifyNoInteractions(accountRepository, categoryRepository, repository);
   }
 
