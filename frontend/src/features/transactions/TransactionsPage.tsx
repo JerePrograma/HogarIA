@@ -1,34 +1,27 @@
-// src/features/transactions/TransactionsPage.tsx
-
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-
 import { listAccounts } from '../../api/accountsApi';
 import { listCategories } from '../../api/categoriesApi';
-
 import {
   createTransaction,
   deleteTransaction,
   listTransactions,
   updateTransaction,
 } from '../../api/transactionsApi';
-
 import { AppLayout } from '../../components/layout/AppLayout';
-
+import { EmptyState } from '../../components/ui/EmptyState';
+import { ErrorState } from '../../components/ui/ErrorState';
+import { MetricCard } from '../../components/ui/MetricCard';
+import { MonthSelector } from '../../components/ui/MonthSelector';
+import { StatusBadge } from '../../components/ui/StatusBadge';
 import {
   labelOrValue,
   movementTypeLabels,
   transactionStatusLabels,
 } from '../../domain/financeLabels';
-
-import {
-  movementTypeOptions,
-  transactionStatusOptions,
-} from '../../domain/financeOptions';
-
+import { movementTypeOptions, transactionStatusOptions } from '../../domain/financeOptions';
 import { formatMoney } from '../../domain/formatters';
-
 import type {
   Account,
   Category,
@@ -49,21 +42,6 @@ interface TransactionForm {
   status: TransactionStatus;
 }
 
-const monthOptions = [
-  { value: 1, label: 'Enero' },
-  { value: 2, label: 'Febrero' },
-  { value: 3, label: 'Marzo' },
-  { value: 4, label: 'Abril' },
-  { value: 5, label: 'Mayo' },
-  { value: 6, label: 'Junio' },
-  { value: 7, label: 'Julio' },
-  { value: 8, label: 'Agosto' },
-  { value: 9, label: 'Septiembre' },
-  { value: 10, label: 'Octubre' },
-  { value: 11, label: 'Noviembre' },
-  { value: 12, label: 'Diciembre' },
-];
-
 function getDefaultDate(year: number, month: number) {
   return `${year}-${String(month).padStart(2, '0')}-01`;
 }
@@ -78,18 +56,18 @@ function formatDate(value: string) {
   }).format(new Date(`${value}T00:00:00`));
 }
 
-function getStatusBadgeClass(status: TransactionStatus) {
-  if (status === 'CONFIRMED') return 'badge badge-ok';
-  if (status === 'PENDING') return 'badge badge-warning';
-  return 'badge badge-danger';
+function getStatusTone(status: TransactionStatus): 'ok' | 'watch' | 'critical' {
+  if (status === 'CONFIRMED') return 'ok';
+  if (status === 'PENDING') return 'watch';
+  return 'critical';
 }
 
-function getMovementBadgeClass(type: MovementType) {
-  if (type === 'INCOME') return 'badge badge-ok';
-  if (type === 'SAVING') return 'badge badge-info';
-  if (type === 'TRANSFER') return 'badge badge-muted';
-  if (type === 'ADJUSTMENT') return 'badge badge-warning';
-  return 'badge badge-danger';
+function getMovementTone(type: MovementType): 'ok' | 'watch' | 'risk' | 'critical' | 'neutral' {
+  if (type === 'INCOME') return 'ok';
+  if (type === 'SAVING') return 'ok';
+  if (type === 'TRANSFER') return 'neutral';
+  if (type === 'ADJUSTMENT') return 'watch';
+  return 'critical';
 }
 
 function toTransactionUpdatePayload(transaction: MoneyTransaction) {
@@ -147,49 +125,55 @@ export function TransactionsPage() {
     enabled: Boolean(profileId),
   });
 
-  const accountsById = useMemo(() => {
-    return new Map((accountsQuery.data ?? []).map((account) => [account.id, account]));
-  }, [accountsQuery.data]);
+  const accountsById = useMemo(
+    () => new Map((accountsQuery.data ?? []).map((account) => [account.id, account])),
+    [accountsQuery.data],
+  );
 
-  const categoriesById = useMemo(() => {
-    return new Map((categoriesQuery.data ?? []).map((category) => [category.id, category]));
-  }, [categoriesQuery.data]);
+  const categoriesById = useMemo(
+    () => new Map((categoriesQuery.data ?? []).map((category) => [category.id, category])),
+    [categoriesQuery.data],
+  );
 
   const transactions = transactionsQuery.data ?? [];
 
-  const totals = useMemo(() => {
-    return transactions.reduce(
-      (acc, transaction) => {
-        if (transaction.status === 'IGNORED') {
-          acc.ignored += Number(transaction.amount ?? 0);
-          return acc;
-        }
+  const totals = useMemo(
+    () =>
+      transactions.reduce(
+        (acc, transaction) => {
+          const amount = Number(transaction.amount ?? 0);
 
-        if (transaction.movementType === 'INCOME') {
-          acc.income += Number(transaction.amount ?? 0);
-          return acc;
-        }
+          if (transaction.status === 'IGNORED') {
+            acc.ignored += amount;
+            return acc;
+          }
 
-        if (transaction.movementType === 'SAVING') {
-          acc.saving += Number(transaction.amount ?? 0);
-          return acc;
-        }
+          if (transaction.movementType === 'INCOME') {
+            acc.income += amount;
+            return acc;
+          }
 
-        if (transaction.movementType === 'EXPENSE') {
-          acc.expenses += Number(transaction.amount ?? 0);
-          return acc;
-        }
+          if (transaction.movementType === 'SAVING') {
+            acc.saving += amount;
+            return acc;
+          }
 
-        return acc;
-      },
-      {
-        income: 0,
-        expenses: 0,
-        saving: 0,
-        ignored: 0,
-      },
-    );
-  }, [transactions]);
+          if (transaction.movementType === 'EXPENSE') {
+            acc.expenses += amount;
+            return acc;
+          }
+
+          return acc;
+        },
+        {
+          income: 0,
+          expenses: 0,
+          saving: 0,
+          ignored: 0,
+        },
+      ),
+    [transactions],
+  );
 
   const createTransactionMutation = useMutation({
     mutationFn: () =>
@@ -249,6 +233,8 @@ export function TransactionsPage() {
     }));
   };
 
+  const balance = totals.income - totals.expenses - totals.saving;
+
   return (
     <AppLayout>
       <div className="page-stack">
@@ -257,83 +243,45 @@ export function TransactionsPage() {
             <p className="eyebrow">Gestión diaria</p>
             <h1>Movimientos</h1>
             <p className="muted">
-              Cargá ingresos, gastos, ahorros y ajustes para alimentar el presupuesto y el panel mensual.
+              Cargá ingresos, gastos, ahorros y ajustes para alimentar presupuesto y panel mensual.
             </p>
           </div>
 
-          <div className="period-selector">
-            <label>
-              Año
-              <input
-                className="input"
-                type="number"
-                value={year}
-                min={2000}
-                max={2100}
-                onChange={(event) =>
-                  handlePeriodChange(Number(event.target.value), month)
-                }
-              />
-            </label>
-
-            <label>
-              Mes
-              <select
-                className="select"
-                value={month}
-                onChange={(event) =>
-                  handlePeriodChange(year, Number(event.target.value))
-                }
-              >
-                {monthOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
+          <div className="stack-ui md:min-w-[360px]">
+            <MonthSelector
+              year={year}
+              month={month}
+              onYearChange={(nextYear) => handlePeriodChange(nextYear, month)}
+              onMonthChange={(nextMonth) => handlePeriodChange(year, nextMonth)}
+            />
           </div>
         </section>
 
-        <section className="summary-grid">
-          <div className="metric-card metric-income">
-            <span>Ingresos</span>
-            <strong>{formatMoney(totals.income)}</strong>
-          </div>
-
-          <div className="metric-card metric-expense">
-            <span>Gastos</span>
-            <strong>{formatMoney(totals.expenses)}</strong>
-          </div>
-
-          <div className="metric-card metric-saving">
-            <span>Ahorro</span>
-            <strong>{formatMoney(totals.saving)}</strong>
-          </div>
-
-          <div className="metric-card">
-            <span>Balance operativo</span>
-            <strong>{formatMoney(totals.income - totals.expenses - totals.saving)}</strong>
-          </div>
+        <section className="metric-grid">
+          <MetricCard title="Ingresos" value={formatMoney(totals.income)} helper="Entradas confirmadas/no ignoradas." tone="success" />
+          <MetricCard title="Gastos" value={formatMoney(totals.expenses)} helper="Egresos del período." tone="danger" />
+          <MetricCard title="Ahorro" value={formatMoney(totals.saving)} helper="Movimientos de ahorro." tone="info" />
+          <MetricCard title="Balance operativo" value={formatMoney(balance)} helper="Ingresos menos gastos y ahorro." tone={balance >= 0 ? 'success' : 'danger'} />
         </section>
 
-        {!accountsQuery.isLoading && !accountsQuery.data?.length && (
-          <p className="empty-state">
+        {!accountsQuery.isLoading && !accountsQuery.data?.length ? (
+          <p className="mensaje-warning">
             No hay cuentas cargadas.{' '}
             <Link to={`/profiles/${profileId}/accounts`}>Crear cuenta</Link>
           </p>
-        )}
+        ) : null}
 
-        {!categoriesQuery.isLoading && !categoriesQuery.data?.length && (
-          <p className="empty-state">
+        {!categoriesQuery.isLoading && !categoriesQuery.data?.length ? (
+          <p className="mensaje-warning">
             No hay categorías cargadas.{' '}
             <Link to={`/profiles/${profileId}/categories`}>Crear categoría</Link>
           </p>
-        )}
+        ) : null}
 
-        <section className="card">
+        <section className="panel">
           <div className="section-title">
             <div>
+              <p className="eyebrow">Alta</p>
               <h2>Cargar movimiento</h2>
               <p className="muted">
                 Los movimientos confirmados impactan en reportes y comparación presupuesto vs real.
@@ -341,21 +289,15 @@ export function TransactionsPage() {
             </div>
           </div>
 
-          <div className="form-grid transaction-form-grid">
+          <div className="form-grid">
             <label>
               Cuenta
               <select
-                className="select"
+                className="input-ui"
                 value={form.accountId}
-                onChange={(event) =>
-                  setForm({
-                    ...form,
-                    accountId: event.target.value,
-                  })
-                }
+                onChange={(event) => setForm({ ...form, accountId: event.target.value })}
               >
                 <option value="">Seleccionar cuenta</option>
-
                 {accountsQuery.data?.map((account) => (
                   <option key={account.id} value={account.id}>
                     {account.name}
@@ -367,17 +309,11 @@ export function TransactionsPage() {
             <label>
               Categoría
               <select
-                className="select"
+                className="input-ui"
                 value={form.categoryId}
-                onChange={(event) =>
-                  setForm({
-                    ...form,
-                    categoryId: event.target.value,
-                  })
-                }
+                onChange={(event) => setForm({ ...form, categoryId: event.target.value })}
               >
                 <option value="">Seleccionar categoría</option>
-
                 {categoriesQuery.data?.map((category) => (
                   <option key={category.id} value={category.id}>
                     {category.name}
@@ -389,13 +325,10 @@ export function TransactionsPage() {
             <label>
               Tipo de movimiento
               <select
-                className="select"
+                className="input-ui"
                 value={form.movementType}
                 onChange={(event) =>
-                  setForm({
-                    ...form,
-                    movementType: event.target.value as MovementType,
-                  })
+                  setForm({ ...form, movementType: event.target.value as MovementType })
                 }
               >
                 {movementTypeOptions.map((option) => (
@@ -409,13 +342,10 @@ export function TransactionsPage() {
             <label>
               Estado
               <select
-                className="select"
+                className="input-ui"
                 value={form.status}
                 onChange={(event) =>
-                  setForm({
-                    ...form,
-                    status: event.target.value as TransactionStatus,
-                  })
+                  setForm({ ...form, status: event.target.value as TransactionStatus })
                 }
               >
                 {transactionStatusOptions.map((option) => (
@@ -429,91 +359,69 @@ export function TransactionsPage() {
             <label>
               Fecha real
               <input
-                className="input"
+                className="input-ui"
                 type="date"
                 value={form.realDate}
-                onChange={(event) =>
-                  setForm({
-                    ...form,
-                    realDate: event.target.value,
-                  })
-                }
+                onChange={(event) => setForm({ ...form, realDate: event.target.value })}
               />
             </label>
 
             <label>
               Fecha de presupuesto
               <input
-                className="input"
+                className="input-ui"
                 type="date"
                 value={form.budgetDate}
-                onChange={(event) =>
-                  setForm({
-                    ...form,
-                    budgetDate: event.target.value,
-                  })
-                }
+                onChange={(event) => setForm({ ...form, budgetDate: event.target.value })}
               />
             </label>
 
             <label>
               Monto
               <input
-                className="input"
+                className="input-ui"
                 type="number"
                 min={0}
                 value={form.amount}
-                onChange={(event) =>
-                  setForm({
-                    ...form,
-                    amount: Number(event.target.value),
-                  })
-                }
+                onChange={(event) => setForm({ ...form, amount: Number(event.target.value) })}
               />
             </label>
 
             <label className="form-field-wide">
               Descripción
               <input
-                className="input"
+                className="input-ui"
                 value={form.description}
                 placeholder="Ej: supermercado, sueldo, alquiler"
-                onChange={(event) =>
-                  setForm({
-                    ...form,
-                    description: event.target.value,
-                  })
-                }
+                onChange={(event) => setForm({ ...form, description: event.target.value })}
               />
             </label>
           </div>
 
           <div className="form-actions">
             <button
-              className="button-primary"
+              type="button"
+              className="boton-principal"
               onClick={() => createTransactionMutation.mutate()}
               disabled={!canSave}
             >
               {createTransactionMutation.isPending ? 'Guardando...' : 'Guardar movimiento'}
             </button>
 
-            {!canSave && (
-              <span className="muted">
-                Completá cuenta, categoría, monto y fechas para guardar.
-              </span>
-            )}
+            {!canSave ? (
+              <span className="muted">Completá cuenta, categoría, monto y fechas para guardar.</span>
+            ) : null}
           </div>
 
-          {createTransactionMutation.isError && (
-            <p className="error-box">
-              No se pudo guardar el movimiento. Revisá los datos ingresados.
-            </p>
-          )}
+          {createTransactionMutation.isError ? (
+            <p className="mensaje-error">No se pudo guardar el movimiento. Revisá los datos ingresados.</p>
+          ) : null}
         </section>
 
-        <section className="card">
+        <section className="panel">
           <div className="section-title">
             <div>
+              <p className="eyebrow">Listado</p>
               <h2>Movimientos del período</h2>
               <p className="muted">
                 {transactions.length} movimiento{transactions.length === 1 ? '' : 's'} registrado
@@ -522,34 +430,28 @@ export function TransactionsPage() {
             </div>
           </div>
 
-          {transactionsQuery.isLoading && (
-            <p className="empty-state">Cargando movimientos...</p>
-          )}
+          {transactionsQuery.isLoading ? (
+            <EmptyState title="Cargando movimientos" message="Estamos consultando los movimientos del período." />
+          ) : null}
 
-          {transactionsQuery.isError && (
-            <p className="error-box">
-              No se pudieron cargar los movimientos del período.
-            </p>
-          )}
+          {transactionsQuery.isError ? (
+            <ErrorState message="No se pudieron cargar los movimientos del período." />
+          ) : null}
 
-          {!transactionsQuery.isLoading &&
-            !transactionsQuery.isError &&
-            transactions.length === 0 && (
-              <p className="empty-state">
-                Todavía no hay movimientos cargados para este mes.
-              </p>
-            )}
+          {!transactionsQuery.isLoading && !transactionsQuery.isError && transactions.length === 0 ? (
+            <EmptyState title="Sin movimientos" message="Todavía no hay movimientos cargados para este mes." />
+          ) : null}
 
-          {transactions.length > 0 && (
-            <div className="table-wrapper">
-              <table className="table table-compact">
+          {transactions.length > 0 ? (
+            <div className="tabla-ui">
+              <table className="table-compact">
                 <thead>
                   <tr>
                     <th>Fecha</th>
                     <th>Movimiento</th>
                     <th>Cuenta</th>
                     <th>Categoría</th>
-                    <th>Monto</th>
+                    <th className="amount-cell">Monto</th>
                     <th>Estado</th>
                     <th>Acciones</th>
                   </tr>
@@ -574,15 +476,13 @@ export function TransactionsPage() {
                         </td>
 
                         <td>
-                          <span className={getMovementBadgeClass(transaction.movementType)}>
-                            {labelOrValue(movementTypeLabels, transaction.movementType)}
-                          </span>
-
-                          <br />
-
-                          <span className="muted">
+                          <StatusBadge
+                            tone={getMovementTone(transaction.movementType)}
+                            label={labelOrValue(movementTypeLabels, transaction.movementType)}
+                          />
+                          <p className="compact-muted">
                             {transaction.description || 'Sin descripción'}
-                          </span>
+                          </p>
                         </td>
 
                         <td>{accountName}</td>
@@ -593,25 +493,26 @@ export function TransactionsPage() {
                         </td>
 
                         <td>
-                          <span className={getStatusBadgeClass(transaction.status)}>
-                            {labelOrValue(transactionStatusLabels, transaction.status)}
-                          </span>
+                          <StatusBadge
+                            tone={getStatusTone(transaction.status)}
+                            label={labelOrValue(transactionStatusLabels, transaction.status)}
+                          />
                         </td>
 
                         <td>
                           <div className="row-actions">
                             <button
-                              className="button-secondary"
+                              type="button"
+                              className="boton-secundario"
                               disabled={updateTransactionMutation.isPending}
                               onClick={() => updateTransactionMutation.mutate(transaction)}
                             >
-                              {transaction.status === 'CONFIRMED'
-                                ? 'Pasar a pendiente'
-                                : 'Confirmar'}
+                              {transaction.status === 'CONFIRMED' ? 'Pasar a pendiente' : 'Confirmar'}
                             </button>
 
                             <button
-                              className="button-danger"
+                              type="button"
+                              className="boton-danger"
                               disabled={deleteTransactionMutation.isPending}
                               onClick={() =>
                                 window.confirm('¿Eliminar este movimiento?') &&
@@ -628,7 +529,7 @@ export function TransactionsPage() {
                 </tbody>
               </table>
             </div>
-          )}
+          ) : null}
         </section>
       </div>
     </AppLayout>

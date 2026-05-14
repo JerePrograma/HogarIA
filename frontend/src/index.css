@@ -1,4 +1,4 @@
-﻿@tailwind base;
+@tailwind base;
 @tailwind components;
 @tailwind utilities;
 
@@ -446,7 +446,7 @@
   }
 
   :root.dark .boton-principal,
-  .button-primary {
+  :root.dark .button-primary {
     color: #020617;
     box-shadow:
       0 14px 34px rgba(2, 132, 199, 0.28),
@@ -470,7 +470,7 @@
   }
 
   :root.dark .boton-secundario,
-  .button-secondary {
+  :root.dark .button-secondary {
     color: var(--app-text);
     background-color: rgba(15, 23, 42, 0.92);
     border-color: rgba(148, 163, 184, 0.46);
@@ -497,7 +497,7 @@
   }
 
   .nav-item {
-    @apply group rounded-2xl border px-3.5 py-3 text-sm no-underline transition duration-150;
+    @apply rounded-2xl border px-3.5 py-3 text-sm no-underline transition duration-150;
     color: var(--app-text-soft);
     background: rgba(255, 255, 255, 0.82);
     border-color: var(--app-border-subtle);
@@ -1107,4 +1107,6 @@
       0 0 0 5px var(--app-ring-strong);
   }
 }
+
+
 

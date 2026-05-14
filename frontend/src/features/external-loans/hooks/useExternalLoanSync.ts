@@ -1,9 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
+  dryRunExternalLoans,
   getExternalLoanSyncConfig,
   saveExternalLoanSyncConfig,
   syncExternalLoans,
-  dryRunExternalLoans,
 } from '../../../api/externalLoansApi';
 import type {
   ExternalLoanManualSyncResponse,
@@ -23,9 +23,11 @@ export function useSaveExternalLoanSyncConfig(profileId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (payload: ExternalLoanSyncConfigPayload) => saveExternalLoanSyncConfig(profileId, payload),
+    mutationFn: (payload: ExternalLoanSyncConfigPayload) =>
+      saveExternalLoanSyncConfig(profileId, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['external-loans-sync-config', profileId] });
+      queryClient.invalidateQueries({ queryKey: ['external-loans-summary', profileId] });
     },
   });
 }
@@ -37,10 +39,11 @@ export function useSyncExternalLoans(profileId: string) {
     mutationFn: () => syncExternalLoans(profileId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['external-loans-summary', profileId] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard', profileId] });
+      queryClient.invalidateQueries({ queryKey: ['tx', profileId] });
     },
   });
 }
-
 
 export function useDryRunExternalLoans(profileId: string) {
   return useMutation<ExternalLoanManualSyncResponse>({

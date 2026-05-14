@@ -1,20 +1,290 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
-import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { createInflation, getAccumulatedInflation, listInflation } from '../../api/inflationApi';
+import { useMemo, useState } from 'react';
+import {
+  CartesianGrid,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
+import {
+  createInflation,
+  getAccumulatedInflation,
+  listInflation,
+} from '../../api/inflationApi';
 import { getApiErrorMessage } from '../../api/http';
 import { AppLayout } from '../../components/layout/AppLayout';
-import { formatPercent, formatMonth } from '../../domain/formatters';
+import { EmptyState } from '../../components/ui/EmptyState';
+import { ErrorState } from '../../components/ui/ErrorState';
+import { MetricCard } from '../../components/ui/MetricCard';
+import { StatusBadge } from '../../components/ui/StatusBadge';
+import { formatMonth, formatPercent } from '../../domain/formatters';
 import type { InflationIndex } from '../../domain/types';
 
 export function InflationPage() {
-  const d = new Date(); const [year, setYear] = useState(d.getFullYear()); const [month, setMonth] = useState(d.getMonth() + 1); const [monthlyRate, setMonthlyRate] = useState(0.03); const [projection, setProjection] = useState(false); const [message, setMessage] = useState(''); const qc = useQueryClient();
-  const q = useQuery({ queryKey: ['inflation', year], queryFn: () => listInflation(year) });
-  const acc = useQuery({ queryKey: ['inflation-acc', year], queryFn: () => getAccumulatedInflation(year, 1, year, 12) });
-  const create = useMutation({ mutationFn: () => createInflation({ year, month, monthlyRate, source: 'MANUAL', projection }), onSuccess: () => { setMessage('Índice guardado.'); qc.invalidateQueries({ queryKey: ['inflation', year] }); }, onError: (e) => setMessage(getApiErrorMessage(e)) });
-  return <AppLayout><div className='card'><h1>Inflación y proyecciones</h1><div className='form-row'><input className='input' type='number' value={year} onChange={e => setYear(Number(e.target.value))} /><input className='input' type='number' value={month} min={1} max={12} onChange={e => setMonth(Number(e.target.value))} /><input className='input' type='number' step='0.0001' value={monthlyRate} onChange={e => setMonthlyRate(Number(e.target.value))} /><label><input type='checkbox' checked={projection} onChange={e => setProjection(e.target.checked)} /> Proyectado</label><button className='button-primary' disabled={create.isPending} onClick={() => create.mutate()}>Guardar índice</button></div>
-    <p>Acumulada anual: {formatPercent(Number(acc.data?.accumulatedRate ?? 0) * 100)}</p>{message && <p className='empty-state'>{message}</p>}
-    <div style={{ height: 260 }}><ResponsiveContainer><LineChart data={(q.data ?? []).map((x: InflationIndex) => ({ mes: formatMonth(x.month), porcentaje: Number(x.monthlyRate) * 100 }))}><XAxis dataKey='mes' /><YAxis /><Tooltip formatter={(value: number) => formatPercent(value)} /><Line type='monotone' dataKey='porcentaje' stroke='#0f766e' /></LineChart></ResponsiveContainer></div>
-    <table className='table'><thead><tr><th>Mes</th><th>Tasa mensual</th><th>Tipo</th><th>Fuente</th></tr></thead><tbody>{(q.data ?? []).map((x: InflationIndex) => <tr key={x.id}><td>{formatMonth(x.month)}</td><td>{formatPercent(Number(x.monthlyRate) * 100)}</td><td>{x.projection ? 'Proyectado' : 'Real'}</td><td>{x.source ?? 'Sin fuente'}</td></tr>)}</tbody></table>
-  </div></AppLayout>;
+  const today = new Date();
+
+  const [year, setYear] = useState(today.getFullYear());
+  const [month, setMonth] = useState(today.getMonth() + 1);
+  const [monthlyRate, setMonthlyRate] = useState(0.03);
+  const [projection, setProjection] = useState(false);
+  const [message, setMessage] = useState('');
+
+  const queryClient = useQueryClient();
+
+  const inflationQuery = useQuery<InflationIndex[]>({
+    queryKey: ['inflation', year],
+    queryFn: () => listInflation(year),
+  });
+
+  const accumulatedQuery = useQuery({
+    queryKey: ['inflation-acc', year],
+    queryFn: () => getAccumulatedInflation(year, 1, year, 12),
+  });
+
+  const createMutation = useMutation({
+    mutationFn: () =>
+      createInflation({
+        year,
+        month,
+        monthlyRate,
+        source: 'MANUAL',
+        projection,
+      }),
+    onSuccess: () => {
+      setMessage('Índice guardado.');
+      queryClient.invalidateQueries({ queryKey: ['inflation', year] });
+      queryClient.invalidateQueries({ queryKey: ['inflation-acc', year] });
+    },
+    onError: (error) => setMessage(getApiErrorMessage(error)),
+  });
+
+  const indexes = inflationQuery.data ?? [];
+
+  const chartData = useMemo(
+    () =>
+      indexes.map((index) => ({
+        mes: formatMonth(index.month),
+        porcentaje: Number(index.monthlyRate) * 100,
+        tipo: index.projection ? 'Proyectado' : 'Real',
+      })),
+    [indexes],
+  );
+
+  const averageRate = useMemo(() => {
+    if (indexes.length === 0) return 0;
+
+    const total = indexes.reduce((acc, index) => acc + Number(index.monthlyRate ?? 0), 0);
+    return (total / indexes.length) * 100;
+  }, [indexes]);
+
+  const projectedCount = indexes.filter((index) => index.projection).length;
+  const realCount = indexes.length - projectedCount;
+  const accumulatedRate = Number(accumulatedQuery.data?.accumulatedRate ?? 0) * 100;
+
+  return (
+    <AppLayout>
+      <div className="page-stack">
+        <section className="page-header">
+          <div>
+            <p className="eyebrow">Variables económicas</p>
+            <h1>Inflación y proyecciones</h1>
+            <p className="muted">
+              Cargá índices reales o proyectados para analizar evolución anual y supuestos financieros.
+            </p>
+          </div>
+        </section>
+
+        <section className="metric-grid">
+          <MetricCard
+            title="Acumulada anual"
+            value={formatPercent(accumulatedRate)}
+            helper="Tasa acumulada del año seleccionado."
+            tone={accumulatedRate > 0 ? 'warning' : 'neutral'}
+          />
+
+          <MetricCard
+            title="Promedio mensual"
+            value={formatPercent(averageRate)}
+            helper="Promedio simple de índices cargados."
+            tone="info"
+          />
+
+          <MetricCard
+            title="Meses reales"
+            value={realCount}
+            helper="Índices no proyectados."
+            tone="success"
+          />
+
+          <MetricCard
+            title="Meses proyectados"
+            value={projectedCount}
+            helper="Supuestos o estimaciones."
+            tone={projectedCount > 0 ? 'warning' : 'neutral'}
+          />
+        </section>
+
+        <section className="panel">
+          <div className="section-title">
+            <div>
+              <p className="eyebrow">Carga manual</p>
+              <h2>Guardar índice mensual</h2>
+              <p className="secondary-text">
+                Ingresá la tasa como decimal. Ejemplo: 0.03 representa 3%.
+              </p>
+            </div>
+          </div>
+
+          <div className="form-row">
+            <label>
+              Año
+              <input
+                className="input-ui"
+                type="number"
+                min={2000}
+                max={2100}
+                value={year}
+                onChange={(event) => setYear(Number(event.target.value))}
+              />
+            </label>
+
+            <label>
+              Mes
+              <input
+                className="input-ui"
+                type="number"
+                value={month}
+                min={1}
+                max={12}
+                onChange={(event) => setMonth(Number(event.target.value))}
+              />
+            </label>
+
+            <label>
+              Tasa mensual
+              <input
+                className="input-ui"
+                type="number"
+                step="0.0001"
+                value={monthlyRate}
+                onChange={(event) => setMonthlyRate(Number(event.target.value))}
+              />
+            </label>
+
+            <label className="surface-inset cluster-ui">
+              <input
+                type="checkbox"
+                checked={projection}
+                onChange={(event) => setProjection(event.target.checked)}
+              />
+              <span>Proyectado</span>
+            </label>
+
+            <button
+              type="button"
+              className="boton-principal"
+              disabled={createMutation.isPending}
+              onClick={() => createMutation.mutate()}
+            >
+              {createMutation.isPending ? 'Guardando...' : 'Guardar índice'}
+            </button>
+          </div>
+
+          {message ? (
+            <p className={message.toLowerCase().includes('error') ? 'mensaje-error' : 'mensaje-exito'}>
+              {message}
+            </p>
+          ) : null}
+        </section>
+
+        <section className="panel chart-card">
+          <div className="section-title">
+            <div>
+              <p className="eyebrow">Evolución</p>
+              <h2>Inflación mensual</h2>
+            </div>
+          </div>
+
+          {inflationQuery.isLoading ? (
+            <EmptyState title="Cargando índices" message="Estamos consultando la inflación del año." />
+          ) : null}
+
+          {inflationQuery.isError ? (
+            <ErrorState message="No se pudo cargar la serie de inflación." />
+          ) : null}
+
+          {!inflationQuery.isLoading && !inflationQuery.isError && chartData.length === 0 ? (
+            <EmptyState title="Sin índices" message="Todavía no hay datos de inflación para este año." />
+          ) : null}
+
+          {chartData.length > 0 ? (
+            <ResponsiveContainer width="100%" height={280}>
+              <LineChart data={chartData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--app-border-subtle)" />
+                <XAxis dataKey="mes" />
+                <YAxis />
+                <Tooltip formatter={(value) => formatPercent(Number(value))} />
+                <Line
+                  type="monotone"
+                  dataKey="porcentaje"
+                  stroke="var(--app-accent)"
+                  strokeWidth={3}
+                  dot={{ r: 4 }}
+                  activeDot={{ r: 6 }}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          ) : null}
+        </section>
+
+        <section className="panel">
+          <div className="section-title">
+            <div>
+              <p className="eyebrow">Detalle</p>
+              <h2>Índices cargados</h2>
+            </div>
+
+            <span className="badge-count">{indexes.length}</span>
+          </div>
+
+          <div className="tabla-ui">
+            <table className="table-compact">
+              <thead>
+                <tr>
+                  <th>Mes</th>
+                  <th>Tasa mensual</th>
+                  <th>Tipo</th>
+                  <th>Fuente</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {indexes.map((index) => (
+                  <tr key={index.id}>
+                    <td>
+                      <strong>{formatMonth(index.month)}</strong>
+                    </td>
+
+                    <td>{formatPercent(Number(index.monthlyRate) * 100)}</td>
+
+                    <td>
+                      <StatusBadge
+                        tone={index.projection ? 'watch' : 'ok'}
+                        label={index.projection ? 'Proyectado' : 'Real'}
+                      />
+                    </td>
+
+                    <td>{index.source ?? 'Sin fuente'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+    </AppLayout>
+  );
 }
