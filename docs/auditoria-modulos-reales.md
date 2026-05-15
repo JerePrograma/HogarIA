@@ -71,7 +71,6 @@ Fecha de auditoría: 2026-05-14.
 - /profiles/:profileId/goals
 - /profiles/:profileId/habits
 - /profiles/:profileId/inflation
-- /profiles/:profileId/imports/budget-excel
 - /profiles/:profileId/planning
 - /profiles/:profileId/prestamos-externos
 
@@ -108,7 +107,7 @@ Fecha de auditoría: 2026-05-14.
 | Goals | FinancialGoal | **Sin controller detectado** | FinancialGoalService | goalsApi | GoalsPage | esperado CRUD | Sin tests de controller | **Frontend adelantado** |
 | Habits | Habit/HabitCheckin | **Sin controller detectado** | HabitService | habitsApi | HabitsPage | esperado CRUD/checkins | Sin tests de controller | **Frontend adelantado** |
 | Inflation | InflationIndex | **Sin controller detectado** | InflationService | inflationApi | InflationPage | esperado series CRUD/list | Sin tests de controller | **Frontend adelantado** |
-| Importador Excel | ExcelImportBatch/Row | **Sin controller detectado** | (sin service dedicado visible) | importsApi | BudgetExcelImportPage | preview/commit/rollback esperado | Sin tests | **Frontend adelantado** |
+| Importador Excel | ExcelImportBatch/Row | **Sin controller detectado** | (sin service dedicado visible) | importsApi | BudgetExcelImportPage | preview/commit/rollback esperado | Sin tests | **Ruta frontend retirada del router activo** |
 
 ## Hallazgos críticos
 
