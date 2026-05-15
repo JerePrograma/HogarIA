@@ -6,6 +6,7 @@ import { ProfilesPage } from '../features/profiles/ProfilesPage';
 import { AccountsPage } from '../features/accounts/AccountsPage';
 import { CategoriesPage } from '../features/categories/CategoriesPage';
 import { TransactionsPage } from '../features/transactions/TransactionsPage';
+import { TransactionImportPage } from '../features/transactions/TransactionImportPage';
 import { DashboardPage } from '../features/dashboard/DashboardPage';
 import { BudgetPage } from '../features/budgets/BudgetPage';
 import { GoalsPage } from '../features/goals/GoalsPage';
@@ -58,6 +59,7 @@ export const AppRouter = () => <Routes>
   <Route path='/profiles/:profileId/accounts' element={<DevGuard><ProfileGuard><AccountsPage /></ProfileGuard></DevGuard>} />
   <Route path='/profiles/:profileId/categories' element={<DevGuard><ProfileGuard><CategoriesPage /></ProfileGuard></DevGuard>} />
   <Route path='/profiles/:profileId/transactions' element={<DevGuard><ProfileGuard><TransactionsPage /></ProfileGuard></DevGuard>} />
+  <Route path='/profiles/:profileId/transactions/import' element={<DevGuard><ProfileGuard><TransactionImportPage /></ProfileGuard></DevGuard>} />
   <Route path='/profiles/:profileId/budgets' element={<DevGuard><ProfileGuard><BudgetPage /></ProfileGuard></DevGuard>} />
   <Route path='/profiles/:profileId/goals' element={<DevGuard><ProfileGuard><GoalsPage /></ProfileGuard></DevGuard>} />
   <Route path='/profiles/:profileId/habits' element={<DevGuard><ProfileGuard><HabitsPage /></ProfileGuard></DevGuard>} />

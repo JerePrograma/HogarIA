@@ -248,6 +248,7 @@ export function TransactionsPage() {
           </div>
 
           <div className="stack-ui md:min-w-[360px]">
+            <Link className='btn btn-secondary' to={`/profiles/${profileId}/transactions/import`}>Importar movimientos</Link>
             <MonthSelector
               year={year}
               month={month}
