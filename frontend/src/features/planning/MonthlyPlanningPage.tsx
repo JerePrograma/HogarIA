@@ -1,5 +1,5 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { listAccounts } from '../../api/accountsApi';
 import { listCategories } from '../../api/categoriesApi';
@@ -32,6 +32,9 @@ import { PlanningSummaryCards } from './components/PlanningSummaryCards';
 import { QuickCapturePanel } from './components/QuickCapturePanel';
 import { QuickCapturePreviewForm } from './components/QuickCapturePreviewForm';
 import { StructuredPlanItemForm } from './components/StructuredPlanItemForm';
+import { queryKeys } from '../../domain/queryKeys';
+import { useInvalidateMonthlyViews } from '../../hooks/useInvalidateMonthlyViews';
+import { useMonthlyPeriod } from '../../hooks/useMonthlyPeriod';
 
 const createEmptyForm = (year: number, month: number): MonthlyPlanItemCreatePayload => ({
   type: 'EXPENSE',
@@ -45,11 +48,7 @@ const createEmptyForm = (year: number, month: number): MonthlyPlanItemCreatePayl
 
 export function MonthlyPlanningPage() {
   const { profileId = '' } = useParams();
-  const queryClient = useQueryClient();
-
-  const today = new Date();
-  const [year, setYear] = useState(today.getFullYear());
-  const [month, setMonth] = useState(today.getMonth() + 1);
+  const { year, month, setYear, setMonth } = useMonthlyPeriod();
   const [tableFilter, setTableFilter] = useState<TableFilterKey>('ALL');
 
   const [quickText, setQuickText] = useState('');
@@ -61,26 +60,22 @@ export function MonthlyPlanningPage() {
     createEmptyForm(year, month),
   );
 
-  const invalidatePlanningViews = () => {
-    queryClient.invalidateQueries({ queryKey: ['planning', profileId, year, month] });
-    queryClient.invalidateQueries({ queryKey: ['dashboard', profileId, year, month] });
-    queryClient.invalidateQueries({ queryKey: ['tx', profileId, year, month] });
-  };
+  const invalidatePlanningViews = useInvalidateMonthlyViews(profileId, year, month);
 
   const planningQuery = useQuery<MonthlyPlanSummary>({
-    queryKey: ['planning', profileId, year, month],
+    queryKey: queryKeys.planning(profileId, year, month),
     queryFn: () => getMonthlyPlan(profileId, year, month),
     enabled: Boolean(profileId),
   });
 
   const accountsQuery = useQuery({
-    queryKey: ['accounts', profileId],
+    queryKey: queryKeys.accounts(profileId),
     queryFn: () => listAccounts(profileId),
     enabled: Boolean(profileId),
   });
 
   const categoriesQuery = useQuery({
-    queryKey: ['categories', profileId],
+    queryKey: queryKeys.categories(profileId, true),
     queryFn: () => listCategories(profileId, true),
     enabled: Boolean(profileId),
   });
@@ -170,7 +165,10 @@ export function MonthlyPlanningPage() {
     mutationFn: () =>
       commitMonthlyPlanQuickCapture(profileId, {
         rawText: quickText,
-        payload: quickForm as MonthlyPlanItemCreatePayload,
+        payload: (() => {
+          if (!quickForm) throw new Error('No hay previsualización confirmable.');
+          return quickForm;
+        })(),
       }),
     onSuccess: () => {
       setQuickText('');
@@ -185,14 +183,28 @@ export function MonthlyPlanningPage() {
   const summary = planningQuery.data;
   const items = summary?.items ?? [];
 
-  const pendingActionId =
-    convertMutation.variables ??
-    updateMutation.variables?.id ??
-    cancelMutation.variables ??
-    markPaidMutation.variables ??
-    markCollectedMutation.variables ??
-    deleteMutation.variables ??
-    null;
+  const pendingActionId = useMemo(() =>
+    (convertMutation.isPending ? convertMutation.variables : null) ??
+    (updateMutation.isPending ? updateMutation.variables?.id : null) ??
+    (cancelMutation.isPending ? cancelMutation.variables : null) ??
+    (markPaidMutation.isPending ? markPaidMutation.variables : null) ??
+    (markCollectedMutation.isPending ? markCollectedMutation.variables : null) ??
+    (deleteMutation.isPending ? deleteMutation.variables : null) ??
+    null,
+  [
+    convertMutation.isPending,
+    convertMutation.variables,
+    updateMutation.isPending,
+    updateMutation.variables,
+    cancelMutation.isPending,
+    cancelMutation.variables,
+    markPaidMutation.isPending,
+    markPaidMutation.variables,
+    markCollectedMutation.isPending,
+    markCollectedMutation.variables,
+    deleteMutation.isPending,
+    deleteMutation.variables,
+  ]);
 
   return (
     <AppLayout>
@@ -234,6 +246,10 @@ export function MonthlyPlanningPage() {
           <ErrorState message="No se pudo cargar la planificación mensual." />
         )}
 
+        <PlanningSummaryCards summary={summary} />
+
+        <MonthlyPlanningChecklist summary={summary} items={items} onApply={setTableFilter} />
+
         <MonthlyPlanningGuide summary={summary} />
 
         <QuickCapturePanel
@@ -269,10 +285,6 @@ export function MonthlyPlanningPage() {
             />
           ) : null}
         </QuickCapturePanel>
-
-        <PlanningSummaryCards summary={summary} />
-
-        <MonthlyPlanningChecklist summary={summary} items={items} onApply={setTableFilter} />
 
         <MonthlyPlanItemsTable
           profileId={profileId}

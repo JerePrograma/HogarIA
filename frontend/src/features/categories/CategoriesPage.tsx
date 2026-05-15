@@ -18,6 +18,7 @@ import {
   labelOrValue,
 } from '../../domain/financeLabels';
 import type { Category, CategoryScope, CategoryType } from '../../domain/types';
+import { queryKeys } from '../../domain/queryKeys';
 
 const categoryTypeOptions: Array<{ value: CategoryType; label: string }> = [
   { value: 'INCOME', label: 'Ingreso' },
@@ -57,7 +58,7 @@ export function CategoriesPage() {
   const [editForm, setEditForm] = useState<EditForm | null>(null);
 
   const categoriesQuery = useQuery<Category[]>({
-    queryKey: ['categories', profileId, includeGlobal],
+    queryKey: queryKeys.categories(profileId, includeGlobal),
     queryFn: () => listCategories(profileId, includeGlobal),
     enabled: Boolean(profileId),
   });
@@ -67,7 +68,7 @@ export function CategoriesPage() {
   const globalCategories = categories.filter((category) => category.scope === 'GLOBAL');
 
   const invalidateCategories = () =>
-    queryClient.invalidateQueries({ queryKey: ['categories', profileId] });
+    queryClient.invalidateQueries({ queryKey: queryKeys.categories(profileId) });
 
   const createMutation = useMutation({
     mutationFn: () =>
@@ -116,10 +117,7 @@ export function CategoriesPage() {
 
   const canCreate = Boolean(profileId) && name.trim().length > 0 && !createMutation.isPending;
 
-  const canSaveEdit =
-    Boolean(editForm) &&
-    editForm.name.trim().length > 0 &&
-    !updateMutation.isPending;
+  const canSaveEdit = (editForm?.name.trim().length ?? 0) > 0 && !updateMutation.isPending;
 
   const startEdit = (category: Category) => {
     if (category.scope === 'GLOBAL') return;
@@ -300,7 +298,8 @@ export function CategoriesPage() {
 
                 <tbody>
                   {categories.map((category) => {
-                    const isEditing = editForm?.id === category.id;
+                    const activeEditForm = editForm?.id === category.id ? editForm : null;
+                    const isEditing = Boolean(activeEditForm);
 
                     return (
                       <tr key={category.id}>
@@ -308,7 +307,7 @@ export function CategoriesPage() {
                           {isEditing ? (
                             <input
                               className="input-ui"
-                              value={editForm.name}
+                              value={activeEditForm?.name ?? ''}
                               onChange={(event) =>
                                 setEditForm((current) =>
                                   current ? { ...current, name: event.target.value } : current,
@@ -324,7 +323,7 @@ export function CategoriesPage() {
                           {isEditing ? (
                             <select
                               className="input-ui"
-                              value={editForm.type}
+                              value={activeEditForm?.type ?? 'VARIABLE_EXPENSE'}
                               onChange={(event) =>
                                 setEditForm((current) =>
                                   current
@@ -348,7 +347,7 @@ export function CategoriesPage() {
                           {isEditing ? (
                             <select
                               className="input-ui"
-                              value={editForm.scope}
+                              value={activeEditForm?.scope ?? 'PERSONAL'}
                               onChange={(event) =>
                                 setEditForm((current) =>
                                   current
