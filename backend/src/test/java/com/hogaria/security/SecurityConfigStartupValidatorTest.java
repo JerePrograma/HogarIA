@@ -28,6 +28,23 @@ class SecurityConfigStartupValidatorTest {
     assertDoesNotThrow(() -> validator.run(null));
   }
 
+
+  @Test
+  void nonLocalProfileBlocksBlankSecret() {
+    var validator = new SecurityConfigStartupValidator(environmentWithProfiles("prod"));
+    ReflectionTestUtils.setField(validator, "jwtSecret", " ");
+
+    assertThrows(IllegalStateException.class, () -> validator.run(null));
+  }
+
+  @Test
+  void nonLocalProfileBlocksNullSecret() {
+    var validator = new SecurityConfigStartupValidator(environmentWithProfiles("prod"));
+    ReflectionTestUtils.setField(validator, "jwtSecret", null);
+
+    assertThrows(IllegalStateException.class, () -> validator.run(null));
+  }
+
   @Test
   void nonLocalProfileBlocksInsecureSecret() {
     var validator = new SecurityConfigStartupValidator(environmentWithProfiles("prod"));
