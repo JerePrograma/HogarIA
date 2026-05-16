@@ -4,6 +4,8 @@ import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -41,12 +43,15 @@ public class ExcelImportBatch {
     @Column(name = "currency", nullable = false, length = 3)
     private String currency;
 
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "summary_json", columnDefinition = "jsonb")
     private String summaryJson;
 
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "warnings_json", columnDefinition = "jsonb")
     private String warningsJson;
 
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "errors_json", columnDefinition = "jsonb")
     private String errorsJson;
 

@@ -3,6 +3,8 @@ package com.hogaria.entity;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -51,6 +53,7 @@ public class ExcelImportRow {
     @Column(name = "error_message", length = 1000)
     private String errorMessage;
 
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "raw_json", columnDefinition = "jsonb")
     private String rawJson;
 
