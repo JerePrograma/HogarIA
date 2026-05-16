@@ -15,7 +15,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.temporal.WeekFields;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 
 @Service
@@ -74,6 +76,7 @@ public class HabitService {
             HabitCheckinRequest request
     ) {
         own(userId, profileId);
+        validateCheckinDate(date);
 
         Habit habit = repo.findById(habitId)
                 .orElseThrow(() -> new NotFoundException("Hábito no encontrado."));
@@ -81,6 +84,8 @@ public class HabitService {
         if (!habit.getProfileId().equals(profileId)) {
             throw new ForbiddenException("El hábito no pertenece al perfil indicado.");
         }
+
+        validateFrequency(habit, date);
 
         HabitCheckin checkin = checkRepo.findByHabitIdAndCheckinDate(habitId, date)
                 .orElseGet(() -> HabitCheckin.builder()
@@ -92,6 +97,41 @@ public class HabitService {
         checkin.setNote(request.note());
 
         return toResponse(checkRepo.save(checkin));
+    }
+
+    private void validateCheckinDate(LocalDate date) {
+        if (date == null) {
+            throw new IllegalArgumentException("La fecha del check-in es obligatoria.");
+        }
+        if (date.isAfter(LocalDate.now())) {
+            throw new IllegalArgumentException("No se permiten check-ins en fechas futuras.");
+        }
+    }
+
+    private void validateFrequency(Habit habit, LocalDate date) {
+        if (habit.getFrequency() == null) {
+            throw new IllegalArgumentException("La frecuencia del hábito es obligatoria.");
+        }
+        if (habit.getFrequency().name().equals("WEEKLY")) {
+            LocalDate start = date.with(WeekFields.of(Locale.getDefault()).dayOfWeek(), 1);
+            LocalDate end = start.plusDays(6);
+            boolean alreadyCheckedThisWeek = checkRepo.findAll().stream()
+                    .filter(c -> c.getHabitId().equals(habit.getId()))
+                    .anyMatch(c -> !c.getCheckinDate().isBefore(start) && !c.getCheckinDate().isAfter(end) && !c.getCheckinDate().equals(date));
+            if (alreadyCheckedThisWeek) {
+                throw new IllegalArgumentException("El hábito semanal ya tiene check-in en esta semana.");
+            }
+        }
+        if (habit.getFrequency().name().equals("MONTHLY")) {
+            boolean alreadyCheckedThisMonth = checkRepo.findAll().stream()
+                    .filter(c -> c.getHabitId().equals(habit.getId()))
+                    .anyMatch(c -> c.getCheckinDate().getYear() == date.getYear()
+                            && c.getCheckinDate().getMonthValue() == date.getMonthValue()
+                            && !c.getCheckinDate().equals(date));
+            if (alreadyCheckedThisMonth) {
+                throw new IllegalArgumentException("El hábito mensual ya tiene check-in en este mes.");
+            }
+        }
     }
 
     private HabitResponse toResponse(Habit habit) {

@@ -1,6 +1,6 @@
 # Auditoría técnica de módulos reales (backend/frontend)
 
-Fecha de auditoría: 2026-05-14.
+Fecha de auditoría: 2026-05-16.
 
 ## Inventario backend (código real)
 
@@ -104,14 +104,14 @@ Fecha de auditoría: 2026-05-14.
 | Planificación mensual | MonthlyPlanItem | MonthlyPlanController/QuickCapture/Suggestion/PlanningController | MonthlyPlan* | monthlyPlanningApi/monthlyPlanQuickCaptureApi/monthlyPlanSuggestionsApi | MonthlyPlanningPage | create/list/update/delete + quick capture | Service tests | Implementado |
 | Préstamos externos | ExternalLoanSyncConfig/ExternalSyncMapping | ExternalLoansController | ExternalLoansService + sync services | externalLoansApi | ExternalLoansPage | summary/config/dry-run/sync/health | Service + IT | Implementado |
 | Dev user/Auth | AppUser | DevUserController/AuthController | DevUserService/AuthService | devUsersApi | DevUserPage | login dev + token | Cobertura indirecta | Implementado |
-| Goals | FinancialGoal | **Sin controller detectado** | FinancialGoalService | goalsApi | GoalsPage | esperado CRUD | Sin tests de controller | **Frontend adelantado** |
-| Habits | Habit/HabitCheckin | **Sin controller detectado** | HabitService | habitsApi | HabitsPage | esperado CRUD/checkins | Sin tests de controller | **Frontend adelantado** |
-| Inflation | InflationIndex | **Sin controller detectado** | InflationService | inflationApi | InflationPage | esperado series CRUD/list | Sin tests de controller | **Frontend adelantado** |
+| Goals | FinancialGoal | PlanningController (`/api/profiles/{profileId}/goals*`) | FinancialGoalService | goalsApi | GoalsPage | list/create/delete + emergency-fund | Service tests agregados | **CERRADO** |
+| Habits | Habit/HabitCheckin | PlanningController (`/api/profiles/{profileId}/habits*`) | HabitService | habitsApi | HabitsPage | list/create/checkins | Service tests agregados + validaciones de fecha/frecuencia | **CERRADO** |
+| Inflation | InflationIndex | PlanningController (`/api/inflation*`) | InflationService | inflationApi | InflationPage | list/create/accumulated | Service tests agregados + validaciones de rango y payload | **CERRADO** |
 | Importador Excel | ExcelImportBatch/Row | **Sin controller detectado** | (sin service dedicado visible) | importsApi | BudgetExcelImportPage | preview/commit/rollback esperado | Sin tests | **Ruta frontend retirada del router activo** |
 
 ## Hallazgos críticos
 
-1. Existen APIs/rutas frontend para `goals`, `habits`, `inflation` e `imports` sin controller backend equivalente; riesgo de 404 y UX rota.
+1. `goals`, `habits` e `inflation` sí exponen backend real vía `PlanningController`; `imports` permanece fuera del router activo.
 2. `ALLOW_X_USER_ID_FALLBACK` estaba habilitado por defecto global; corregido a `false` por defecto.
 3. Perfil local habilitaba `CJP_SYNC_ENABLED=true` por defecto; corregido a `false` (read-only por defecto).
 
