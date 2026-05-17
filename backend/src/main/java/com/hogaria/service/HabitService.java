@@ -17,7 +17,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.time.temporal.WeekFields;
 import java.util.List;
-import java.util.Locale;
 import java.util.UUID;
 
 @Service
@@ -113,21 +112,27 @@ public class HabitService {
             throw new IllegalArgumentException("La frecuencia del hábito es obligatoria.");
         }
         if (habit.getFrequency().name().equals("WEEKLY")) {
-            LocalDate start = date.with(WeekFields.of(Locale.getDefault()).dayOfWeek(), 1);
+            LocalDate start = date.with(WeekFields.ISO.dayOfWeek(), 1);
             LocalDate end = start.plusDays(6);
-            boolean alreadyCheckedThisWeek = checkRepo.findAll().stream()
-                    .filter(c -> c.getHabitId().equals(habit.getId()))
-                    .anyMatch(c -> !c.getCheckinDate().isBefore(start) && !c.getCheckinDate().isAfter(end) && !c.getCheckinDate().equals(date));
+            boolean alreadyCheckedThisWeek = checkRepo.existsByHabitIdAndCheckinDateBetweenAndCheckinDateNot(
+                    habit.getId(),
+                    start,
+                    end,
+                    date
+            );
             if (alreadyCheckedThisWeek) {
                 throw new IllegalArgumentException("El hábito semanal ya tiene check-in en esta semana.");
             }
         }
         if (habit.getFrequency().name().equals("MONTHLY")) {
-            boolean alreadyCheckedThisMonth = checkRepo.findAll().stream()
-                    .filter(c -> c.getHabitId().equals(habit.getId()))
-                    .anyMatch(c -> c.getCheckinDate().getYear() == date.getYear()
-                            && c.getCheckinDate().getMonthValue() == date.getMonthValue()
-                            && !c.getCheckinDate().equals(date));
+            LocalDate start = date.withDayOfMonth(1);
+            LocalDate end = date.withDayOfMonth(date.lengthOfMonth());
+            boolean alreadyCheckedThisMonth = checkRepo.existsByHabitIdAndCheckinDateBetweenAndCheckinDateNot(
+                    habit.getId(),
+                    start,
+                    end,
+                    date
+            );
             if (alreadyCheckedThisMonth) {
                 throw new IllegalArgumentException("El hábito mensual ya tiene check-in en este mes.");
             }

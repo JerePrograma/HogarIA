@@ -3,7 +3,6 @@ package com.hogaria.service;
 import com.hogaria.dto.PlanningDtos.HabitCheckinRequest;
 import com.hogaria.entity.FinancialProfile;
 import com.hogaria.entity.Habit;
-import com.hogaria.entity.HabitCheckin;
 import com.hogaria.entity.HabitFrequency;
 import com.hogaria.exception.ForbiddenException;
 import com.hogaria.repository.FinancialProfileRepository;
@@ -16,7 +15,6 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDate;
-import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -50,7 +48,7 @@ class HabitServiceTest {
 
         when(profileRepository.findByIdAndUserId(profileId, userId)).thenReturn(Optional.of(new FinancialProfile()));
         when(repo.findById(habitId)).thenReturn(Optional.of(Habit.builder().id(habitId).profileId(profileId).frequency(HabitFrequency.WEEKLY).build()));
-        when(checkRepo.findAll()).thenReturn(List.of(HabitCheckin.builder().habitId(habitId).checkinDate(date.minusDays(1)).build()));
+        when(checkRepo.existsByHabitIdAndCheckinDateBetweenAndCheckinDateNot(any(), any(), any(), any())).thenReturn(true);
 
         assertThrows(IllegalArgumentException.class, () -> service.check(userId, profileId, habitId, date, new HabitCheckinRequest(true, null)));
     }

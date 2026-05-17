@@ -10,4 +10,11 @@ import java.util.UUID;
 public interface HabitCheckinRepository extends JpaRepository<HabitCheckin, UUID> {
 
     Optional<HabitCheckin> findByHabitIdAndCheckinDate(UUID habitId, LocalDate checkinDate);
+
+    boolean existsByHabitIdAndCheckinDateBetweenAndCheckinDateNot(
+            UUID habitId,
+            LocalDate startDate,
+            LocalDate endDate,
+            LocalDate excludedDate
+    );
 }
