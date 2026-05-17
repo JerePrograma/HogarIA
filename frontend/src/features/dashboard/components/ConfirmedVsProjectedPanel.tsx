@@ -8,6 +8,13 @@ type Props = {
 };
 
 export function ConfirmedVsProjectedPanel({ planning, operational }: Props) {
+  const deltaTone =
+    operational.deltaProjectedMinVsConfirmed >= 0 && operational.deltaProjectedMaxVsConfirmed >= 0
+      ? 'success'
+      : operational.deltaProjectedMaxVsConfirmed < 0
+        ? 'danger'
+        : 'warning';
+
   return (
     <section className="grid">
       <article className="panel">
@@ -69,7 +76,8 @@ export function ConfirmedVsProjectedPanel({ planning, operational }: Props) {
           <MetricCard
             title="Diferencia vs saldo confirmado"
             value={`${formatMoney(operational.deltaProjectedMinVsConfirmed)} – ${formatMoney(operational.deltaProjectedMaxVsConfirmed)}`}
-            tone={operational.deltaProjectedMinVsConfirmed >= 0 ? 'info' : 'warning'}
+            helper="Mide cuánto podría mejorar o empeorar el resultado al cierre del período."
+            tone={deltaTone}
           />
         </div>
       </article>
