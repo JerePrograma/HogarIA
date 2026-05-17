@@ -31,6 +31,7 @@ export function DashboardPage() {
   const operational = summary?.operationalSummary;
   const canRenderDashboard = Boolean(summary && planning && operational);
   const alertCount = operational?.alerts?.length ?? 0;
+  const riskLabel = operational ? getRiskLabel(operational.financialRiskLevel) : null;
 
   return (
     <AppLayout>
@@ -79,19 +80,20 @@ export function DashboardPage() {
 
         {summary && planning && operational && (
           <>
-            <section className="grid gap-4 xl:grid-cols-[1.4fr_0.6fr]">
+            <section className="grid gap-4 xl:grid-cols-[1.4fr_0.6fr]" aria-label="Resumen ejecutivo del período">
               <DashboardIntroCard
-                title="Lectura rápida"
-                description="Primero mirá el balance operativo. Después revisá alertas y desvíos contra planificación."
+                title="Orden de lectura recomendado"
+                description="1) Revisá resultado operativo. 2) Verificá alertas. 3) Ajustá desvíos contra planificación."
               />
 
               <DashboardIntroCard
-                title={alertCount > 0 ? `${alertCount} alerta${alertCount === 1 ? '' : 's'} activa${alertCount === 1 ? '' : 's'}` : 'Sin alertas críticas'}
+                title={alertCount > 0 ? `${alertCount} alerta${alertCount === 1 ? '' : 's'} activa${alertCount === 1 ? '' : 's'}` : 'Sin alertas operativas'}
                 description={
                   alertCount > 0
                     ? 'Hay puntos que requieren revisión antes de cerrar el mes.'
                     : 'No hay alertas operativas relevantes para este período.'
                 }
+                status={riskLabel ? `Riesgo actual: ${riskLabel}` : undefined}
               />
             </section>
 
@@ -205,15 +207,29 @@ function DashboardSection({
 function DashboardIntroCard({
   title,
   description,
+  status,
 }: {
   title: string;
   description: string;
+  status?: string;
 }) {
   return (
     <article className="panel">
       <p className="eyebrow">Orientación</p>
       <h2>{title}</h2>
       <p className="muted">{description}</p>
+      {status ? <p className="label-ui mt-3 mb-0">{status}</p> : null}
     </article>
   );
+}
+
+function getRiskLabel(level: 'OK' | 'WATCH' | 'RISK' | 'CRITICAL') {
+  const labels = {
+    OK: 'Correcto',
+    WATCH: 'Atención',
+    RISK: 'Riesgo',
+    CRITICAL: 'Crítico',
+  } as const;
+
+  return labels[level];
 }

@@ -20,6 +20,7 @@ export function NextBestActionCard({ profileId, summary }: Props) {
   let cta: string | null = 'Cargar movimiento';
   let href: string | null = `/profiles/${profileId}/transactions`;
   let toneClass = 'panel-accent';
+  let context = 'Sin riesgos operativos críticos identificados.';
 
   if (planning.unpricedCount > 0) {
     title = 'Faltan cotizaciones';
@@ -27,30 +28,35 @@ export function NextBestActionCard({ profileId, summary }: Props) {
     cta = 'Ir a planificación';
     href = `/profiles/${profileId}/planning`;
     toneClass = 'panel-accent';
+    context = 'Completar cotizaciones mejora la precisión del resultado proyectado.';
   } else if (planning.dueNext7DaysCount > 0) {
     title = 'Vencimientos próximos';
     message = `Hay ${planning.dueNext7DaysCount} vencimientos o cobros próximos en los próximos 7 días.`;
     cta = 'Revisar planificación';
     href = `/profiles/${profileId}/planning`;
     toneClass = 'panel';
+    context = 'Resolver próximos vencimientos reduce riesgo de desvíos de caja.';
   } else if (planning.pendingExpense > 0) {
     title = 'Pagos pendientes';
     message = `Hay ${formatMoney(planning.pendingExpense)} en pagos pendientes.`;
     cta = 'Ver planificación';
     href = `/profiles/${profileId}/planning`;
     toneClass = 'panel';
+    context = 'Registrar pagos pendientes mejora la lectura real del período.';
   } else if (planning.pendingIncome > 0) {
     title = 'Cobros pendientes';
     message = `Hay ${formatMoney(planning.pendingIncome)} en cobros pendientes.`;
     cta = 'Ver planificación';
     href = `/profiles/${profileId}/planning`;
     toneClass = 'panel';
+    context = 'Confirmar cobros pendientes evita subestimar el resultado final.';
   } else if (operational.alerts.length > 0) {
     title = 'Primera alerta operativa';
     message = operational.alerts[0];
     cta = null;
     href = null;
     toneClass = 'panel';
+    context = 'Atendé esta alerta antes de definir nuevas decisiones del mes.';
   }
 
   return (
@@ -64,6 +70,7 @@ export function NextBestActionCard({ profileId, summary }: Props) {
 
       <h3 className="mb-2 mt-0 text-xl font-semibold">{title}</h3>
       <p className="texto-secundario">{message}</p>
+      <p className="label-ui mt-2 mb-0">{context}</p>
 
       {cta && href ? (
         <Link to={href} className="boton-principal mt-3">

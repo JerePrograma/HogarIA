@@ -22,13 +22,14 @@ export function OperationalAlerts({ alerts }: Props) {
           message="No hay alertas operativas para este período."
         />
       ) : (
-        <ul className="grid gap-2 p-0">
-          {alerts.map((alert) => (
+        <ol className="grid gap-2 p-0 m-0" aria-label="Alertas priorizadas">
+          {alerts.map((alert, index) => (
             <li key={alert} className="surface-inset list-none">
-              {alert}
+              <p className="label-ui mb-1">Prioridad {index + 1}</p>
+              <p className="m-0 texto-secundario">{alert}</p>
             </li>
           ))}
-        </ul>
+        </ol>
       )}
     </section>
   );
