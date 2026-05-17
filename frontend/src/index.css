@@ -796,12 +796,12 @@
   }
 
   .sidebar h2 {
-    @apply mb-3 mt-0 text-2xl font-bold tracking-tight;
+    @apply mb-1 mt-0 text-xl font-bold tracking-tight;
     color: var(--app-text);
   }
 
   .sidebar p {
-    @apply mb-2 mt-0 text-xs;
+    @apply mb-1 mt-0 text-xs;
     color: var(--app-text-faint);
   }
 
@@ -841,6 +841,30 @@
 
   .nav-group {
     @apply mb-2 mt-5 text-xs font-extrabold uppercase tracking-wider;
+    color: var(--app-text-faint);
+  }
+
+
+  .sidebar-nav {
+    @apply flex flex-1 flex-col;
+  }
+
+  .sidebar-system {
+    @apply mt-4 border-t pt-3;
+    border-color: var(--app-border-subtle);
+  }
+
+  .nav-item-title {
+    @apply block text-sm font-semibold;
+  }
+
+  .nav-item-description {
+    @apply mt-1 block text-xs font-normal;
+    color: var(--app-text-faint);
+  }
+
+  .session-id {
+    @apply m-0 mt-0.5 text-xs;
     color: var(--app-text-faint);
   }
 
@@ -1022,6 +1046,19 @@
 
     .content {
       @apply p-4;
+    }
+
+
+    .sidebar {
+      @apply p-3;
+    }
+
+    .sidebar-nav nav {
+      @apply mb-2;
+    }
+
+    .nav-item {
+      @apply px-3 py-2.5;
     }
 
     .page-header,

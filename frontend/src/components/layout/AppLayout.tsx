@@ -4,6 +4,7 @@ import { NavLink, useNavigate, useParams } from 'react-router-dom';
 type NavItem = {
   label: string;
   to: string;
+  description?: string;
 };
 
 type NavSection = {
@@ -45,28 +46,31 @@ export function AppLayout({ children }: { children: ReactNode }) {
 
     return [
       {
-        title: 'Principal',
+        title: 'Inicio',
+        items: [{ label: 'Panel mensual', description: 'Resumen del período', to: `${base}/dashboard` }],
+      },
+      {
+        title: 'Operación mensual',
         items: [
-          { label: 'Panel mensual', to: `${base}/dashboard` },
-          { label: 'Planificación', to: `${base}/planning` },
-          { label: 'Movimientos', to: `${base}/transactions` },
+          { label: 'Planificación', description: 'Ingresos, gastos y pendientes', to: `${base}/planning` },
+          { label: 'Movimientos', description: 'Registro real', to: `${base}/transactions` },
+          { label: 'Presupuesto', description: 'Límites y estructura', to: `${base}/budgets` },
         ],
       },
       {
         title: 'Organización',
         items: [
-          { label: 'Presupuesto', to: `${base}/budgets` },
           { label: 'Cuentas', to: `${base}/accounts` },
           { label: 'Categorías', to: `${base}/categories` },
         ],
       },
       {
-        title: 'Herramientas',
+        title: 'Seguimiento',
         items: [
           { label: 'Objetivos', to: `${base}/goals` },
           { label: 'Hábitos', to: `${base}/habits` },
           { label: 'Inflación', to: `${base}/inflation` },
-          { label: 'Préstamos externos', to: `${base}/prestamos-externos` },
+          { label: 'Préstamos externos', description: 'Consulta integrada', to: `${base}/prestamos-externos` },
         ],
       },
     ];
@@ -84,74 +88,84 @@ export function AppLayout({ children }: { children: ReactNode }) {
 
   return (
     <div className="app-shell">
-      <aside className="sidebar">
+      <aside className="sidebar" aria-label="Navegación principal">
         <div className="panel-accent mb-4">
-          <p className="label-ui">Sistema financiero personal</p>
-          <h2>HogarIA</h2>
-          <p className="texto-secundario">
-            Organización, planificación y control operativo del hogar.
-          </p>
+          <p className="label-ui">HogarIA</p>
+          <h2>Tu economía del hogar</h2>
         </div>
 
         <div className="surface-inset mb-4">
-          <p className="label-ui">Modo desarrollo</p>
+          <p className="label-ui">Sesión actual</p>
 
           <div className="mt-3 grid gap-2">
             <div>
-              <p className="compact-muted">Usuario</p>
-              <strong className="texto-principal">
-                {devUserId?.slice(0, 8) ?? 'Sin usuario'}
-              </strong>
+              <p className="compact-muted">Usuario activo</p>
+              <strong className="texto-principal">{devUserId ? 'Usuario seleccionado' : 'Sin usuario'}</strong>
+              {devUserId && <p className="session-id">ID: {devUserId.slice(0, 8)}...</p>}
             </div>
 
             <div>
               <p className="compact-muted">Perfil activo</p>
-              <strong className="texto-principal">
-                {selectedProfileId?.slice(0, 8) ?? 'Sin perfil'}
-              </strong>
+              <strong className="texto-principal">{selectedProfileId ? 'Perfil seleccionado' : 'Sin perfil'}</strong>
+              {selectedProfileId && <p className="session-id">ID: {selectedProfileId.slice(0, 8)}...</p>}
             </div>
           </div>
         </div>
 
-        <button type="button" className="boton-secundario mb-3" onClick={toggleTheme}>
-          {theme === 'dark' ? 'Usar modo claro' : 'Usar modo oscuro'}
-        </button>
+        <div className="sidebar-nav" aria-label="Secciones de navegación">
+          {navSections.map((section) => (
+            <nav key={section.title} aria-label={section.title}>
+              <p className="nav-group">{section.title}</p>
 
-        {navSections.map((section) => (
-          <nav key={section.title} aria-label={section.title}>
-            <p className="nav-group">{section.title}</p>
+              {section.items.map((item) => (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  className={({ isActive }) =>
+                    `nav-item ${isActive ? 'nav-item-active' : ''}`.trim()
+                  }
+                >
+                  <span className="nav-item-title">{item.label}</span>
+                  {item.description ? <span className="nav-item-description">{item.description}</span> : null}
+                </NavLink>
+              ))}
+            </nav>
+          ))}
+        </div>
 
-            {section.items.map((item) => (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                className={({ isActive }) =>
-                  `nav-item ${isActive ? 'nav-item-active' : ''}`.trim()
-                }
-              >
-                <span className="nav-item-title">{item.label}</span>
-              </NavLink>
-            ))}
-          </nav>
-        ))}
+        <div className="sidebar-system" aria-label="Sistema">
+          <p className="nav-group">Sistema</p>
 
-        <p className="nav-group">Cuenta</p>
+          <NavLink
+            to="/profiles"
+            className={({ isActive }) =>
+              `nav-item ${isActive ? 'nav-item-active' : ''}`.trim()
+            }
+          >
+            <span className="nav-item-title">Perfiles</span>
+          </NavLink>
 
-        <NavLink
-          to="/profiles"
-          className={({ isActive }) =>
-            `nav-item ${isActive ? 'nav-item-active' : ''}`.trim()
-          }
-        >
-          <span className="nav-item-title">Perfiles</span>
-        </NavLink>
+          <button
+            type="button"
+            className="boton-secundario mt-3"
+            onClick={toggleTheme}
+            aria-label={theme === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
+          >
+            {theme === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
+          </button>
 
-        <button type="button" className="boton-fantasma mt-3 w-full" onClick={handleChangeUser}>
-          Cambiar usuario
-        </button>
+          <button
+            type="button"
+            className="boton-fantasma mt-2 w-full"
+            onClick={handleChangeUser}
+            aria-label="Cambiar usuario activo"
+          >
+            Cambiar usuario
+          </button>
+        </div>
       </aside>
 
-      <main className="content">{children}</main>
+      <main className="content" aria-label="Contenido principal">{children}</main>
     </div>
   );
 }
