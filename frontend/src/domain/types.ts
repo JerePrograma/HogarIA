@@ -129,11 +129,11 @@ export interface BudgetMonth {
 export interface BudgetComparisonItem {
   categoryId: string;
   categoryName: string;
-  categoryType: CategoryType;
+  categoryType: CategoryType | null;
   budgetAmount: number;
   realAmount: number;
   difference: number;
-  percentUsed: number;
+  percentage: number;
   status: BudgetComparisonStatus;
 }
 
