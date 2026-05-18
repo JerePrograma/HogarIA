@@ -17,8 +17,8 @@ import java.util.stream.Collectors;
 
 @Service
 public class MonthlyPlanReconciliationService {
-  private final FinancialProfileRepository profiles; private final MonthlyPlanItemRepository itemRepo; private final MoneyTransactionRepository txRepo; private final MonthlyPlanTransactionMatchRepository matchRepo;
-  public MonthlyPlanReconciliationService(FinancialProfileRepository profiles, MonthlyPlanItemRepository itemRepo, MoneyTransactionRepository txRepo, MonthlyPlanTransactionMatchRepository matchRepo){this.profiles=profiles;this.itemRepo=itemRepo;this.txRepo=txRepo;this.matchRepo=matchRepo;}
+  private final FinancialProfileRepository profiles; private final MonthlyPlanItemRepository itemRepo; private final MoneyTransactionRepository txRepo; private final MonthlyPlanTransactionMatchRepository matchRepo; private final MonthlyPlanAmountCalculator amountCalculator;
+  public MonthlyPlanReconciliationService(FinancialProfileRepository profiles, MonthlyPlanItemRepository itemRepo, MoneyTransactionRepository txRepo, MonthlyPlanTransactionMatchRepository matchRepo, MonthlyPlanAmountCalculator amountCalculator){this.profiles=profiles;this.itemRepo=itemRepo;this.txRepo=txRepo;this.matchRepo=matchRepo;this.amountCalculator=amountCalculator;}
   private void ensureProfile(UUID profileId, UUID userId){profiles.findByIdAndUserId(profileId,userId).orElseThrow(()->new ForbiddenException("Profile does not belong to user"));}
 
   public MonthlyPlanReconciliationSummary getSummary(UUID userId, UUID profileId, int year, int month){ ensureProfile(profileId,userId); var items=itemRepo.findByProfileIdAndPeriodYearAndPeriodMonth(profileId,year,month); var from=LocalDate.of(year,month,1); var txs=txRepo.findByProfileIdAndBudgetDateBetween(profileId,from,from.withDayOfMonth(from.lengthOfMonth()));
@@ -33,7 +33,7 @@ public class MonthlyPlanReconciliationService {
     var byItem = matches.stream().collect(Collectors.groupingBy(MonthlyPlanTransactionMatch::getMonthlyPlanItemId));
     var planItems = items.stream().map(item->{
       var m=byItem.getOrDefault(item.getId(), List.of()); var matched = m.stream().map(MonthlyPlanTransactionMatch::getMatchedAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
-      var planned = item.getAmount()==null?BigDecimal.ZERO:item.getAmount(); var remaining = planned.subtract(matched);
+      var planned = amountCalculator.plannedAmountForReconciliation(item); var remaining = planned.subtract(matched);
       var exec=remaining.signum()<=0?"MATCHED":matched.signum()>0?"PARTIAL":"PENDING";
       return new PlanItemReconciliation(item.getId(), item.getTitle(), item.getType(), planned, matched, remaining, exec, m.stream().map(mm->new TransactionMatch(mm.getId(),mm.getMonthlyPlanItemId(),mm.getMoneyTransactionId(),mm.getMatchedAmount(),mm.getMatchType(),mm.getConfidence())).toList());
     }).toList();
@@ -57,7 +57,10 @@ public class MonthlyPlanReconciliationService {
   }
   private boolean compatible(MonthlyPlanItem item, MoneyTransaction tx){ return switch (item.getType()){ case INCOME,RECOVERY -> tx.getMovementType()== MoneyTransaction.MovementType.INCOME; case EXPENSE,DEBT -> tx.getMovementType()== MoneyTransaction.MovementType.EXPENSE; case SAVING -> tx.getMovementType()== MoneyTransaction.MovementType.SAVING; default -> false;}; }
 
-  public TransactionMatch confirm(UUID userId, UUID profileId, ConfirmPlanTransactionMatchPayload p){ ensureProfile(profileId,userId); var existing=matchRepo.findByProfileIdAndMonthlyPlanItemIdAndMoneyTransactionId(profileId,p.monthlyPlanItemId(),p.moneyTransactionId()).orElse(null);
+  public TransactionMatch confirm(UUID userId, UUID profileId, ConfirmPlanTransactionMatchPayload p){ ensureProfile(profileId,userId);
+    itemRepo.findByIdAndProfileId(p.monthlyPlanItemId(), profileId).orElseThrow(()->new ForbiddenException("Item no pertenece al perfil"));
+    txRepo.findByIdAndProfileId(p.moneyTransactionId(), profileId).orElseThrow(()->new ForbiddenException("Transacción no pertenece al perfil"));
+    var existing=matchRepo.findByProfileIdAndMonthlyPlanItemIdAndMoneyTransactionId(profileId,p.monthlyPlanItemId(),p.moneyTransactionId()).orElse(null);
     var m=existing==null?MonthlyPlanTransactionMatch.builder().profileId(profileId).monthlyPlanItemId(p.monthlyPlanItemId()).moneyTransactionId(p.moneyTransactionId()).build():existing;
     m.setMatchedAmount(p.matchedAmount()); m.setMatchType(p.matchType()==null?MonthlyPlanTransactionMatch.MatchType.MANUAL:p.matchType()); m.setConfidence(p.confidence()==null?MonthlyPlanTransactionMatch.Confidence.HIGH:p.confidence()); m=matchRepo.save(m);
     return new TransactionMatch(m.getId(),m.getMonthlyPlanItemId(),m.getMoneyTransactionId(),m.getMatchedAmount(),m.getMatchType(),m.getConfidence()); }

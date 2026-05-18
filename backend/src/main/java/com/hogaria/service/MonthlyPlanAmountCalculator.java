@@ -1,0 +1,34 @@
+package com.hogaria.service;
+
+import com.hogaria.entity.MonthlyPlanItem;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import org.springframework.stereotype.Component;
+
+@Component
+public class MonthlyPlanAmountCalculator {
+  public AmountBreakdown calculate(MonthlyPlanItem item) {
+    BigDecimal grossMin = item.getAmount() != null ? item.getAmount() : defaulted(item.getMinAmount());
+    BigDecimal grossMax = item.getAmount() != null ? item.getAmount() : (item.getMaxAmount() != null ? item.getMaxAmount() : defaulted(item.getMinAmount()));
+    BigDecimal percent = item.getExpectedRecoveryPercent() == null
+        ? BigDecimal.ZERO
+        : item.getExpectedRecoveryPercent().divide(new BigDecimal("100"), 6, RoundingMode.HALF_UP);
+    BigDecimal recoveryMin = item.getExpectedRecoveryAmount() != null ? item.getExpectedRecoveryAmount() : grossMin.multiply(percent);
+    BigDecimal recoveryMax = item.getExpectedRecoveryAmount() != null ? item.getExpectedRecoveryAmount() : grossMax.multiply(percent);
+    return new AmountBreakdown(grossMin, grossMax, recoveryMin, recoveryMax, grossMin.subtract(recoveryMax), grossMax.subtract(recoveryMin));
+  }
+
+  public BigDecimal plannedAmountForReconciliation(MonthlyPlanItem item) {
+    var b = calculate(item);
+    if (item.getType() == MonthlyPlanItem.Type.INCOME || item.getType() == MonthlyPlanItem.Type.RECOVERY) {
+      return b.netMin();
+    }
+    return b.netMin();
+  }
+
+  private BigDecimal defaulted(BigDecimal value) {
+    return value == null ? BigDecimal.ZERO : value;
+  }
+
+  public record AmountBreakdown(BigDecimal grossMin, BigDecimal grossMax, BigDecimal recoveryMin, BigDecimal recoveryMax, BigDecimal netMin, BigDecimal netMax) {}
+}
