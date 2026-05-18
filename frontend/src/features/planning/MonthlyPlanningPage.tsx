@@ -137,65 +137,88 @@ export function MonthlyPlanningPage() {
             ) : null}
 
             {currentView === 'CAPTURE' ? (
-              <QuickCapturePanel
-              input={quickCapture.quickText}
-              onChange={quickCapture.setQuickText}
-              onAnalyze={quickCapture.analyze}
-              canAnalyze={quickCapture.canAnalyze}
-              error={quickCapture.quickError}
-              showDiscard={quickCapture.hasPreview}
-              onDiscard={quickCapture.discard}
-              onClear={quickCapture.clear}
-              isAnalyzing={quickCapture.isAnalyzing}
-            >
-              {quickCapture.quickPreview && quickCapture.quickForm ? (
-                <QuickCapturePreviewForm
-                  profileId={profileId}
-                  preview={quickCapture.quickPreview}
-                  form={quickCapture.quickForm}
-                  setForm={quickCapture.setQuickForm}
-                  accounts={accounts}
-                  categories={categories}
-                  onConfirm={quickCapture.confirm}
-                  isConfirming={quickCapture.isConfirming}
-                  error={quickCapture.commitError}
-                />
-              ) : null}
-            </QuickCapturePanel>
+              <section className="planning-section-stack">
+                <div className="panel panel-soft planning-section-header">
+                  <div>
+                    <p className="eyebrow">Paso 1</p>
+                    <h2>Captura rápida</h2>
+                    <p className="secondary-text">Escribí en lenguaje natural para generar un borrador.</p>
+                  </div>
+                  <button className="boton-fantasma" type="button" onClick={() => setCurrentView('ITEMS')}>
+                    Ir a operaciones
+                  </button>
+                </div>
+
+                <QuickCapturePanel
+                  input={quickCapture.quickText}
+                  onChange={quickCapture.setQuickText}
+                  onAnalyze={quickCapture.analyze}
+                  canAnalyze={quickCapture.canAnalyze}
+                  error={quickCapture.quickError}
+                  showDiscard={quickCapture.hasPreview}
+                  onDiscard={quickCapture.discard}
+                  onClear={quickCapture.clear}
+                  isAnalyzing={quickCapture.isAnalyzing}
+                >
+                  {quickCapture.quickPreview && quickCapture.quickForm ? (
+                    <QuickCapturePreviewForm
+                      profileId={profileId}
+                      preview={quickCapture.quickPreview}
+                      form={quickCapture.quickForm}
+                      setForm={quickCapture.setQuickForm}
+                      accounts={accounts}
+                      categories={categories}
+                      onConfirm={quickCapture.confirm}
+                      isConfirming={quickCapture.isConfirming}
+                      error={quickCapture.commitError}
+                    />
+                  ) : null}
+                </QuickCapturePanel>
+              </section>
             ) : null}
 
             {currentView === 'ITEMS' ? (
-              <div id="plan-items">
-              <MonthlyPlanItemsTable
-                profileId={profileId}
-                items={items}
-                accounts={accounts}
-                categories={categories}
-                onConvert={actions.convert}
-                onCancel={actions.cancel}
-                onDelete={actions.remove}
-                onUpdate={actions.update}
-                onMarkPaid={actions.markPaid}
-                onMarkCollected={actions.markCollected}
-                pendingActionId={actions.pendingActionId}
-                actionError={actions.actionErrorMessage}
-                externalFilterKey={tableFilter}
-                onExternalFilterChange={setTableFilter}
-              />
-              </div>
+              <section className="planning-section-stack" id="plan-items">
+                <div className="panel panel-soft planning-section-header">
+                  <div>
+                    <p className="eyebrow">Paso 2</p>
+                    <h2>Operación y confirmación</h2>
+                    <p className="secondary-text">Convertí, editá y marcá el estado de cada ítem mensual.</p>
+                  </div>
+                  <button className="boton-fantasma" type="button" onClick={() => setCurrentView('MAPPINGS')}>
+                    Auditar mapeos
+                  </button>
+                </div>
+                <MonthlyPlanItemsTable
+                  profileId={profileId}
+                  items={items}
+                  accounts={accounts}
+                  categories={categories}
+                  onConvert={actions.convert}
+                  onCancel={actions.cancel}
+                  onDelete={actions.remove}
+                  onUpdate={actions.update}
+                  onMarkPaid={actions.markPaid}
+                  onMarkCollected={actions.markCollected}
+                  pendingActionId={actions.pendingActionId}
+                  actionError={actions.actionErrorMessage}
+                  externalFilterKey={tableFilter}
+                  onExternalFilterChange={setTableFilter}
+                />
+              </section>
             ) : null}
 
             {currentView === 'CAPTURE' ? (
               <div id="new-plan-item">
-              <StructuredPlanItemForm
-                form={draft.form}
-                setForm={draft.setForm}
-                accounts={accounts}
-                categories={categories}
-                onCreate={actions.create}
-                isCreating={actions.isCreating}
-                error={actions.createErrorMessage}
-              />
+                <StructuredPlanItemForm
+                  form={draft.form}
+                  setForm={draft.setForm}
+                  accounts={accounts}
+                  categories={categories}
+                  onCreate={actions.create}
+                  isCreating={actions.isCreating}
+                  error={actions.createErrorMessage}
+                />
               </div>
             ) : null}
 
