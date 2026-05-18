@@ -19,16 +19,21 @@ public class MonthlyPlanAmountCalculator {
   }
 
   public BigDecimal plannedAmountForReconciliation(MonthlyPlanItem item) {
+    if (item.getStatus() == MonthlyPlanItem.Status.CANCELLED || item.getType() == MonthlyPlanItem.Type.TODO) {
+      return BigDecimal.ZERO;
+    }
     var b = calculate(item);
-    if (item.getType() == MonthlyPlanItem.Type.INCOME || item.getType() == MonthlyPlanItem.Type.RECOVERY) {
+    if (item.getAmount() != null) {
       return b.netMin();
     }
-    return b.netMin();
+    return switch (item.getType()) {
+      case INCOME, RECOVERY -> b.netMin();
+      case EXPENSE, DEBT, SAVING, TRANSFER -> b.netMax();
+      case TODO -> BigDecimal.ZERO;
+    };
   }
 
-  private BigDecimal defaulted(BigDecimal value) {
-    return value == null ? BigDecimal.ZERO : value;
-  }
+  private BigDecimal defaulted(BigDecimal value) { return value == null ? BigDecimal.ZERO : value; }
 
   public record AmountBreakdown(BigDecimal grossMin, BigDecimal grossMax, BigDecimal recoveryMin, BigDecimal recoveryMax, BigDecimal netMin, BigDecimal netMax) {}
 }
