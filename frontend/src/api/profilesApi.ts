@@ -13,16 +13,16 @@ export interface ProfileUpdateRequest extends ProfileCreateRequest {
 }
 
 export const listProfiles = (): Promise<Profile[]> =>
-  http.get<Profile[]>('/api/profiles').then((response) => response.data);
+  http.get<Profile[]>('/profiles').then((response) => response.data);
 
 export const createProfile = (payload: ProfileCreateRequest): Promise<Profile> =>
-  http.post<Profile>('/api/profiles', payload).then((response) => response.data);
+  http.post<Profile>('/profiles', payload).then((response) => response.data);
 
 export const getProfile = (id: string): Promise<Profile> =>
-  http.get<Profile>(`/api/profiles/${id}`).then((response) => response.data);
+  http.get<Profile>(`/profiles/${id}`).then((response) => response.data);
 
 export const updateProfile = (id: string, payload: ProfileUpdateRequest): Promise<Profile> =>
-  http.put<Profile>(`/api/profiles/${id}`, payload).then((response) => response.data);
+  http.put<Profile>(`/profiles/${id}`, payload).then((response) => response.data);
 
 export const deleteProfile = (id: string): Promise<void> =>
-  http.delete<void>(`/api/profiles/${id}`).then((response) => response.data);
+  http.delete<void>(`/profiles/${id}`).then((response) => response.data);

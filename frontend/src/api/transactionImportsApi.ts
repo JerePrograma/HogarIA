@@ -12,7 +12,7 @@ export const previewTransactionImport = (
 
   return http
     .post<TransactionImportPreview>(
-      `/api/profiles/${profileId}/transaction-imports/preview?source=${source}&accountId=${accountId}`,
+      `/profiles/${profileId}/transaction-imports/preview?source=${source}&accountId=${accountId}`,
       formData,
       { headers: { 'Content-Type': 'multipart/form-data' } },
     )
@@ -24,4 +24,4 @@ export const commitTransactionImport = (
   batchId: string,
   payload: TransactionImportCommitPayload,
 ): Promise<TransactionImportCommitResult> =>
-  http.post<TransactionImportCommitResult>(`/api/profiles/${profileId}/transaction-imports/${batchId}/commit`, payload).then((response) => response.data);
+  http.post<TransactionImportCommitResult>(`/profiles/${profileId}/transaction-imports/${batchId}/commit`, payload).then((response) => response.data);

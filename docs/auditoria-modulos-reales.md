@@ -67,11 +67,20 @@ Fecha de auditoría: 2026-05-16.
 - /profiles/:profileId/accounts
 - /profiles/:profileId/categories
 - /profiles/:profileId/transactions
+- /profiles/:profileId/transactions/import
 - /profiles/:profileId/budgets
 - /profiles/:profileId/goals
 - /profiles/:profileId/habits
 - /profiles/:profileId/inflation
 - /profiles/:profileId/planning
+- /profiles/:profileId/planning/monthly
+- /profiles/:profileId/planning/monthly/items
+- /profiles/:profileId/planning/monthly/items/new
+- /profiles/:profileId/planning/monthly/items/:itemId/edit
+- /profiles/:profileId/planning/monthly/import
+- /profiles/:profileId/planning/monthly/alerts
+- /profiles/:profileId/planning/monthly/convert
+- /profiles/:profileId/planning/monthly/reconciliation
 - /profiles/:profileId/prestamos-externos
 
 ### APIs frontend (`frontend/src/api/*Api.ts`)
@@ -101,7 +110,7 @@ Fecha de auditoría: 2026-05-16.
 | Movimientos | MoneyTransaction | TransactionController | TransactionService | transactionsApi | TransactionsPage | create/list/get/update/delete | Service tests | Implementado |
 | Presupuesto | BudgetYear/BudgetMonth/BudgetCategoryItem | BudgetController | BudgetService | budgetsApi | BudgetPage | ciclo anual + mensual + items | Service tests | Implementado |
 | Dashboard | agregados | DashboardController | DashboardService | dashboardApi | DashboardPage | consulta KPIs | Service tests | Implementado |
-| Planificación mensual | MonthlyPlanItem | MonthlyPlanController/QuickCapture/Suggestion/PlanningController | MonthlyPlan* | monthlyPlanningApi/monthlyPlanQuickCaptureApi/monthlyPlanSuggestionsApi | MonthlyPlanningPage | create/list/update/delete + quick capture | Service tests | Implementado |
+| Planificación mensual | MonthlyPlanItem | MonthlyPlanController/QuickCapture/Suggestion/PlanningController | MonthlyPlan* | monthlyPlanningApi/monthlyPlanQuickCaptureApi/monthlyPlanSuggestionsApi/monthlyPlanReconciliationApi | Planning pages + reconciliación | create/list/update/delete + quick capture + reconciliación parcial | Service tests | Implementado (reconciliación en cierre) |
 | Préstamos externos | ExternalLoanSyncConfig/ExternalSyncMapping | ExternalLoansController | ExternalLoansService + sync services | externalLoansApi | ExternalLoansPage | summary/config/dry-run/sync/health | Service + IT | Implementado |
 | Dev user/Auth | AppUser | DevUserController/AuthController | DevUserService/AuthService | devUsersApi | DevUserPage | login dev + token | Cobertura indirecta | Implementado |
 | Goals | FinancialGoal | PlanningController (`/api/profiles/{profileId}/goals*`) | FinancialGoalService | goalsApi | GoalsPage | list/create/delete + emergency-fund | Service tests agregados | **CERRADO** |

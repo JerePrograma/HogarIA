@@ -96,13 +96,13 @@ export function createBudgetYear(
   payload: BudgetYearCreatePayload
 ): Promise<BudgetYear> {
   return http
-    .post(`/api/profiles/${profileId}/budgets`, payload)
+    .post(`/profiles/${profileId}/budgets`, payload)
     .then((response) => response.data);
 }
 
 export function listBudgetYears(profileId: string): Promise<BudgetYear[]> {
   return http
-    .get(`/api/profiles/${profileId}/budgets`)
+    .get(`/profiles/${profileId}/budgets`)
     .then((response) => response.data);
 }
 
@@ -111,7 +111,7 @@ export function getBudgetYear(
   year: number
 ): Promise<BudgetYear> {
   return http
-    .get(`/api/profiles/${profileId}/budgets/${year}`)
+    .get(`/profiles/${profileId}/budgets/${year}`)
     .then((response) => response.data);
 }
 
@@ -121,7 +121,7 @@ export function updateBudgetYear(
   payload: BudgetYearUpdatePayload
 ): Promise<BudgetYear> {
   return http
-    .put(`/api/profiles/${profileId}/budgets/${year}`, payload)
+    .put(`/profiles/${profileId}/budgets/${year}`, payload)
     .then((response) => response.data);
 }
 
@@ -131,7 +131,7 @@ export function createBudgetMonth(
   payload: BudgetMonthCreatePayload
 ): Promise<BudgetMonth> {
   return http
-    .post(`/api/profiles/${profileId}/budgets/${year}/months`, payload)
+    .post(`/profiles/${profileId}/budgets/${year}/months`, payload)
     .then((response) => response.data);
 }
 
@@ -141,7 +141,7 @@ export function getBudgetMonth(
   month: number
 ): Promise<BudgetMonth> {
   return http
-    .get(`/api/profiles/${profileId}/budgets/${year}/months/${month}`)
+    .get(`/profiles/${profileId}/budgets/${year}/months/${month}`)
     .then((response) => response.data);
 }
 
@@ -150,7 +150,7 @@ export function updateBudgetMonth(
   payload: BudgetMonthUpdatePayload
 ): Promise<BudgetMonth> {
   return http
-    .put(`/api/budget-months/${budgetMonthId}`, payload)
+    .put(`/budget-months/${budgetMonthId}`, payload)
     .then((response) => response.data);
 }
 
@@ -159,13 +159,13 @@ export function upsertBudgetCategoryItem(
   payload: BudgetCategoryItemUpsertPayload
 ): Promise<BudgetCategoryItem> {
   return http
-    .put(`/api/budget-months/${budgetMonthId}/items`, payload)
+    .put(`/budget-months/${budgetMonthId}/items`, payload)
     .then((response) => response.data);
 }
 
 export function deleteBudgetCategoryItem(itemId: string): Promise<void> {
   return http
-    .delete(`/api/budget-category-items/${itemId}`)
+    .delete(`/budget-category-items/${itemId}`)
     .then((response) => response.data);
 }
 
@@ -175,39 +175,7 @@ export function getBudgetComparison(
   month: number
 ): Promise<BudgetComparison> {
   return http
-    .get(`/api/profiles/${profileId}/budgets/${year}/months/${month}/comparison`)
+    .get(`/profiles/${profileId}/budgets/${year}/months/${month}/comparison`)
     .then((response) => response.data);
 }
 
-export function isBudgetYearAlreadyExistsError(error: unknown): boolean {
-  if (!axios.isAxiosError(error)) {
-    return false;
-  }
-
-  const status = error.response?.status;
-  const message = error.response?.data?.message;
-
-  return (
-    (status === 409 || status === 400) &&
-    message === 'Budget year already exists'
-  );
-}
-
-/**
- * Útil cuando el frontend quiere "abrir o crear" un año sin romper.
- * Pero para UI limpia, es mejor verificar antes si existe.
- */
-export async function ensureBudgetYear(
-  profileId: string,
-  payload: BudgetYearCreatePayload
-): Promise<BudgetYear> {
-  try {
-    return await createBudgetYear(profileId, payload);
-  } catch (error) {
-    if (isBudgetYearAlreadyExistsError(error)) {
-      return getBudgetYear(profileId, payload.year);
-    }
-
-    throw error;
-  }
-}

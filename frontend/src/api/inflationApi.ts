@@ -12,10 +12,10 @@ export interface CreateInflationRequest {
 }
 
 export const listInflation = (year: number) =>
-  http.get<InflationIndex[]>(`/api/inflation?year=${year}`).then((r) => r.data);
+  http.get<InflationIndex[]>(`/inflation?year=${year}`).then((r) => r.data);
 
 export const createInflation = (payload: CreateInflationRequest) =>
-  http.post<InflationIndex>('/api/inflation', payload).then((r) => r.data);
+  http.post<InflationIndex>('/inflation', payload).then((r) => r.data);
 
 export const getAccumulatedInflation = (fromYear: number, fromMonth: number, toYear: number, toMonth: number) =>
-  http.get<InflationAccumulated>(`/api/inflation/accumulated?fromYear=${fromYear}&fromMonth=${fromMonth}&toYear=${toYear}&toMonth=${toMonth}`).then((r) => r.data);
+  http.get<InflationAccumulated>(`/inflation/accumulated?fromYear=${fromYear}&fromMonth=${fromMonth}&toYear=${toYear}&toMonth=${toMonth}`).then((r) => r.data);
