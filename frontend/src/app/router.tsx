@@ -10,7 +10,8 @@ import { ExternalLoansPage } from '../features/external-loans/ExternalLoansPage'
 import { GoalsPage } from '../features/goals/GoalsPage';
 import { HabitsPage } from '../features/habits/HabitsPage';
 import { InflationPage } from '../features/inflation/InflationPage';
-import { MonthlyPlanningPage } from '../features/planning/MonthlyPlanningPage';
+import { PlanningLayout } from '../features/planning/PlanningLayout';
+import { LegacyPlanningRedirect, MonthlyPlanAlertsPage, MonthlyPlanConvertPage, MonthlyPlanImportPage, MonthlyPlanItemCreatePage, MonthlyPlanItemEditPage, MonthlyPlanItemsPage, MonthlyPlanningHomePage, PlanningOverviewPage } from '../features/planning/PlanningPages';
 import { ProfilesPage } from '../features/profiles/ProfilesPage';
 import { TransactionImportPage } from '../features/transactions/TransactionImportPage';
 import { TransactionsPage } from '../features/transactions/TransactionsPage';
@@ -84,7 +85,17 @@ export function AppRouter() {
       <Route path="/profiles/:profileId/goals" element={<ProtectedRoute><GoalsPage /></ProtectedRoute>} />
       <Route path="/profiles/:profileId/habits" element={<ProtectedRoute><HabitsPage /></ProtectedRoute>} />
       <Route path="/profiles/:profileId/inflation" element={<ProtectedRoute><InflationPage /></ProtectedRoute>} />
-      <Route path="/profiles/:profileId/planning" element={<ProtectedRoute><MonthlyPlanningPage /></ProtectedRoute>} />
+      <Route path="/profiles/:profileId/planning" element={<ProtectedRoute><PlanningLayout /></ProtectedRoute>}>
+        <Route index element={<PlanningOverviewPage />} />
+        <Route path="monthly" element={<MonthlyPlanningHomePage />} />
+        <Route path="monthly/items" element={<MonthlyPlanItemsPage />} />
+        <Route path="monthly/items/new" element={<MonthlyPlanItemCreatePage />} />
+        <Route path="monthly/items/:itemId/edit" element={<MonthlyPlanItemEditPage />} />
+        <Route path="monthly/import" element={<MonthlyPlanImportPage />} />
+        <Route path="monthly/alerts" element={<MonthlyPlanAlertsPage />} />
+        <Route path="monthly/convert" element={<MonthlyPlanConvertPage />} />
+      </Route>
+      <Route path="/profiles/:profileId/monthly-planning" element={<ProtectedRoute><LegacyPlanningRedirect /></ProtectedRoute>} />
       <Route
         path="/profiles/:profileId/prestamos-externos"
         element={<ProtectedRoute><ExternalLoansPage /></ProtectedRoute>}
