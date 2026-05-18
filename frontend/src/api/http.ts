@@ -1,11 +1,39 @@
 import axios from 'axios';
 
+const API_PREFIX = '/api';
+const DEFAULT_API_BASE_URL = API_PREFIX;
+
+const trimTrailingSlashes = (value: string): string => value.replace(/\/+$/, '');
+
+const normalizeApiBaseUrl = (value?: string): string => {
+  const raw = value?.trim();
+  if (!raw) return DEFAULT_API_BASE_URL;
+
+  const normalized = trimTrailingSlashes(raw);
+  if (!normalized) return DEFAULT_API_BASE_URL;
+
+  return normalized.endsWith(API_PREFIX) ? normalized : `${normalized}${API_PREFIX}`;
+};
+
+const normalizeRequestUrl = (baseURL: string | undefined, url: string | undefined): string | undefined => {
+  if (!url || /^https?:\/\//i.test(url)) return url;
+
+  const normalizedBase = baseURL ? trimTrailingSlashes(baseURL) : '';
+  if (!normalizedBase.endsWith(API_PREFIX)) return url;
+
+  return url.startsWith(`${API_PREFIX}/`) ? url.slice(API_PREFIX.length) : url;
+};
+
+export const apiBaseUrl = normalizeApiBaseUrl(import.meta.env.VITE_API_BASE_URL);
+
 export const http = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL ?? '/api',
+  baseURL: apiBaseUrl,
   timeout: 15000,
 });
 
 http.interceptors.request.use((config) => {
+  config.url = normalizeRequestUrl(config.baseURL ?? apiBaseUrl, config.url);
+
   const token = localStorage.getItem('authToken');
   if (token) config.headers.Authorization = `Bearer ${token}`;
 

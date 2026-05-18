@@ -3,27 +3,29 @@ import { http } from './http';
 export type DevUser = {
   id: string;
   email: string;
-  displayName?: string | null;
+  fullName: string;
+  createdAt?: string | null;
 };
 
 export type DevUserCreateRequest = {
   email: string;
-  displayName?: string | null;
+  password: string;
+  fullName: string;
 };
 
 export const createDevUser = async (
   payload: DevUserCreateRequest,
 ): Promise<DevUser> => {
-  const { data } = await http.post<DevUser>('/api/dev/users', payload);
+  const { data } = await http.post<DevUser>('/dev/users', payload);
   return data;
 };
 
 export const listDevUsers = async (): Promise<DevUser[]> => {
-  const { data } = await http.get<DevUser[]>('/api/dev/users');
+  const { data } = await http.get<DevUser[]>('/dev/users');
   return data;
 };
 
 export const getDevUser = async (id: string): Promise<DevUser> => {
-  const { data } = await http.get<DevUser>(`/api/dev/users/${id}`);
+  const { data } = await http.get<DevUser>(`/dev/users/${id}`);
   return data;
 };
