@@ -21,6 +21,7 @@ class MonthlyPlanReconciliationServiceTest {
   @Mock MonthlyPlanItemRepository itemRepo;
   @Mock MoneyTransactionRepository txRepo;
   @Mock MonthlyPlanTransactionMatchRepository matchRepo;
+   MonthlyPlanAmountCalculator amountCalculator;
   @InjectMocks MonthlyPlanReconciliationService service;
 
   UUID userId = UUID.randomUUID(); UUID profileId = UUID.randomUUID();
@@ -33,6 +34,8 @@ class MonthlyPlanReconciliationServiceTest {
     var legacyTxId = UUID.randomUUID();
     var item2 = MonthlyPlanItem.builder().id(UUID.randomUUID()).profileId(profileId).periodYear(2026).periodMonth(5).type(MonthlyPlanItem.Type.EXPENSE).title("i2").amount(new BigDecimal("20")).transactionId(legacyTxId).build();
     when(itemRepo.findByProfileIdAndPeriodYearAndPeriodMonth(profileId, 2026, 5)).thenReturn(List.of(item1, item2));
+    when(amountCalculator.plannedAmountForReconciliation(item1)).thenReturn(new BigDecimal("100"));
+    when(amountCalculator.plannedAmountForReconciliation(item2)).thenReturn(new BigDecimal("20"));
 
     var persistedTxId = UUID.randomUUID();
     var tx1 = tx(persistedTxId, "50", MoneyTransaction.Status.CONFIRMED);
@@ -54,6 +57,7 @@ class MonthlyPlanReconciliationServiceTest {
     ok();
     var item = MonthlyPlanItem.builder().id(UUID.randomUUID()).profileId(profileId).periodYear(2026).periodMonth(5).type(MonthlyPlanItem.Type.EXPENSE).title("i").amount(new BigDecimal("30")).build();
     when(itemRepo.findByProfileIdAndPeriodYearAndPeriodMonth(profileId, 2026, 5)).thenReturn(List.of(item));
+    when(amountCalculator.plannedAmountForReconciliation(item)).thenReturn(new BigDecimal("30"));
 
     var matchedTxId = UUID.randomUUID();
     var confirmedMatched = tx(matchedTxId, "30", MoneyTransaction.Status.CONFIRMED);

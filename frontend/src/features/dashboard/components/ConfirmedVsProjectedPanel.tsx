@@ -5,80 +5,27 @@ import type { DashboardSummary } from '../../../domain/types';
 type Props = {
   planning: NonNullable<DashboardSummary['planningSummary']>;
   operational: NonNullable<DashboardSummary['operationalSummary']>;
+  cashFlow: NonNullable<DashboardSummary['monthlyCashFlowSummary']>;
 };
 
-export function ConfirmedVsProjectedPanel({ planning, operational }: Props) {
-  const deltaTone =
-    operational.deltaProjectedMinVsConfirmed >= 0 && operational.deltaProjectedMaxVsConfirmed >= 0
-      ? 'success'
-      : operational.deltaProjectedMaxVsConfirmed < 0
-        ? 'danger'
-        : 'warning';
-
+export function ConfirmedVsProjectedPanel({ planning, operational, cashFlow }: Props) {
   return (
     <section className="grid">
       <article className="panel">
-        <div className="section-title">
-          <div>
-            <p className="eyebrow">Datos reales</p>
-            <h2>Confirmado</h2>
-          </div>
-        </div>
-
+        <div className="section-title"><div><p className="eyebrow">Datos reales</p><h2>Confirmado (semántica financiera)</h2></div></div>
         <div className="grid">
-          <MetricCard
-            title="Ingresos"
-            value={formatMoney(operational.confirmedIncome)}
-            tone="success"
-          />
-
-          <MetricCard
-            title="Egresos"
-            value={formatMoney(operational.confirmedExpenses)}
-            tone="danger"
-          />
-
-          <MetricCard
-            title="Ahorro"
-            value={formatMoney(operational.confirmedSavings)}
-            tone="info"
-          />
+          <MetricCard title="Flujo neto de caja" value={formatMoney(cashFlow.netCashFlow)} tone={cashFlow.netCashFlow >= 0 ? 'success' : 'danger'} />
+          <MetricCard title="Gasto de consumo" value={formatMoney(cashFlow.consumptionExpense)} tone="danger" helper={`Fijo: ${formatMoney(cashFlow.fixedExpense)} · Variable: ${formatMoney(cashFlow.variableExpense)}`} />
+          <MetricCard title="Ahorro + inversión" value={formatMoney(cashFlow.savingOutflow + cashFlow.investmentOutflow)} tone="info" />
+          <MetricCard title="Deuda y egresos recuperables" value={formatMoney(cashFlow.debtOutflow + cashFlow.recoverableOutflow)} tone="warning" />
+          <MetricCard title="Transferencias" value={`Internas ${formatMoney(cashFlow.internalTransfers)} · Externas ${formatMoney(cashFlow.externalTransfers)}`} tone="info" />
         </div>
       </article>
-
       <article className="panel">
-        <div className="section-title">
-          <div>
-            <p className="eyebrow">Escenario esperado</p>
-            <h2>Proyectado</h2>
-          </div>
-        </div>
-
+        <div className="section-title"><div><p className="eyebrow">Escenario esperado</p><h2>Proyectado</h2></div></div>
         <div className="grid">
-          <MetricCard
-            title="Ingresos estimados"
-            value={`${formatMoney(planning.totalIncomeMin)} – ${formatMoney(planning.totalIncomeMax)}`}
-            tone="success"
-          />
-
-          <MetricCard
-            title="Egresos estimados"
-            value={`${formatMoney(planning.totalExpenseMin)} – ${formatMoney(planning.totalExpenseMax)}`}
-            tone="danger"
-          />
-
-          <MetricCard
-            title="Neto proyectado"
-            value={`${formatMoney(planning.projectedNetMin)} – ${formatMoney(planning.projectedNetMax)}`}
-            tone={planning.projectedNetMin >= 0 ? 'success' : 'danger'}
-          />
-
-          <MetricCard
-            title="Diferencia vs saldo confirmado"
-            value={`${formatMoney(operational.deltaProjectedMinVsConfirmed)} – ${formatMoney(operational.deltaProjectedMaxVsConfirmed)}`}
-            helper="Mide cuánto podría mejorar o empeorar el resultado al cierre del período."
-            tone={deltaTone}
-          />
+          <MetricCard title="Neto proyectado" value={`${formatMoney(planning.projectedNetMin)} – ${formatMoney(planning.projectedNetMax)}`} tone={planning.projectedNetMin >= 0 ? 'success' : 'danger'} />
+          <MetricCard title="Diferencia vs flujo confirmado" value={`${formatMoney(operational.deltaProjectedMinVsConfirmed)} – ${formatMoney(operational.deltaProjectedMaxVsConfirmed)}`} tone="warning" />
         </div>
       </article>
     </section>

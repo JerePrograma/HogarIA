@@ -130,7 +130,7 @@ export function DashboardPage() {
               title="Planificado vs real"
               description="Comparación entre lo esperado y lo efectivamente confirmado en movimientos."
             >
-              <ConfirmedVsProjectedPanel planning={planning} operational={operational} />
+              <ConfirmedVsProjectedPanel planning={planning} operational={operational} cashFlow={summary.monthlyCashFlowSummary!} />
             </DashboardSection>
 
             <DashboardSection
