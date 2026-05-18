@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { AppLayout } from '../../components/layout/AppLayout';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { ErrorState } from '../../components/ui/ErrorState';
@@ -13,6 +13,8 @@ import { useStructuredPlanItemDraft } from '../../hooks/useStructuredPlanItemDra
 import { MonthlyPlanItemsTable, type TableFilterKey } from './components/MonthlyPlanItemsTable';
 import { MonthlyPlanningChecklist } from './components/MonthlyPlanningChecklist';
 import { MonthlyPlanningGuide } from './components/MonthlyPlanningGuide';
+import { PlanningMappingsAuditPanel } from './components/PlanningMappingsAuditPanel';
+import { PlanningWorkspaceNavigator, type PlanningWorkspaceView } from './components/PlanningWorkspaceNavigator';
 import { PlanningSummaryCards } from './components/PlanningSummaryCards';
 import { QuickCapturePanel } from './components/QuickCapturePanel';
 import { QuickCapturePreviewForm } from './components/QuickCapturePreviewForm';
@@ -24,6 +26,8 @@ export function MonthlyPlanningPage() {
   const { profileId = '' } = useParams();
   const { year, month, setYear, setMonth } = useMonthlyPeriod();
   const [tableFilter, setTableFilter] = useState<TableFilterKey>(DEFAULT_TABLE_FILTER);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const currentView = (searchParams.get('view') as PlanningWorkspaceView | null) ?? 'CHECKLIST';
 
   const invalidatePlanningViews = useInvalidateMonthlyViews(profileId, year, month);
 
@@ -55,6 +59,12 @@ export function MonthlyPlanningPage() {
   const isError = planningQuery.isError;
   const isReady = !isLoading && !isError;
 
+  const setCurrentView = (view: PlanningWorkspaceView) => {
+    const next = new URLSearchParams(searchParams);
+    next.set('view', view);
+    setSearchParams(next, { replace: true });
+  };
+
   return (
     <AppLayout>
       <div className="page-stack monthly-planning-page">
@@ -76,13 +86,13 @@ export function MonthlyPlanningPage() {
             />
 
             <div className="page-actions planning-hero-actions">
-              <a className="boton-secundario" href="#plan-items">
+              <button className="boton-secundario" type="button" onClick={() => setCurrentView('ITEMS')}>
                 Revisar ítems
-              </a>
+              </button>
 
-              <a className="boton-secundario" href="#new-plan-item">
+              <button className="boton-secundario" type="button" onClick={() => setCurrentView('CAPTURE')}>
                 Cargar manual
-              </a>
+              </button>
 
               <Link className="boton-principal" to={`/profiles/${profileId}/dashboard`}>
                 Ver dashboard
@@ -104,21 +114,30 @@ export function MonthlyPlanningPage() {
           <>
             <PlanningSummaryCards summary={summary} />
 
-            <section className="planning-layout-grid">
-              <div className="planning-layout-main">
-                <MonthlyPlanningChecklist
-                  summary={summary}
-                  items={items}
-                  onApply={setTableFilter}
-                />
-              </div>
+            <PlanningWorkspaceNavigator
+              activeView={currentView}
+              onChange={setCurrentView}
+              items={items}
+            />
 
-              <aside className="planning-layout-side">
-                <MonthlyPlanningGuide summary={summary} />
-              </aside>
-            </section>
+            {currentView === 'CHECKLIST' ? (
+              <section className="planning-layout-grid">
+                <div className="planning-layout-main">
+                  <MonthlyPlanningChecklist
+                    summary={summary}
+                    items={items}
+                    onApply={setTableFilter}
+                  />
+                </div>
 
-            <QuickCapturePanel
+                <aside className="planning-layout-side">
+                  <MonthlyPlanningGuide summary={summary} />
+                </aside>
+              </section>
+            ) : null}
+
+            {currentView === 'CAPTURE' ? (
+              <QuickCapturePanel
               input={quickCapture.quickText}
               onChange={quickCapture.setQuickText}
               onAnalyze={quickCapture.analyze}
@@ -143,8 +162,10 @@ export function MonthlyPlanningPage() {
                 />
               ) : null}
             </QuickCapturePanel>
+            ) : null}
 
-            <div id="plan-items">
+            {currentView === 'ITEMS' ? (
+              <div id="plan-items">
               <MonthlyPlanItemsTable
                 profileId={profileId}
                 items={items}
@@ -161,9 +182,11 @@ export function MonthlyPlanningPage() {
                 externalFilterKey={tableFilter}
                 onExternalFilterChange={setTableFilter}
               />
-            </div>
+              </div>
+            ) : null}
 
-            <div id="new-plan-item">
+            {currentView === 'CAPTURE' ? (
+              <div id="new-plan-item">
               <StructuredPlanItemForm
                 form={draft.form}
                 setForm={draft.setForm}
@@ -173,7 +196,12 @@ export function MonthlyPlanningPage() {
                 isCreating={actions.isCreating}
                 error={actions.createErrorMessage}
               />
-            </div>
+              </div>
+            ) : null}
+
+            {currentView === 'MAPPINGS' ? (
+              <PlanningMappingsAuditPanel items={items} accounts={accounts} categories={categories} />
+            ) : null}
           </>
         ) : null}
       </div>
