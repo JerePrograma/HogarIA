@@ -1,12 +1,13 @@
 import { MetricCard } from '../../../components/ui/MetricCard';
 import { formatMoney } from '../../../domain/formatters';
-import type { MonthlyPlanSummary } from '../../../domain/types';
+import type { MonthlyPlanReconciliationSummary, MonthlyPlanSummary } from '../../../domain/types';
 
 type Props = {
   summary?: MonthlyPlanSummary;
+  reconciliation?: MonthlyPlanReconciliationSummary;
 };
 
-export function PlanningSummaryCards({ summary }: Props) {
+export function PlanningSummaryCards({ summary, reconciliation }: Props) {
   const netMin = summary?.netMin ?? 0;
   const netMax = summary?.netMax ?? 0;
   const netTone = netMin >= 0 && netMax >= 0 ? 'success' : 'danger';
@@ -16,33 +17,40 @@ export function PlanningSummaryCards({ summary }: Props) {
       <div className="section-title">
         <div>
           <p className="eyebrow">Resumen</p>
-          <h2>Proyección mensual</h2>
+          <h2>Proyección y ejecución mensual</h2>
           <p className="muted">
-            Lectura rápida del rango planificado antes de confirmar movimientos reales.
+            Compará lo planificado contra movimientos reales conciliados.
           </p>
         </div>
       </div>
 
       <div className="metric-grid">
         <MetricCard
-          title="Ingresos estimados"
-          value={formatRange(summary?.totalIncomeMin, summary?.totalIncomeMax)}
-          helper="Rango de ingresos planificados."
+          title="Planificado"
+          value={formatMoney(reconciliation?.plannedTotal ?? 0)}
+          helper="Monto objetivo cargado en planificación."
+          tone="info"
+        />
+
+        <MetricCard
+          title="Ejecutado"
+          value={formatMoney(reconciliation?.matchedTotal ?? 0)}
+          helper="Movimientos reales vinculados al plan."
           tone="success"
         />
 
         <MetricCard
-          title="Egresos estimados"
-          value={formatRange(summary?.totalExpenseMin, summary?.totalExpenseMax)}
-          helper="Rango de pagos o gastos esperados."
-          tone="danger"
+          title="Pendiente"
+          value={formatMoney(reconciliation?.remainingTotal ?? 0)}
+          helper="Saldo planificado todavía no cubierto."
+          tone={(reconciliation?.remainingTotal ?? 0) > 0 ? 'warning' : 'success'}
         />
 
         <MetricCard
-          title="Recuperos esperados"
-          value={formatRange(summary?.totalRecoveryMin, summary?.totalRecoveryMax)}
-          helper="Reintegros o recuperos previstos."
-          tone="info"
+          title="No planificado"
+          value={formatMoney(reconciliation?.unplannedTransactionsTotal ?? 0)}
+          helper="Movimientos reales sin vínculo con planificación."
+          tone={(reconciliation?.unplannedTransactionsCount ?? 0) > 0 ? 'danger' : 'neutral'}
         />
 
         <MetricCard

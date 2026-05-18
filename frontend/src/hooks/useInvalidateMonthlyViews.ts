@@ -6,6 +6,9 @@ export function useInvalidateMonthlyViews(profileId: string, year: number, month
 
   return () => {
     queryClient.invalidateQueries({ queryKey: queryKeys.planning(profileId, year, month) });
+    queryClient.invalidateQueries({
+      queryKey: queryKeys.planningReconciliation(profileId, year, month),
+    });
     queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(profileId, year, month) });
     queryClient.invalidateQueries({ queryKey: queryKeys.transactions(profileId, year, month) });
   };

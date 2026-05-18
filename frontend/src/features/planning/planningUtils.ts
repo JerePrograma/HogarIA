@@ -1,35 +1,56 @@
-import { formatMoney } from '../../domain/formatters';
+import { formatMoney } from "../../domain/formatters";
 import type {
   MonthlyPlanItem,
   MonthlyPlanItemType,
   MonthlyPlanPriority,
+  MonthlyPlanReconciliationSummary,
   MonthlyPlanStatus,
+  PlanExecutionStatus,
+  PlanItemReconciliation,
   QuickCapturePreviewResponse,
-} from '../../domain/types';
+} from "../../domain/types";
 
-export type PlanItemAmountLike = Pick<MonthlyPlanItem, 'amount' | 'minAmount' | 'maxAmount'>;
+export type PlanItemAmountLike = Pick<
+  MonthlyPlanItem,
+  "amount" | "minAmount" | "maxAmount"
+>;
 export type TableFilterKey =
-  | 'ALL'
-  | 'UNPRICED'
-  | 'MISSING_CLASSIFICATION'
-  | 'READY_TO_CONVERT'
-  | 'DUE_NEXT_7_DAYS';
+  | "ALL"
+  | "UNPRICED"
+  | "MISSING_CLASSIFICATION"
+  | "READY_TO_CONVERT"
+  | "DUE_NEXT_7_DAYS"
+  | "PARTIALLY_EXECUTED"
+  | "OVER_EXECUTED"
+  | "NOT_EXECUTED"
+  | "UNPLANNED_MOVEMENTS"
+  | "SUGGESTED_MATCHES";
 
-export type StatusFilterKey = 'ALL' | 'PENDING' | 'DONE' | 'CANCELLED';
-export type PlanItemSortKey = 'DATE' | 'PRIORITY' | 'AMOUNT';
+export type StatusFilterKey = "ALL" | "PENDING" | "DONE" | "CANCELLED";
+export type PlanItemSortKey = "DATE" | "PRIORITY" | "AMOUNT";
 
 export type PlanItemNextAction =
-  | 'COMPLETE_AMOUNT'
-  | 'PREPARE_CONVERSION'
-  | 'CONVERT'
-  | 'MARK_COLLECTED'
-  | 'MARK_PAID'
-  | 'EDIT';
+  | "COMPLETE_AMOUNT"
+  | "PREPARE_CONVERSION"
+  | "CONVERT"
+  | "MARK_COLLECTED"
+  | "MARK_PAID"
+  | "EDIT";
 
-const PENDING_STATUSES: MonthlyPlanStatus[] = ['DRAFT', 'ESTIMATED', 'SCHEDULED', 'DUE'];
-const DONE_STATUSES: MonthlyPlanStatus[] = ['PAID', 'COLLECTED'];
-const MONEY_OUT_TYPES: MonthlyPlanItemType[] = ['EXPENSE', 'DEBT', 'SAVING', 'TRANSFER'];
-const MONEY_IN_TYPES: MonthlyPlanItemType[] = ['INCOME', 'RECOVERY'];
+const PENDING_STATUSES: MonthlyPlanStatus[] = [
+  "DRAFT",
+  "ESTIMATED",
+  "SCHEDULED",
+  "DUE",
+];
+const DONE_STATUSES: MonthlyPlanStatus[] = ["PAID", "COLLECTED"];
+const MONEY_OUT_TYPES: MonthlyPlanItemType[] = [
+  "EXPENSE",
+  "DEBT",
+  "SAVING",
+  "TRANSFER",
+];
+const MONEY_IN_TYPES: MonthlyPlanItemType[] = ["INCOME", "RECOVERY"];
 
 const priorityOrder: Record<MonthlyPlanPriority, number> = {
   ESSENTIAL: 1,
@@ -50,11 +71,14 @@ export function formatPlanAmount(item: PlanItemAmountLike): string {
       : `${formatMoney(range.min)} – ${formatMoney(range.max)}`;
   }
 
-  return 'Sin monto';
+  return "Sin monto";
 }
 
 export function formatPlanRecovery(
-  item: Pick<MonthlyPlanItem, 'expectedRecoveryPercent' | 'expectedRecoveryAmount'>,
+  item: Pick<
+    MonthlyPlanItem,
+    "expectedRecoveryPercent" | "expectedRecoveryAmount"
+  >,
 ): string {
   if (item.expectedRecoveryPercent != null) {
     return `${item.expectedRecoveryPercent}%`;
@@ -64,25 +88,31 @@ export function formatPlanRecovery(
     return formatMoney(item.expectedRecoveryAmount);
   }
 
-  return 'Sin recupero';
+  return "Sin recupero";
 }
 
-export function formatPlanNet(item: Pick<MonthlyPlanItem, 'netMin' | 'netMax'>): string {
+export function formatPlanNet(
+  item: Pick<MonthlyPlanItem, "netMin" | "netMax">,
+): string {
   if (item.netMin == null && item.netMax == null) {
-    return 'Sin monto';
+    return "Sin monto";
   }
 
   const min = item.netMin ?? item.netMax;
   const max = item.netMax ?? item.netMin;
 
   if (min == null || max == null) {
-    return 'Sin monto';
+    return "Sin monto";
   }
 
-  return min === max ? formatMoney(min) : `${formatMoney(min)} – ${formatMoney(max)}`;
+  return min === max
+    ? formatMoney(min)
+    : `${formatMoney(min)} – ${formatMoney(max)}`;
 }
 
-export function normalizeAmountRange(item: PlanItemAmountLike): { min: number; max: number } | null {
+export function normalizeAmountRange(
+  item: PlanItemAmountLike,
+): { min: number; max: number } | null {
   if (item.minAmount == null && item.maxAmount == null) {
     return null;
   }
@@ -100,28 +130,39 @@ export function normalizeAmountRange(item: PlanItemAmountLike): { min: number; m
 export function hasExactAmount(item: PlanItemAmountLike): boolean {
   return (
     item.amount != null ||
-    (item.minAmount != null && item.maxAmount != null && item.minAmount === item.maxAmount)
+    (item.minAmount != null &&
+      item.maxAmount != null &&
+      item.minAmount === item.maxAmount)
   );
 }
 
-export function isPendingPlanItem(item: Pick<MonthlyPlanItem, 'status'>): boolean {
+export function isPendingPlanItem(
+  item: Pick<MonthlyPlanItem, "status">,
+): boolean {
   return PENDING_STATUSES.includes(item.status);
 }
 
-export function isDonePlanItem(item: Pick<MonthlyPlanItem, 'status'>): boolean {
+export function isDonePlanItem(item: Pick<MonthlyPlanItem, "status">): boolean {
   return DONE_STATUSES.includes(item.status);
 }
 
-export function isCancelledPlanItem(item: Pick<MonthlyPlanItem, 'status'>): boolean {
-  return item.status === 'CANCELLED';
+export function isCancelledPlanItem(
+  item: Pick<MonthlyPlanItem, "status">,
+): boolean {
+  return item.status === "CANCELLED";
 }
 
-export function isConvertedPlanItem(item: Pick<MonthlyPlanItem, 'transactionId'>): boolean {
+export function isConvertedPlanItem(
+  item: Pick<MonthlyPlanItem, "transactionId">,
+): boolean {
   return Boolean(item.transactionId);
 }
 
 export function isUnpricedPlanItem(
-  item: Pick<MonthlyPlanItem, 'amount' | 'minAmount' | 'maxAmount' | 'status' | 'transactionId'>,
+  item: Pick<
+    MonthlyPlanItem,
+    "amount" | "minAmount" | "maxAmount" | "status" | "transactionId"
+  >,
 ): boolean {
   return (
     !isCancelledPlanItem(item) &&
@@ -133,7 +174,10 @@ export function isUnpricedPlanItem(
 }
 
 export function isMissingClassificationPlanItem(
-  item: Pick<MonthlyPlanItem, 'accountId' | 'categoryId' | 'status' | 'transactionId'>,
+  item: Pick<
+    MonthlyPlanItem,
+    "accountId" | "categoryId" | "status" | "transactionId"
+  >,
 ): boolean {
   return (
     !isCancelledPlanItem(item) &&
@@ -147,64 +191,72 @@ export function canConvertPlanItem(item: MonthlyPlanItem): boolean {
     hasExactAmount(item) &&
     Boolean(item.accountId) &&
     Boolean(item.categoryId) &&
-    item.type !== 'TODO' &&
+    item.type !== "TODO" &&
     !isCancelledPlanItem(item) &&
     !isConvertedPlanItem(item)
   );
 }
 
-export function getPlanItemNextAction(item: MonthlyPlanItem): PlanItemNextAction {
+export function getPlanItemNextAction(
+  item: MonthlyPlanItem,
+): PlanItemNextAction {
   if (isUnpricedPlanItem(item)) {
-    return 'COMPLETE_AMOUNT';
+    return "COMPLETE_AMOUNT";
   }
 
   if (canConvertPlanItem(item)) {
-    return 'CONVERT';
+    return "CONVERT";
   }
 
-  if (MONEY_IN_TYPES.includes(item.type) && !['COLLECTED', 'CANCELLED'].includes(item.status)) {
-    return 'MARK_COLLECTED';
+  if (
+    MONEY_IN_TYPES.includes(item.type) &&
+    !["COLLECTED", "CANCELLED"].includes(item.status)
+  ) {
+    return "MARK_COLLECTED";
   }
 
-  if (MONEY_OUT_TYPES.includes(item.type) && !['PAID', 'CANCELLED'].includes(item.status)) {
-    return 'MARK_PAID';
+  if (
+    MONEY_OUT_TYPES.includes(item.type) &&
+    !["PAID", "CANCELLED"].includes(item.status)
+  ) {
+    return "MARK_PAID";
   }
 
   if (isMissingClassificationPlanItem(item) || item.amount == null) {
-    return 'PREPARE_CONVERSION';
+    return "PREPARE_CONVERSION";
   }
 
-  return 'EDIT';
+  return "EDIT";
 }
 
 export function getPlanItemMissingLabels(item: MonthlyPlanItem): string[] {
   if (isCancelledPlanItem(item)) {
-    return ['Cancelado'];
+    return ["Cancelado"];
   }
 
   if (isConvertedPlanItem(item)) {
-    return ['Convertido'];
+    return ["Convertido"];
   }
 
   const labels: string[] = [];
 
   if (isUnpricedPlanItem(item)) {
-    labels.push('Sin monto');
+    labels.push("Sin monto");
   }
 
   if (!item.accountId) {
-    labels.push('Sin cuenta');
+    labels.push("Sin cuenta");
   }
 
   if (!item.categoryId) {
-    labels.push('Sin categoría');
+    labels.push("Sin categoría");
   }
 
   if (labels.length === 0 && canConvertPlanItem(item)) {
-    labels.push('Listo para convertir');
+    labels.push("Listo para convertir");
   }
 
-  return labels.length > 0 ? labels : ['Sin acciones'];
+  return labels.length > 0 ? labels : ["Sin acciones"];
 }
 
 export function getPlanItemCompletionScore(item: MonthlyPlanItem): number {
@@ -223,65 +275,107 @@ export function getPlanItemCompletionScore(item: MonthlyPlanItem): number {
   return Math.round((checks.filter(Boolean).length / checks.length) * 100);
 }
 
-export function matchesExternalFilter(item: MonthlyPlanItem, filter: TableFilterKey = 'ALL'): boolean {
-  if (filter === 'ALL') {
+export function matchesExternalFilter(
+  item: MonthlyPlanItem,
+  filter: TableFilterKey = "ALL",
+  reconciliationByItemId?: Map<string, PlanItemReconciliation>,
+  suggestedItemIds?: Set<string>,
+): boolean {
+  if (filter === "ALL") {
     return true;
   }
 
-  if (filter === 'UNPRICED') {
+  const itemReconciliation = reconciliationByItemId?.get(item.id);
+
+  if (filter === "PARTIALLY_EXECUTED") {
+    return itemReconciliation?.executionStatus === "PARTIALLY_EXECUTED";
+  }
+
+  if (filter === "OVER_EXECUTED") {
+    return itemReconciliation?.executionStatus === "OVER_EXECUTED";
+  }
+
+  if (filter === "NOT_EXECUTED") {
+    return itemReconciliation?.executionStatus === "NOT_EXECUTED";
+  }
+
+  if (filter === "SUGGESTED_MATCHES") {
+    return suggestedItemIds?.has(item.id) ?? false;
+  }
+
+  if (filter === "UNPLANNED_MOVEMENTS") {
+    return false;
+  }
+
+  if (filter === "UNPRICED") {
     return isUnpricedPlanItem(item);
   }
 
-  if (filter === 'MISSING_CLASSIFICATION') {
+  if (filter === "MISSING_CLASSIFICATION") {
     return isMissingClassificationPlanItem(item);
   }
 
-  if (filter === 'READY_TO_CONVERT') {
+  if (filter === "READY_TO_CONVERT") {
     return canConvertPlanItem(item);
   }
 
-  if (filter === 'DUE_NEXT_7_DAYS') {
-    return !isCancelledPlanItem(item) && !isConvertedPlanItem(item) && isDueNextDays(item.expectedDate, 7);
+  if (filter === "DUE_NEXT_7_DAYS") {
+    return (
+      !isCancelledPlanItem(item) &&
+      !isConvertedPlanItem(item) &&
+      isDueNextDays(item.expectedDate, 7)
+    );
   }
 
   return true;
 }
 
-export function matchesStatusFilter(item: MonthlyPlanItem, filter: StatusFilterKey): boolean {
-  if (filter === 'ALL') {
+export function matchesStatusFilter(
+  item: MonthlyPlanItem,
+  filter: StatusFilterKey,
+): boolean {
+  if (filter === "ALL") {
     return true;
   }
 
-  if (filter === 'PENDING') {
+  if (filter === "PENDING") {
     return isPendingPlanItem(item);
   }
 
-  if (filter === 'DONE') {
+  if (filter === "DONE") {
     return isDonePlanItem(item);
   }
 
-  if (filter === 'CANCELLED') {
+  if (filter === "CANCELLED") {
     return isCancelledPlanItem(item);
   }
 
   return true;
 }
 
-export function sortPlanItems(a: MonthlyPlanItem, b: MonthlyPlanItem, sortBy: PlanItemSortKey): number {
-  if (sortBy === 'DATE') {
-    const dateA = a.expectedDate ?? '9999-12-31';
-    const dateB = b.expectedDate ?? '9999-12-31';
+export function sortPlanItems(
+  a: MonthlyPlanItem,
+  b: MonthlyPlanItem,
+  sortBy: PlanItemSortKey,
+): number {
+  if (sortBy === "DATE") {
+    const dateA = a.expectedDate ?? "9999-12-31";
+    const dateB = b.expectedDate ?? "9999-12-31";
     const byDate = dateA.localeCompare(dateB);
 
-    return byDate !== 0 ? byDate : priorityWeight(a.priority) - priorityWeight(b.priority);
+    return byDate !== 0
+      ? byDate
+      : priorityWeight(a.priority) - priorityWeight(b.priority);
   }
 
-  if (sortBy === 'PRIORITY') {
+  if (sortBy === "PRIORITY") {
     const byPriority = priorityWeight(a.priority) - priorityWeight(b.priority);
 
     return byPriority !== 0
       ? byPriority
-      : (a.expectedDate ?? '9999-12-31').localeCompare(b.expectedDate ?? '9999-12-31');
+      : (a.expectedDate ?? "9999-12-31").localeCompare(
+          b.expectedDate ?? "9999-12-31",
+        );
   }
 
   return getComparableAmount(b) - getComparableAmount(a);
@@ -291,7 +385,10 @@ export function priorityWeight(priority: MonthlyPlanPriority): number {
   return priorityOrder[priority] ?? 99;
 }
 
-export function isDueNextDays(expectedDate: string | null | undefined, days: number): boolean {
+export function isDueNextDays(
+  expectedDate: string | null | undefined,
+  days: number,
+): boolean {
   if (!expectedDate || days < 0) {
     return false;
   }
@@ -343,23 +440,64 @@ export function addDays(date: Date, days: number): Date {
 }
 
 export function confidenceMeta(
-  confidence: QuickCapturePreviewResponse['confidence'],
-): { label: string; tone: 'neutral' | 'ok' | 'watch' | 'critical' } {
-  if (confidence === 'HIGH') {
-    return { label: 'Alta', tone: 'ok' };
+  confidence: QuickCapturePreviewResponse["confidence"],
+): { label: string; tone: "neutral" | "ok" | "watch" | "critical" } {
+  if (confidence === "HIGH") {
+    return { label: "Alta", tone: "ok" };
   }
 
-  if (confidence === 'MEDIUM') {
-    return { label: 'Media', tone: 'watch' };
+  if (confidence === "MEDIUM") {
+    return { label: "Media", tone: "watch" };
   }
 
-  if (confidence === 'LOW') {
-    return { label: 'Baja', tone: 'critical' };
+  if (confidence === "LOW") {
+    return { label: "Baja", tone: "critical" };
   }
 
-  return { label: 'Sin confianza', tone: 'neutral' };
+  return { label: "Sin confianza", tone: "neutral" };
 }
 
 function getComparableAmount(item: MonthlyPlanItem): number {
-  return Math.abs(item.netMax ?? item.amount ?? item.maxAmount ?? item.minAmount ?? 0);
+  return Math.abs(
+    item.netMax ?? item.amount ?? item.maxAmount ?? item.minAmount ?? 0,
+  );
+}
+
+export function createReconciliationByItemId(
+  reconciliation?: MonthlyPlanReconciliationSummary,
+): Map<string, PlanItemReconciliation> {
+  return new Map(
+    (reconciliation?.items ?? []).map((item) => [item.itemId, item]),
+  );
+}
+
+export function getExecutionStatusLabel(status?: PlanExecutionStatus): string {
+  if (!status) return "Sin conciliación";
+
+  const labels: Record<PlanExecutionStatus, string> = {
+    UNPRICED: "Sin monto",
+    NOT_EXECUTED: "Sin ejecutar",
+    PARTIALLY_EXECUTED: "Parcial",
+    EXECUTED: "Ejecutado",
+    OVER_EXECUTED: "Excedido",
+    CANCELLED: "Cancelado",
+    NOT_APPLICABLE: "No aplica",
+  };
+
+  return labels[status];
+}
+
+export function getExecutionStatusTone(
+  status?: PlanExecutionStatus,
+): "neutral" | "ok" | "watch" | "critical" {
+  if (status === "EXECUTED") return "ok";
+  if (
+    status === "PARTIALLY_EXECUTED" ||
+    status === "UNPRICED" ||
+    status === "NOT_EXECUTED"
+  ) {
+    return "watch";
+  }
+  if (status === "OVER_EXECUTED") return "critical";
+  return "neutral";
 }

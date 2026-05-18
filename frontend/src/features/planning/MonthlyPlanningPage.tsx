@@ -1,37 +1,58 @@
-import { useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
-import { AppLayout } from '../../components/layout/AppLayout';
-import { EmptyState } from '../../components/ui/EmptyState';
-import { ErrorState } from '../../components/ui/ErrorState';
-import { MonthSelector } from '../../components/ui/MonthSelector';
-import { useInvalidateMonthlyViews } from '../../hooks/useInvalidateMonthlyViews';
-import { useMonthlyPeriod } from '../../hooks/useMonthlyPeriod';
-import { useMonthlyPlanItemActions } from '../../hooks/useMonthlyPlanItemActions';
-import { useMonthlyPlanningQueries } from '../../hooks/useMonthlyPlanningQueries';
-import { useQuickCaptureFlow } from '../../hooks/useQuickCaptureFlow';
-import { useStructuredPlanItemDraft } from '../../hooks/useStructuredPlanItemDraft';
-import { MonthlyPlanItemsTable, type TableFilterKey } from './components/MonthlyPlanItemsTable';
-import { MonthlyPlanningChecklist } from './components/MonthlyPlanningChecklist';
-import { MonthlyPlanningGuide } from './components/MonthlyPlanningGuide';
-import { PlanningSummaryCards } from './components/PlanningSummaryCards';
-import { QuickCapturePanel } from './components/QuickCapturePanel';
-import { QuickCapturePreviewForm } from './components/QuickCapturePreviewForm';
-import { StructuredPlanItemForm } from './components/StructuredPlanItemForm';
+import { useState } from "react";
+import { Link, useParams } from "react-router-dom";
+import { AppLayout } from "../../components/layout/AppLayout";
+import { EmptyState } from "../../components/ui/EmptyState";
+import { ErrorState } from "../../components/ui/ErrorState";
+import { MonthSelector } from "../../components/ui/MonthSelector";
+import { useInvalidateMonthlyViews } from "../../hooks/useInvalidateMonthlyViews";
+import { useMonthlyPeriod } from "../../hooks/useMonthlyPeriod";
+import { useMonthlyPlanItemActions } from "../../hooks/useMonthlyPlanItemActions";
+import { useMonthlyPlanningQueries } from "../../hooks/useMonthlyPlanningQueries";
+import { useQuickCaptureFlow } from "../../hooks/useQuickCaptureFlow";
+import { useStructuredPlanItemDraft } from "../../hooks/useStructuredPlanItemDraft";
+import {
+  MonthlyPlanItemsTable,
+  type TableFilterKey,
+} from "./components/MonthlyPlanItemsTable";
+import { MonthlyPlanningChecklist } from "./components/MonthlyPlanningChecklist";
+import { MonthlyPlanningGuide } from "./components/MonthlyPlanningGuide";
+import { PlanningSummaryCards } from "./components/PlanningSummaryCards";
+import { QuickCapturePanel } from "./components/QuickCapturePanel";
+import { QuickCapturePreviewForm } from "./components/QuickCapturePreviewForm";
+import { StructuredPlanItemForm } from "./components/StructuredPlanItemForm";
+import { useMonthlyPlanReconciliationActions } from "../../hooks/useMonthlyPlanReconciliationActions";
 
-const DEFAULT_TABLE_FILTER: TableFilterKey = 'ALL';
+const DEFAULT_TABLE_FILTER: TableFilterKey = "ALL";
 
 export function MonthlyPlanningPage() {
-  const { profileId = '' } = useParams();
+  const { profileId = "" } = useParams();
   const { year, month, setYear, setMonth } = useMonthlyPeriod();
-  const [tableFilter, setTableFilter] = useState<TableFilterKey>(DEFAULT_TABLE_FILTER);
+  const [tableFilter, setTableFilter] =
+    useState<TableFilterKey>(DEFAULT_TABLE_FILTER);
 
-  const invalidatePlanningViews = useInvalidateMonthlyViews(profileId, year, month);
-
-  const { planningQuery, summary, items, accounts, categories } = useMonthlyPlanningQueries(
+  const invalidatePlanningViews = useInvalidateMonthlyViews(
     profileId,
     year,
     month,
   );
+
+  const {
+    planningQuery,
+    reconciliationQuery,
+    summary,
+    reconciliation,
+    items,
+    accounts,
+    categories,
+  } = useMonthlyPlanningQueries(profileId, year, month);
+
+  const reconciliationActions = useMonthlyPlanReconciliationActions({
+    profileId,
+    invalidatePlanningViews,
+  });
+
+  const isLoading = planningQuery.isLoading || reconciliationQuery.isLoading;
+  const isError = planningQuery.isError || reconciliationQuery.isError;
 
   const draft = useStructuredPlanItemDraft(year, month);
 
@@ -51,8 +72,6 @@ export function MonthlyPlanningPage() {
     invalidatePlanningViews,
   });
 
-  const isLoading = planningQuery.isLoading;
-  const isError = planningQuery.isError;
   const isReady = !isLoading && !isError;
 
   return (
@@ -63,7 +82,8 @@ export function MonthlyPlanningPage() {
             <p className="eyebrow">Plan operativo</p>
             <h1>Planificación mensual</h1>
             <p className="secondary-text">
-              Cargá estimaciones, completá faltantes y convertí sólo lo que ya está confirmado.
+              Cargá estimaciones, completá faltantes y convertí sólo lo que ya
+              está confirmado.
             </p>
           </div>
 
@@ -84,7 +104,10 @@ export function MonthlyPlanningPage() {
                 Cargar manual
               </a>
 
-              <Link className="boton-principal" to={`/profiles/${profileId}/dashboard`}>
+              <Link
+                className="boton-principal"
+                to={`/profiles/${profileId}/dashboard`}
+              >
                 Ver dashboard
               </Link>
             </div>
@@ -98,16 +121,22 @@ export function MonthlyPlanningPage() {
           />
         ) : null}
 
-        {isError ? <ErrorState message="No se pudo cargar la planificación mensual." /> : null}
+        {isError ? (
+          <ErrorState message="No se pudo cargar la planificación mensual." />
+        ) : null}
 
         {isReady ? (
           <>
-            <PlanningSummaryCards summary={summary} />
+            <PlanningSummaryCards
+              summary={summary}
+              reconciliation={reconciliation}
+            />
 
             <section className="planning-layout-grid">
               <div className="planning-layout-main">
                 <MonthlyPlanningChecklist
                   summary={summary}
+                  reconciliation={reconciliation}
                   items={items}
                   onApply={setTableFilter}
                 />
@@ -148,6 +177,7 @@ export function MonthlyPlanningPage() {
               <MonthlyPlanItemsTable
                 profileId={profileId}
                 items={items}
+                reconciliation={reconciliation}
                 accounts={accounts}
                 categories={categories}
                 onConvert={actions.convert}
@@ -156,8 +186,14 @@ export function MonthlyPlanningPage() {
                 onUpdate={actions.update}
                 onMarkPaid={actions.markPaid}
                 onMarkCollected={actions.markCollected}
+                onConfirmMatch={reconciliationActions.confirmMatch}
+                onDeleteMatch={reconciliationActions.deleteMatch}
                 pendingActionId={actions.pendingActionId}
-                actionError={actions.actionErrorMessage}
+                pendingMatchId={reconciliationActions.pendingMatchId}
+                actionError={
+                  actions.actionErrorMessage ??
+                  reconciliationActions.reconciliationErrorMessage
+                }
                 externalFilterKey={tableFilter}
                 onExternalFilterChange={setTableFilter}
               />

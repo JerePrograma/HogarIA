@@ -1,37 +1,37 @@
 // src/domain/types.ts
 
-export type ProfileType = 'PERSONAL' | 'FAMILY' | 'BUSINESS';
+export type ProfileType = "PERSONAL" | "FAMILY" | "BUSINESS";
 
 export type AccountType =
-  | 'CASH'
-  | 'BANK'
-  | 'CREDIT_CARD'
-  | 'DEBIT_CARD'
-  | 'VIRTUAL_WALLET'
-  | 'BUSINESS';
+  | "CASH"
+  | "BANK"
+  | "CREDIT_CARD"
+  | "DEBIT_CARD"
+  | "VIRTUAL_WALLET"
+  | "BUSINESS";
 
 export type CategoryType =
-  | 'INCOME'
-  | 'FIXED_EXPENSE'
-  | 'VARIABLE_EXPENSE'
-  | 'SAVING'
-  | 'DEBT'
-  | 'INVESTMENT';
+  | "INCOME"
+  | "FIXED_EXPENSE"
+  | "VARIABLE_EXPENSE"
+  | "SAVING"
+  | "DEBT"
+  | "INVESTMENT";
 
-export type CategoryScope = 'PERSONAL' | 'FAMILY' | 'BUSINESS' | 'GLOBAL';
+export type CategoryScope = "PERSONAL" | "FAMILY" | "BUSINESS" | "GLOBAL";
 
 export type MovementType =
-  | 'INCOME'
-  | 'EXPENSE'
-  | 'SAVING'
-  | 'TRANSFER'
-  | 'ADJUSTMENT';
+  | "INCOME"
+  | "EXPENSE"
+  | "SAVING"
+  | "TRANSFER"
+  | "ADJUSTMENT";
 
-export type TransactionOrigin = 'MANUAL' | 'IMPORT' | 'RECURRENT' | 'SYSTEM';
-export type TransactionStatus = 'CONFIRMED' | 'PENDING' | 'IGNORED';
-export type BudgetComparisonStatus = 'OK' | 'WARNING' | 'EXCEEDED';
-export type FinancialHealth = 'EXCELLENT' | 'HEALTHY' | 'WARNING' | 'CRITICAL';
-export type FinancialRiskLevel = 'OK' | 'WATCH' | 'RISK' | 'CRITICAL';
+export type TransactionOrigin = "MANUAL" | "IMPORT" | "RECURRENT" | "SYSTEM";
+export type TransactionStatus = "CONFIRMED" | "PENDING" | "IGNORED";
+export type BudgetComparisonStatus = "OK" | "WARNING" | "EXCEEDED";
+export type FinancialHealth = "EXCELLENT" | "HEALTHY" | "WARNING" | "CRITICAL";
+export type FinancialRiskLevel = "OK" | "WATCH" | "RISK" | "CRITICAL";
 
 export interface DevUser {
   id: string;
@@ -251,17 +251,17 @@ export interface DashboardSummary {
 }
 
 export type GoalType =
-  | 'EMERGENCY_FUND'
-  | 'DEBT_PAYOFF'
-  | 'SAVING_TARGET'
-  | 'INVESTMENT'
-  | 'BUSINESS'
-  | 'TRAVEL'
-  | 'EDUCATION'
-  | 'OTHER';
+  | "EMERGENCY_FUND"
+  | "DEBT_PAYOFF"
+  | "SAVING_TARGET"
+  | "INVESTMENT"
+  | "BUSINESS"
+  | "TRAVEL"
+  | "EDUCATION"
+  | "OTHER";
 
-export type GoalStatus = 'ACTIVE' | 'PAUSED' | 'COMPLETED' | 'CANCELLED';
-export type HabitFrequency = 'DAILY' | 'WEEKLY' | 'MONTHLY';
+export type GoalStatus = "ACTIVE" | "PAUSED" | "COMPLETED" | "CANCELLED";
+export type HabitFrequency = "DAILY" | "WEEKLY" | "MONTHLY";
 
 export interface FinancialGoal {
   id: string;
@@ -382,26 +382,30 @@ export interface BudgetExcelImportCommitResponse {
 }
 
 export type MonthlyPlanItemType =
-  | 'INCOME'
-  | 'EXPENSE'
-  | 'SAVING'
-  | 'DEBT'
-  | 'TRANSFER'
-  | 'RECOVERY'
-  | 'TODO';
+  | "INCOME"
+  | "EXPENSE"
+  | "SAVING"
+  | "DEBT"
+  | "TRANSFER"
+  | "RECOVERY"
+  | "TODO";
 
-export type MonthlyPlanPriority = 'ESSENTIAL' | 'IMPORTANT' | 'OPTIONAL';
+export type MonthlyPlanPriority = "ESSENTIAL" | "IMPORTANT" | "OPTIONAL";
 
 export type MonthlyPlanStatus =
-  | 'DRAFT'
-  | 'ESTIMATED'
-  | 'SCHEDULED'
-  | 'DUE'
-  | 'PAID'
-  | 'COLLECTED'
-  | 'CANCELLED';
+  | "DRAFT"
+  | "ESTIMATED"
+  | "SCHEDULED"
+  | "DUE"
+  | "PAID"
+  | "COLLECTED"
+  | "CANCELLED";
 
-export type MonthlyPlanSource = 'MANUAL' | 'IMPORT' | 'QUICK_CAPTURE' | 'SYSTEM';
+export type MonthlyPlanSource =
+  | "MANUAL"
+  | "IMPORT"
+  | "QUICK_CAPTURE"
+  | "SYSTEM";
 
 export interface MonthlyPlanItem {
   id: string;
@@ -487,8 +491,8 @@ export interface MonthlyPlanItemUpdatePayload extends Partial<MonthlyPlanItemCre
   clearAccount?: boolean;
 }
 
-export type SuggestionConfidence = 'HIGH' | 'MEDIUM' | 'LOW' | 'NONE';
-export type QuickCaptureConfidence = Exclude<SuggestionConfidence, 'NONE'>;
+export type SuggestionConfidence = "HIGH" | "MEDIUM" | "LOW" | "NONE";
+export type QuickCaptureConfidence = Exclude<SuggestionConfidence, "NONE">;
 
 export interface SuggestedAccount {
   id: string;
@@ -551,4 +555,97 @@ export interface QuickCaptureCommitRequest {
 export interface QuickCaptureCommitResponse {
   item: MonthlyPlanItem;
   warnings: string[];
+}
+
+export type PlanExecutionStatus =
+  | "UNPRICED"
+  | "NOT_EXECUTED"
+  | "PARTIALLY_EXECUTED"
+  | "EXECUTED"
+  | "OVER_EXECUTED"
+  | "CANCELLED"
+  | "NOT_APPLICABLE";
+
+export type MonthlyPlanTransactionMatchType =
+  | "MANUAL"
+  | "SUGGESTED_ACCEPTED"
+  | "AUTO"
+  | "SYSTEM_CONVERSION";
+
+export type MonthlyPlanMatchConfidence = "HIGH" | "MEDIUM" | "LOW";
+
+export type SuggestedPlanTransactionMatchConfidence = "HIGH" | "MEDIUM" | "LOW";
+
+export interface TransactionMatch {
+  matchId: string;
+  transactionId: string;
+  matchedAmount: number;
+  matchType: MonthlyPlanTransactionMatchType;
+  confidence: MonthlyPlanMatchConfidence;
+  note?: string | null;
+}
+
+export interface PlanItemReconciliation {
+  itemId: string;
+  title: string;
+  type: MonthlyPlanItemType;
+  status: MonthlyPlanStatus;
+  categoryId: string | null;
+  accountId: string | null;
+  expectedDate?: string | null;
+  plannedAmount: number;
+  matchedAmount: number;
+  remainingAmount: number;
+  executionStatus: PlanExecutionStatus;
+  matches: TransactionMatch[];
+}
+
+export interface UnplannedTransaction {
+  transactionId: string;
+  accountId: string;
+  categoryId: string;
+  movementType: MovementType;
+  realDate: string;
+  budgetDate: string;
+  amount: number;
+  currency: string;
+  description?: string | null;
+  origin: TransactionOrigin;
+  status: TransactionStatus;
+}
+
+export interface SuggestedPlanTransactionMatch {
+  itemId: string;
+  transactionId: string;
+  suggestedAmount: number;
+  confidence: SuggestedPlanTransactionMatchConfidence;
+  score: number;
+  reasons: string[];
+}
+
+export interface MonthlyPlanReconciliationSummary {
+  profileId: string;
+  year: number;
+  month: number;
+  plannedTotal: number;
+  matchedTotal: number;
+  remainingTotal: number;
+  unplannedTransactionsTotal: number;
+  plannedItemsCount: number;
+  matchedItemsCount: number;
+  partialItemsCount: number;
+  overExecutedItemsCount: number;
+  unplannedTransactionsCount: number;
+  items: PlanItemReconciliation[];
+  unplannedTransactions: UnplannedTransaction[];
+  suggestedMatches: SuggestedPlanTransactionMatch[];
+}
+
+export interface ConfirmPlanTransactionMatchPayload {
+  itemId: string;
+  transactionId: string;
+  matchedAmount: number;
+  matchType?: MonthlyPlanTransactionMatchType;
+  confidence?: MonthlyPlanMatchConfidence;
+  note?: string | null;
 }

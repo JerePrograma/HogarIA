@@ -1,22 +1,24 @@
-import { Fragment, memo, useEffect, useMemo, useState } from 'react';
-import { getApiErrorMessage } from '../../../api/http';
-import { getMonthlyPlanSuggestions } from '../../../api/monthlyPlanSuggestionsApi';
-import { StatusBadge } from '../../../components/ui/StatusBadge';
+import { Fragment, memo, useEffect, useMemo, useState } from "react";
+import { getApiErrorMessage } from "../../../api/http";
+import { getMonthlyPlanSuggestions } from "../../../api/monthlyPlanSuggestionsApi";
+import { StatusBadge } from "../../../components/ui/StatusBadge";
 import {
   labelOrValue,
   monthlyPlanPriorityLabels,
   monthlyPlanStatusLabels,
   monthlyPlanTypeLabels,
-} from '../../../domain/financeLabels';
+} from "../../../domain/financeLabels";
 import type {
   Account,
   Category,
+  ConfirmPlanTransactionMatchPayload,
   MonthlyPlanItem,
   MonthlyPlanItemUpdatePayload,
   MonthlyPlanPriority,
+  MonthlyPlanReconciliationSummary,
   MonthlyPlanStatus,
   PlanningSuggestionResponse,
-} from '../../../domain/types';
+} from "../../../domain/types";
 import {
   canConvertPlanItem,
   formatPlanAmount,
@@ -32,28 +34,35 @@ import {
   type PlanItemSortKey,
   type StatusFilterKey,
   type TableFilterKey,
-} from '../planningUtils';
+} from "../planningUtils";
 
-export type { TableFilterKey } from '../planningUtils';
+export type { TableFilterKey } from "../planningUtils";
 
 type Props = {
   items: MonthlyPlanItem[];
+  reconciliation?: MonthlyPlanReconciliationSummary;
   accounts: Account[];
   categories: Category[];
   onConvert: (id: string) => void;
   onCancel: (id: string) => void;
   onDelete: (id: string) => void;
-  onUpdate: (id: string, payload: MonthlyPlanItemUpdatePayload) => Promise<void>;
+  onUpdate: (
+    id: string,
+    payload: MonthlyPlanItemUpdatePayload,
+  ) => Promise<void>;
   onMarkPaid: (id: string) => void;
   onMarkCollected: (id: string) => void;
+  onConfirmMatch: (payload: ConfirmPlanTransactionMatchPayload) => void;
+  onDeleteMatch: (matchId: string) => void;
   pendingActionId?: string | null;
+  pendingMatchId?: string | null;
   actionError?: string | null;
   profileId: string;
   externalFilterKey?: TableFilterKey;
   onExternalFilterChange?: (filter: TableFilterKey) => void;
 };
 
-type EditMode = 'FULL' | 'AMOUNT' | 'CONVERT';
+type EditMode = "FULL" | "AMOUNT" | "CONVERT";
 
 type EditForm = {
   title: string;
@@ -83,58 +92,70 @@ type Option = {
 };
 
 const typeOptions: Option[] = [
-  { value: 'ALL', label: 'Todos' },
-  { value: 'INCOME', label: 'Ingresos' },
-  { value: 'EXPENSE', label: 'Egresos' },
-  { value: 'DEBT', label: 'Deudas' },
-  { value: 'SAVING', label: 'Ahorros' },
-  { value: 'TRANSFER', label: 'Transferencias' },
-  { value: 'RECOVERY', label: 'Recuperos' },
-  { value: 'TODO', label: 'TODO' },
+  { value: "ALL", label: "Todos" },
+  { value: "INCOME", label: "Ingresos" },
+  { value: "EXPENSE", label: "Egresos" },
+  { value: "DEBT", label: "Deudas" },
+  { value: "SAVING", label: "Ahorros" },
+  { value: "TRANSFER", label: "Transferencias" },
+  { value: "RECOVERY", label: "Recuperos" },
+  { value: "TODO", label: "TODO" },
 ];
 
 const statusOptions: Array<{ value: StatusFilterKey; label: string }> = [
-  { value: 'ALL', label: 'Todos' },
-  { value: 'PENDING', label: 'Pendientes' },
-  { value: 'DONE', label: 'Pagados/Cobrados' },
-  { value: 'CANCELLED', label: 'Cancelados' },
+  { value: "ALL", label: "Todos" },
+  { value: "PENDING", label: "Pendientes" },
+  { value: "DONE", label: "Pagados/Cobrados" },
+  { value: "CANCELLED", label: "Cancelados" },
 ];
 
 const sortOptions: Array<{ value: PlanItemSortKey; label: string }> = [
-  { value: 'DATE', label: 'Fecha' },
-  { value: 'PRIORITY', label: 'Prioridad' },
-  { value: 'AMOUNT', label: 'Monto' },
+  { value: "DATE", label: "Fecha" },
+  { value: "PRIORITY", label: "Prioridad" },
+  { value: "AMOUNT", label: "Monto" },
 ];
 
 const externalFilterLabels: Record<TableFilterKey, string> = {
-  ALL: 'Todos',
-  UNPRICED: 'Sin monto',
-  MISSING_CLASSIFICATION: 'Sin cuenta/categoría',
-  READY_TO_CONVERT: 'Listos para convertir',
-  DUE_NEXT_7_DAYS: 'Próximos 7 días',
+  ALL: "Todos",
+  UNPRICED: "Sin monto",
+  MISSING_CLASSIFICATION: "Sin cuenta/categoría",
+  READY_TO_CONVERT: "Listos para convertir",
+  DUE_NEXT_7_DAYS: "Próximos 7 días",
+  NOT_EXECUTED: "Sin ejecutar",
+  PARTIALLY_EXECUTED: "Parciales",
+  OVER_EXECUTED: "Excedidos",
+  UNPLANNED_MOVEMENTS: "Movimientos sin plan",
+  SUGGESTED_MATCHES: "Sugerencias",
 };
 
 const toForm = (item: MonthlyPlanItem): EditForm => ({
   title: item.title,
-  expectedDate: item.expectedDate ?? '',
-  amount: item.amount == null ? '' : String(item.amount),
-  minAmount: item.minAmount == null ? '' : String(item.minAmount),
-  maxAmount: item.maxAmount == null ? '' : String(item.maxAmount),
+  expectedDate: item.expectedDate ?? "",
+  amount: item.amount == null ? "" : String(item.amount),
+  minAmount: item.minAmount == null ? "" : String(item.minAmount),
+  maxAmount: item.maxAmount == null ? "" : String(item.maxAmount),
   expectedRecoveryAmount:
-    item.expectedRecoveryAmount == null ? '' : String(item.expectedRecoveryAmount),
+    item.expectedRecoveryAmount == null
+      ? ""
+      : String(item.expectedRecoveryAmount),
   expectedRecoveryPercent:
-    item.expectedRecoveryPercent == null ? '' : String(item.expectedRecoveryPercent),
-  counterparty: item.counterparty ?? '',
+    item.expectedRecoveryPercent == null
+      ? ""
+      : String(item.expectedRecoveryPercent),
+  counterparty: item.counterparty ?? "",
   status: item.status,
   priority: item.priority,
-  accountId: item.accountId ?? '',
-  categoryId: item.categoryId ?? '',
-  installmentNumber: item.installmentNumber == null ? '' : String(item.installmentNumber),
-  installmentTotal: item.installmentTotal == null ? '' : String(item.installmentTotal),
+  accountId: item.accountId ?? "",
+  categoryId: item.categoryId ?? "",
+  installmentNumber:
+    item.installmentNumber == null ? "" : String(item.installmentNumber),
+  installmentTotal:
+    item.installmentTotal == null ? "" : String(item.installmentTotal),
 });
 
 export function MonthlyPlanItemsTable({
   items,
+  reconciliation,
   accounts,
   categories,
   onConvert,
@@ -146,15 +167,15 @@ export function MonthlyPlanItemsTable({
   pendingActionId,
   actionError,
   profileId,
-  externalFilterKey = 'ALL',
+  externalFilterKey = "ALL",
   onExternalFilterChange,
 }: Props) {
-  const [statusFilter, setStatusFilter] = useState<StatusFilterKey>('ALL');
-  const [typeFilter, setTypeFilter] = useState<string>('ALL');
-  const [sortBy, setSortBy] = useState<PlanItemSortKey>('DATE');
-  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<StatusFilterKey>("ALL");
+  const [typeFilter, setTypeFilter] = useState<string>("ALL");
+  const [sortBy, setSortBy] = useState<PlanItemSortKey>("DATE");
+  const [search, setSearch] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editMode, setEditMode] = useState<EditMode>('FULL');
+  const [editMode, setEditMode] = useState<EditMode>("FULL");
   const [form, setForm] = useState<EditForm | null>(null);
   const [editError, setEditError] = useState<string | null>(null);
   const [savingId, setSavingId] = useState<string | null>(null);
@@ -165,15 +186,49 @@ export function MonthlyPlanItemsTable({
   const accountById = useMemo(() => createLookup(accounts), [accounts]);
   const categoryById = useMemo(() => createLookup(categories), [categories]);
 
+  const reconciliationByItemId = useMemo(
+    () =>
+      new Map((reconciliation?.items ?? []).map((item) => [item.itemId, item])),
+    [reconciliation],
+  );
+
+  const suggestedItemIds = useMemo(
+    () =>
+      new Set(
+        (reconciliation?.suggestedMatches ?? []).map((match) => match.itemId),
+      ),
+    [reconciliation],
+  );
+
   const filtered = useMemo(
     () =>
       items
-        .filter((item) => matchesExternalFilter(item, externalFilterKey))
+        .filter((item) =>
+          matchesExternalFilter(
+            item,
+            externalFilterKey,
+            reconciliationByItemId,
+            suggestedItemIds,
+          ),
+        )
         .filter((item) => matchesStatusFilter(item, statusFilter))
-        .filter((item) => typeFilter === 'ALL' || item.type === typeFilter)
-        .filter((item) => matchesSearch(item, search, accountById, categoryById))
+        .filter((item) => typeFilter === "ALL" || item.type === typeFilter)
+        .filter((item) =>
+          matchesSearch(item, search, accountById, categoryById),
+        )
         .sort((a, b) => sortPlanItems(a, b, sortBy)),
-    [items, externalFilterKey, statusFilter, typeFilter, search, accountById, categoryById, sortBy],
+    [
+      items,
+      externalFilterKey,
+      reconciliationByItemId,
+      suggestedItemIds,
+      statusFilter,
+      typeFilter,
+      search,
+      accountById,
+      categoryById,
+      sortBy,
+    ],
   );
 
   const visibleStats = useMemo(() => getVisibleStats(filtered), [filtered]);
@@ -185,7 +240,11 @@ export function MonthlyPlanItemsTable({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editingId, items]);
 
-  const startEdit = (item: MonthlyPlanItem, mode: EditMode, initialForm = toForm(item)) => {
+  const startEdit = (
+    item: MonthlyPlanItem,
+    mode: EditMode,
+    initialForm = toForm(item),
+  ) => {
     setEditingId(item.id);
     setExpandedId(item.id);
     setEditMode(mode);
@@ -202,14 +261,17 @@ export function MonthlyPlanItemsTable({
   };
 
   const clearAllFilters = () => {
-    setStatusFilter('ALL');
-    setTypeFilter('ALL');
-    setSortBy('DATE');
-    setSearch('');
-    onExternalFilterChange?.('ALL');
+    setStatusFilter("ALL");
+    setTypeFilter("ALL");
+    setSortBy("DATE");
+    setSearch("");
+    onExternalFilterChange?.("ALL");
   };
 
-  const loadSuggestion = async (item: MonthlyPlanItem, sourceForm = form ?? toForm(item)) => {
+  const loadSuggestion = async (
+    item: MonthlyPlanItem,
+    sourceForm = form ?? toForm(item),
+  ) => {
     try {
       setSuggestingId(item.id);
       setEditError(null);
@@ -221,14 +283,18 @@ export function MonthlyPlanItemsTable({
         amount: parseNullableNumber(sourceForm.amount),
         minAmount: parseNullableNumber(sourceForm.minAmount),
         maxAmount: parseNullableNumber(sourceForm.maxAmount),
-        expectedRecoveryAmount: parseNullableNumber(sourceForm.expectedRecoveryAmount),
-        expectedRecoveryPercent: parseNullableNumber(sourceForm.expectedRecoveryPercent),
+        expectedRecoveryAmount: parseNullableNumber(
+          sourceForm.expectedRecoveryAmount,
+        ),
+        expectedRecoveryPercent: parseNullableNumber(
+          sourceForm.expectedRecoveryPercent,
+        ),
       });
 
       setSuggestion({ itemId: item.id, response });
     } catch {
       setSuggestion(null);
-      setEditError('No se pudo obtener sugerencias en este momento.');
+      setEditError("No se pudo obtener sugerencias en este momento.");
     } finally {
       setSuggestingId(null);
     }
@@ -236,7 +302,7 @@ export function MonthlyPlanItemsTable({
 
   const prepareSuggestionEdit = (item: MonthlyPlanItem) => {
     const initialForm = toForm(item);
-    startEdit(item, 'CONVERT', initialForm);
+    startEdit(item, "CONVERT", initialForm);
     void loadSuggestion(item, initialForm);
   };
 
@@ -273,14 +339,24 @@ export function MonthlyPlanItemsTable({
           <p className="eyebrow">Detalle</p>
           <h2>Ítems planificados</h2>
           <p className="secondary-text">
-            Priorizá el próximo paso: completar datos, confirmar pago/cobro o convertir a movimiento.
+            Priorizá el próximo paso: completar datos, confirmar pago/cobro o
+            convertir a movimiento.
           </p>
         </div>
 
-        <div className="planning-items-kpis" aria-label="Resumen de ítems visibles">
-          <span className="badge-ui badge-info">{filtered.length} visibles</span>
-          <span className="badge-ui badge-warning">{visibleStats.incomplete} incompletos</span>
-          <span className="badge-ui badge-ok">{visibleStats.convertible} convertibles</span>
+        <div
+          className="planning-items-kpis"
+          aria-label="Resumen de ítems visibles"
+        >
+          <span className="badge-ui badge-info">
+            {filtered.length} visibles
+          </span>
+          <span className="badge-ui badge-warning">
+            {visibleStats.incomplete} incompletos
+          </span>
+          <span className="badge-ui badge-ok">
+            {visibleStats.convertible} convertibles
+          </span>
         </div>
       </div>
 
@@ -319,23 +395,28 @@ export function MonthlyPlanItemsTable({
             {filtered.map((item) => {
               const isEditing = editingId === item.id && form;
               const isExpanded = expandedId === item.id;
-              const isBusy = pendingActionId === item.id || savingId === item.id;
+              const isBusy =
+                pendingActionId === item.id || savingId === item.id;
               const currentSuggestion =
-                suggestion && suggestion.itemId === item.id ? suggestion.response : null;
+                suggestion && suggestion.itemId === item.id
+                  ? suggestion.response
+                  : null;
 
               return (
                 <Fragment key={item.id}>
                   <PlanItemRow
                     item={item}
-                    accountName={accountById.get(item.accountId ?? '')?.name}
-                    categoryName={categoryById.get(item.categoryId ?? '')?.name}
+                    accountName={accountById.get(item.accountId ?? "")?.name}
+                    categoryName={categoryById.get(item.categoryId ?? "")?.name}
                     isBusy={isBusy}
                     isExpanded={isExpanded}
                     onEdit={(mode) => startEdit(item, mode)}
                     onConvert={() => onConvert(item.id)}
                     onMarkPaid={() => onMarkPaid(item.id)}
                     onMarkCollected={() => onMarkCollected(item.id)}
-                    onToggleMore={() => setExpandedId(isExpanded ? null : item.id)}
+                    onToggleMore={() =>
+                      setExpandedId(isExpanded ? null : item.id)
+                    }
                   />
 
                   {isExpanded ? (
@@ -346,7 +427,7 @@ export function MonthlyPlanItemsTable({
                       onCancel={() => onCancel(item.id)}
                       onDelete={() => onDelete(item.id)}
                       onSuggest={() => prepareSuggestionEdit(item)}
-                      onEditFull={() => startEdit(item, 'FULL')}
+                      onEditFull={() => startEdit(item, "FULL")}
                     />
                   ) : null}
 
@@ -368,8 +449,12 @@ export function MonthlyPlanItemsTable({
 
                         setForm({
                           ...form,
-                          accountId: currentSuggestion.accountSuggestion?.id ?? form.accountId,
-                          categoryId: currentSuggestion.categorySuggestion?.id ?? form.categoryId,
+                          accountId:
+                            currentSuggestion.accountSuggestion?.id ??
+                            form.accountId,
+                          categoryId:
+                            currentSuggestion.categorySuggestion?.id ??
+                            form.categoryId,
                         });
                       }}
                       onSave={() => void saveEdit(item)}
@@ -388,14 +473,16 @@ export function MonthlyPlanItemsTable({
           const isBusy = pendingActionId === item.id || savingId === item.id;
           const isEditing = editingId === item.id && form;
           const currentSuggestion =
-            suggestion && suggestion.itemId === item.id ? suggestion.response : null;
+            suggestion && suggestion.itemId === item.id
+              ? suggestion.response
+              : null;
 
           return (
             <PlanItemMobileCard
               key={item.id}
               item={item}
-              accountName={accountById.get(item.accountId ?? '')?.name}
-              categoryName={categoryById.get(item.categoryId ?? '')?.name}
+              accountName={accountById.get(item.accountId ?? "")?.name}
+              categoryName={categoryById.get(item.categoryId ?? "")?.name}
               isBusy={isBusy}
               isEditing={Boolean(isEditing)}
               form={isEditing ? form : null}
@@ -421,8 +508,10 @@ export function MonthlyPlanItemsTable({
 
                 setForm({
                   ...form,
-                  accountId: currentSuggestion.accountSuggestion?.id ?? form.accountId,
-                  categoryId: currentSuggestion.categorySuggestion?.id ?? form.categoryId,
+                  accountId:
+                    currentSuggestion.accountSuggestion?.id ?? form.accountId,
+                  categoryId:
+                    currentSuggestion.categorySuggestion?.id ?? form.categoryId,
                 });
               }}
               onRefreshSuggestion={() => void loadSuggestion(item)}
@@ -433,7 +522,8 @@ export function MonthlyPlanItemsTable({
 
       {filtered.length === 0 ? (
         <p className="mensaje-info mt-4">
-          No hay ítems que coincidan con los filtros actuales. Limpiá filtros o cambiá el período.
+          No hay ítems que coincidan con los filtros actuales. Limpiá filtros o
+          cambiá el período.
         </p>
       ) : null}
     </section>
@@ -483,7 +573,9 @@ const TableFilters = memo(function TableFilters({
           <select
             className="input-ui"
             value={statusFilter}
-            onChange={(event) => setStatusFilter(event.target.value as StatusFilterKey)}
+            onChange={(event) =>
+              setStatusFilter(event.target.value as StatusFilterKey)
+            }
           >
             {statusOptions.map((option) => (
               <option key={option.value} value={option.value}>
@@ -513,7 +605,9 @@ const TableFilters = memo(function TableFilters({
           <select
             className="input-ui"
             value={sortBy}
-            onChange={(event) => setSortBy(event.target.value as PlanItemSortKey)}
+            onChange={(event) =>
+              setSortBy(event.target.value as PlanItemSortKey)
+            }
           >
             {sortOptions.map((option) => (
               <option key={option.value} value={option.value}>
@@ -525,16 +619,22 @@ const TableFilters = memo(function TableFilters({
       </div>
 
       <div className="planning-filter-chips" aria-label="Filtros rápidos">
-        {(Object.keys(externalFilterLabels) as TableFilterKey[]).map((filter) => (
-          <button
-            key={filter}
-            type="button"
-            className={filter === externalFilterKey ? 'planning-filter-chip active' : 'planning-filter-chip'}
-            onClick={() => onExternalFilterChange?.(filter)}
-          >
-            {externalFilterLabels[filter]}
-          </button>
-        ))}
+        {(Object.keys(externalFilterLabels) as TableFilterKey[]).map(
+          (filter) => (
+            <button
+              key={filter}
+              type="button"
+              className={
+                filter === externalFilterKey
+                  ? "planning-filter-chip active"
+                  : "planning-filter-chip"
+              }
+              onClick={() => onExternalFilterChange?.(filter)}
+            >
+              {externalFilterLabels[filter]}
+            </button>
+          ),
+        )}
 
         <button type="button" className="boton-fantasma" onClick={onClearAll}>
           Limpiar
@@ -568,7 +668,13 @@ function PlanItemRow({
   onToggleMore: () => void;
 }) {
   return (
-    <tr className={isDueNextDays(item.expectedDate, 7) ? 'plan-item-row plan-item-row-due' : 'plan-item-row'}>
+    <tr
+      className={
+        isDueNextDays(item.expectedDate, 7)
+          ? "plan-item-row plan-item-row-due"
+          : "plan-item-row"
+      }
+    >
       <td>{formatDateOrDash(item.expectedDate)}</td>
 
       <td>
@@ -587,8 +693,12 @@ function PlanItemRow({
 
       <td>
         <div className="planning-status-stack">
-          <StatusBadge label={labelOrValue(monthlyPlanStatusLabels, item.status)} />
-          <StatusBadge label={labelOrValue(monthlyPlanPriorityLabels, item.priority)} />
+          <StatusBadge
+            label={labelOrValue(monthlyPlanStatusLabels, item.status)}
+          />
+          <StatusBadge
+            label={labelOrValue(monthlyPlanPriorityLabels, item.priority)}
+          />
         </div>
       </td>
 
@@ -668,7 +778,11 @@ function PlanItemMobileCard({
   return (
     <article className="plan-item-card">
       <div className="plan-item-card-header">
-        <PlanItemTitle item={item} accountName={accountName} categoryName={categoryName} />
+        <PlanItemTitle
+          item={item}
+          accountName={accountName}
+          categoryName={categoryName}
+        />
 
         <span className="plan-item-score" title="Completitud operativa">
           {getPlanItemCompletionScore(item)}%
@@ -703,8 +817,12 @@ function PlanItemMobileCard({
       </dl>
 
       <div className="planning-status-stack">
-        <StatusBadge label={labelOrValue(monthlyPlanStatusLabels, item.status)} />
-        <StatusBadge label={labelOrValue(monthlyPlanPriorityLabels, item.priority)} />
+        <StatusBadge
+          label={labelOrValue(monthlyPlanStatusLabels, item.status)}
+        />
+        <StatusBadge
+          label={labelOrValue(monthlyPlanPriorityLabels, item.priority)}
+        />
       </div>
 
       <MissingLabels item={item} />
@@ -724,17 +842,27 @@ function PlanItemMobileCard({
           type="button"
           className="boton-secundario"
           onClick={onCancel}
-          disabled={isBusy || item.status === 'CANCELLED'}
+          disabled={isBusy || item.status === "CANCELLED"}
         >
           Cancelar
         </button>
 
-        <button type="button" className="boton-danger" onClick={onDelete} disabled={isBusy}>
+        <button
+          type="button"
+          className="boton-danger"
+          onClick={onDelete}
+          disabled={isBusy}
+        >
           Eliminar
         </button>
 
-        <button type="button" className="boton-secundario" onClick={onSuggest} disabled={isBusy}>
-          {suggesting ? 'Sugiriendo...' : 'Sugerir cuenta/categoría'}
+        <button
+          type="button"
+          className="boton-secundario"
+          onClick={onSuggest}
+          disabled={isBusy}
+        >
+          {suggesting ? "Sugiriendo..." : "Sugerir cuenta/categoría"}
         </button>
       </div>
 
@@ -776,10 +904,14 @@ function PlanItemTitle({
       <strong>{item.title}</strong>
 
       <span className="compact-muted">
-        {[item.counterparty, accountName, categoryName].filter(Boolean).join(' · ') || 'Sin detalle'}
+        {[item.counterparty, accountName, categoryName]
+          .filter(Boolean)
+          .join(" · ") || "Sin detalle"}
       </span>
 
-      {item.transactionId ? <span className="badge-ui badge-ok">Convertido</span> : null}
+      {item.transactionId ? (
+        <span className="badge-ui badge-ok">Convertido</span>
+      ) : null}
     </div>
   );
 }
@@ -821,48 +953,60 @@ function PlanItemActions({
     <div className="action-row planning-row-actions">
       <button
         type="button"
-        className={nextAction === 'EDIT' ? 'boton-principal' : 'boton-secundario'}
-        onClick={() => onEdit('FULL')}
+        className={
+          nextAction === "EDIT" ? "boton-principal" : "boton-secundario"
+        }
+        onClick={() => onEdit("FULL")}
         disabled={isBusy}
       >
         Editar
       </button>
 
-      {nextAction === 'COMPLETE_AMOUNT' ? (
+      {nextAction === "COMPLETE_AMOUNT" ? (
         <button
           type="button"
           className="boton-principal"
-          onClick={() => onEdit('AMOUNT')}
+          onClick={() => onEdit("AMOUNT")}
           disabled={isBusy}
         >
           Completar monto
         </button>
       ) : null}
 
-      {nextAction === 'PREPARE_CONVERSION' ? (
+      {nextAction === "PREPARE_CONVERSION" ? (
         <button
           type="button"
           className="boton-principal"
-          onClick={() => onEdit('CONVERT')}
+          onClick={() => onEdit("CONVERT")}
           disabled={isBusy}
         >
           Preparar conversión
         </button>
       ) : null}
 
-      {nextAction === 'CONVERT' ? (
-        <button type="button" className="boton-principal" onClick={onConvert} disabled={isBusy}>
+      {nextAction === "CONVERT" ? (
+        <button
+          type="button"
+          className="boton-principal"
+          onClick={onConvert}
+          disabled={isBusy}
+        >
           Convertir
         </button>
       ) : null}
 
-      {nextAction === 'MARK_PAID' ? (
-        <button type="button" className="boton-secundario" onClick={onMarkPaid} disabled={isBusy}>
+      {nextAction === "MARK_PAID" ? (
+        <button
+          type="button"
+          className="boton-secundario"
+          onClick={onMarkPaid}
+          disabled={isBusy}
+        >
           Marcar pagado
         </button>
       ) : null}
 
-      {nextAction === 'MARK_COLLECTED' ? (
+      {nextAction === "MARK_COLLECTED" ? (
         <button
           type="button"
           className="boton-secundario"
@@ -874,8 +1018,13 @@ function PlanItemActions({
       ) : null}
 
       {onToggleMore ? (
-        <button type="button" className="boton-fantasma" onClick={onToggleMore} disabled={isBusy}>
-          {isExpanded ? 'Ocultar acciones' : 'Más'}
+        <button
+          type="button"
+          className="boton-fantasma"
+          onClick={onToggleMore}
+          disabled={isBusy}
+        >
+          {isExpanded ? "Ocultar acciones" : "Más"}
         </button>
       ) : null}
     </div>
@@ -907,20 +1056,35 @@ function ExpandedActionsRow({
             type="button"
             className="boton-secundario"
             onClick={onCancel}
-            disabled={isBusy || item.status === 'CANCELLED'}
+            disabled={isBusy || item.status === "CANCELLED"}
           >
             Cancelar
           </button>
 
-          <button type="button" className="boton-danger" onClick={onDelete} disabled={isBusy}>
+          <button
+            type="button"
+            className="boton-danger"
+            onClick={onDelete}
+            disabled={isBusy}
+          >
             Eliminar
           </button>
 
-          <button type="button" className="boton-secundario" onClick={onSuggest} disabled={isBusy}>
-            {isSuggesting ? 'Sugiriendo...' : 'Sugerir cuenta/categoría'}
+          <button
+            type="button"
+            className="boton-secundario"
+            onClick={onSuggest}
+            disabled={isBusy}
+          >
+            {isSuggesting ? "Sugiriendo..." : "Sugerir cuenta/categoría"}
           </button>
 
-          <button type="button" className="boton-secundario" onClick={onEditFull} disabled={isBusy}>
+          <button
+            type="button"
+            className="boton-secundario"
+            onClick={onEditFull}
+            disabled={isBusy}
+          >
             Editar completo
           </button>
         </div>
@@ -973,11 +1137,11 @@ function EditPanel({
   onClose,
 }: EditPanelProps) {
   const title =
-    editMode === 'AMOUNT'
-      ? 'Completar monto'
-      : editMode === 'CONVERT'
-        ? 'Preparar conversión'
-        : 'Editar ítem';
+    editMode === "AMOUNT"
+      ? "Completar monto"
+      : editMode === "CONVERT"
+        ? "Preparar conversión"
+        : "Editar ítem";
 
   return (
     <div className="panel-muted planning-edit-panel">
@@ -986,34 +1150,38 @@ function EditPanel({
           <p className="eyebrow">Edición</p>
           <h3>{title}</h3>
           <p className="secondary-text">
-            {editMode === 'CONVERT'
-              ? 'Para convertir, necesitás monto exacto, cuenta y categoría.'
-              : 'Actualizá sólo los datos necesarios. Los campos vacíos limpian valores existentes.'}
+            {editMode === "CONVERT"
+              ? "Para convertir, necesitás monto exacto, cuenta y categoría."
+              : "Actualizá sólo los datos necesarios. Los campos vacíos limpian valores existentes."}
           </p>
         </div>
       </div>
 
-      {editMode !== 'AMOUNT' ? (
+      {editMode !== "AMOUNT" ? (
         <label>
           Título
           <input
             className="input-ui"
             placeholder="Ej: Alquiler, sueldo, cuota del préstamo"
             value={form.title}
-            onChange={(event) => setForm({ ...form, title: event.target.value })}
+            onChange={(event) =>
+              setForm({ ...form, title: event.target.value })
+            }
           />
         </label>
       ) : null}
 
       <div className="form-row">
-        {editMode !== 'CONVERT' ? (
+        {editMode !== "CONVERT" ? (
           <label>
             Fecha esperada
             <input
               className="input-ui"
               type="date"
               value={form.expectedDate}
-              onChange={(event) => setForm({ ...form, expectedDate: event.target.value })}
+              onChange={(event) =>
+                setForm({ ...form, expectedDate: event.target.value })
+              }
             />
           </label>
         ) : null}
@@ -1027,11 +1195,13 @@ function EditPanel({
             min="0"
             placeholder="Monto exacto"
             value={form.amount}
-            onChange={(event) => setForm({ ...form, amount: event.target.value })}
+            onChange={(event) =>
+              setForm({ ...form, amount: event.target.value })
+            }
           />
         </label>
 
-        {editMode !== 'CONVERT' ? (
+        {editMode !== "CONVERT" ? (
           <>
             <label>
               Monto mínimo
@@ -1042,7 +1212,9 @@ function EditPanel({
                 min="0"
                 placeholder="Monto mínimo"
                 value={form.minAmount}
-                onChange={(event) => setForm({ ...form, minAmount: event.target.value })}
+                onChange={(event) =>
+                  setForm({ ...form, minAmount: event.target.value })
+                }
               />
             </label>
 
@@ -1055,14 +1227,16 @@ function EditPanel({
                 min="0"
                 placeholder="Monto máximo"
                 value={form.maxAmount}
-                onChange={(event) => setForm({ ...form, maxAmount: event.target.value })}
+                onChange={(event) =>
+                  setForm({ ...form, maxAmount: event.target.value })
+                }
               />
             </label>
           </>
         ) : null}
       </div>
 
-      {editMode === 'FULL' ? (
+      {editMode === "FULL" ? (
         <>
           <div className="form-row">
             <label>
@@ -1075,7 +1249,10 @@ function EditPanel({
                 placeholder="Recupero monto"
                 value={form.expectedRecoveryAmount}
                 onChange={(event) =>
-                  setForm({ ...form, expectedRecoveryAmount: event.target.value })
+                  setForm({
+                    ...form,
+                    expectedRecoveryAmount: event.target.value,
+                  })
                 }
               />
             </label>
@@ -1091,7 +1268,10 @@ function EditPanel({
                 placeholder="0 a 100"
                 value={form.expectedRecoveryPercent}
                 onChange={(event) =>
-                  setForm({ ...form, expectedRecoveryPercent: event.target.value })
+                  setForm({
+                    ...form,
+                    expectedRecoveryPercent: event.target.value,
+                  })
                 }
               />
             </label>
@@ -1102,7 +1282,9 @@ function EditPanel({
                 className="input-ui"
                 placeholder="Proveedor, cliente, persona, entidad"
                 value={form.counterparty}
-                onChange={(event) => setForm({ ...form, counterparty: event.target.value })}
+                onChange={(event) =>
+                  setForm({ ...form, counterparty: event.target.value })
+                }
               />
             </label>
           </div>
@@ -1117,7 +1299,9 @@ function EditPanel({
                 min="1"
                 placeholder="Ej: 2"
                 value={form.installmentNumber}
-                onChange={(event) => setForm({ ...form, installmentNumber: event.target.value })}
+                onChange={(event) =>
+                  setForm({ ...form, installmentNumber: event.target.value })
+                }
               />
             </label>
 
@@ -1130,7 +1314,9 @@ function EditPanel({
                 min="1"
                 placeholder="Ej: 12"
                 value={form.installmentTotal}
-                onChange={(event) => setForm({ ...form, installmentTotal: event.target.value })}
+                onChange={(event) =>
+                  setForm({ ...form, installmentTotal: event.target.value })
+                }
               />
             </label>
           </div>
@@ -1143,7 +1329,9 @@ function EditPanel({
           <select
             className="input-ui"
             value={form.accountId}
-            onChange={(event) => setForm({ ...form, accountId: event.target.value })}
+            onChange={(event) =>
+              setForm({ ...form, accountId: event.target.value })
+            }
           >
             <option value="">Sin cuenta</option>
             {accounts.map((account) => (
@@ -1159,7 +1347,9 @@ function EditPanel({
           <select
             className="input-ui"
             value={form.categoryId}
-            onChange={(event) => setForm({ ...form, categoryId: event.target.value })}
+            onChange={(event) =>
+              setForm({ ...form, categoryId: event.target.value })
+            }
           >
             <option value="">Sin categoría</option>
             {categories.map((category) => (
@@ -1170,7 +1360,7 @@ function EditPanel({
           </select>
         </label>
 
-        {editMode === 'FULL' ? (
+        {editMode === "FULL" ? (
           <>
             <label>
               Estado
@@ -1184,11 +1374,13 @@ function EditPanel({
                   })
                 }
               >
-                {Object.entries(monthlyPlanStatusLabels).map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
+                {Object.entries(monthlyPlanStatusLabels).map(
+                  ([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ),
+                )}
               </select>
             </label>
 
@@ -1204,11 +1396,13 @@ function EditPanel({
                   })
                 }
               >
-                {Object.entries(monthlyPlanPriorityLabels).map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
+                {Object.entries(monthlyPlanPriorityLabels).map(
+                  ([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ),
+                )}
               </select>
             </label>
           </>
@@ -1218,7 +1412,10 @@ function EditPanel({
       {editError ? <p className="mensaje-error">{editError}</p> : null}
 
       {suggestion ? (
-        <SuggestionBox suggestion={suggestion} onApplySuggestion={onApplySuggestion} />
+        <SuggestionBox
+          suggestion={suggestion}
+          onApplySuggestion={onApplySuggestion}
+        />
       ) : null}
 
       <div className="table-actions">
@@ -1228,21 +1425,32 @@ function EditPanel({
           onClick={onSuggest}
           disabled={saving || suggesting}
         >
-          {suggesting ? 'Sugiriendo...' : 'Sugerir cuenta/categoría'}
+          {suggesting ? "Sugiriendo..." : "Sugerir cuenta/categoría"}
         </button>
 
-        <button type="button" className="boton-principal" onClick={onSave} disabled={saving}>
-          {saving ? 'Guardando...' : 'Guardar'}
+        <button
+          type="button"
+          className="boton-principal"
+          onClick={onSave}
+          disabled={saving}
+        >
+          {saving ? "Guardando..." : "Guardar"}
         </button>
 
-        <button type="button" className="boton-secundario" onClick={onClose} disabled={saving}>
+        <button
+          type="button"
+          className="boton-secundario"
+          onClick={onClose}
+          disabled={saving}
+        >
           Cancelar
         </button>
       </div>
 
-      {item.type === 'TODO' ? (
+      {item.type === "TODO" ? (
         <p className="mensaje-warning">
-          Este ítem es TODO: puede planificarse, pero no debería convertirse a movimiento financiero.
+          Este ítem es TODO: puede planificarse, pero no debería convertirse a
+          movimiento financiero.
         </p>
       ) : null}
     </div>
@@ -1256,21 +1464,29 @@ function SuggestionBox({
   suggestion: PlanningSuggestionResponse;
   onApplySuggestion: () => void;
 }) {
-  const hasSuggestion = suggestion.confidence !== 'NONE';
+  const hasSuggestion = suggestion.confidence !== "NONE";
 
   return (
     <div className="surface-inset planning-suggestion-box">
       <div>
-        <strong>{hasSuggestion ? 'Sugerencias disponibles' : 'Sin historial suficiente'}</strong>
+        <strong>
+          {hasSuggestion
+            ? "Sugerencias disponibles"
+            : "Sin historial suficiente"}
+        </strong>
         <p className="secondary-text">
           {hasSuggestion
-            ? 'Podés aplicar cuenta y categoría sugeridas según historial.'
-            : 'No encontré datos confiables para inferir cuenta o categoría.'}
+            ? "Podés aplicar cuenta y categoría sugeridas según historial."
+            : "No encontré datos confiables para inferir cuenta o categoría."}
         </p>
       </div>
 
       {hasSuggestion ? (
-        <button type="button" className="boton-secundario" onClick={onApplySuggestion}>
+        <button
+          type="button"
+          className="boton-secundario"
+          onClick={onApplySuggestion}
+        >
           Aplicar sugerencia
         </button>
       ) : null}
@@ -1290,52 +1506,56 @@ function validateEditForm(form: EditForm): string | null {
   const amount = parseNullableNumber(form.amount);
   const minAmount = parseNullableNumber(form.minAmount);
   const maxAmount = parseNullableNumber(form.maxAmount);
-  const expectedRecoveryAmount = parseNullableNumber(form.expectedRecoveryAmount);
-  const expectedRecoveryPercent = parseNullableNumber(form.expectedRecoveryPercent);
+  const expectedRecoveryAmount = parseNullableNumber(
+    form.expectedRecoveryAmount,
+  );
+  const expectedRecoveryPercent = parseNullableNumber(
+    form.expectedRecoveryPercent,
+  );
   const installmentNumber = parseNullableNumber(form.installmentNumber);
   const installmentTotal = parseNullableNumber(form.installmentTotal);
 
   if (!form.title.trim()) {
-    return 'El título no puede quedar vacío.';
+    return "El título no puede quedar vacío.";
   }
 
   if (amount != null && amount < 0) {
-    return 'El monto exacto no puede ser negativo.';
+    return "El monto exacto no puede ser negativo.";
   }
 
   if (minAmount != null && minAmount < 0) {
-    return 'El monto mínimo no puede ser negativo.';
+    return "El monto mínimo no puede ser negativo.";
   }
 
   if (maxAmount != null && maxAmount < 0) {
-    return 'El monto máximo no puede ser negativo.';
+    return "El monto máximo no puede ser negativo.";
   }
 
   if (minAmount != null && maxAmount != null && minAmount > maxAmount) {
-    return 'El monto mínimo no puede superar al máximo.';
+    return "El monto mínimo no puede superar al máximo.";
   }
 
   if (expectedRecoveryAmount != null && expectedRecoveryAmount < 0) {
-    return 'El recupero por monto no puede ser negativo.';
+    return "El recupero por monto no puede ser negativo.";
   }
 
   if (
     expectedRecoveryPercent != null &&
     (expectedRecoveryPercent < 0 || expectedRecoveryPercent > 100)
   ) {
-    return 'El recupero porcentual debe estar entre 0 y 100.';
+    return "El recupero porcentual debe estar entre 0 y 100.";
   }
 
   if (expectedRecoveryAmount != null && expectedRecoveryPercent != null) {
-    return 'Usá recupero por monto o por porcentaje, no ambos.';
+    return "Usá recupero por monto o por porcentaje, no ambos.";
   }
 
   if (installmentNumber != null && installmentNumber < 1) {
-    return 'El número de cuota debe ser mayor a cero.';
+    return "El número de cuota debe ser mayor a cero.";
   }
 
   if (installmentTotal != null && installmentTotal < 1) {
-    return 'El total de cuotas debe ser mayor a cero.';
+    return "El total de cuotas debe ser mayor a cero.";
   }
 
   if (
@@ -1343,7 +1563,7 @@ function validateEditForm(form: EditForm): string | null {
     installmentTotal != null &&
     installmentNumber > installmentTotal
   ) {
-    return 'La cuota no puede superar el total de cuotas.';
+    return "La cuota no puede superar el total de cuotas.";
   }
 
   return null;
@@ -1356,8 +1576,12 @@ function buildUpdatePayload(
   const amount = parseNullableNumber(form.amount);
   const minAmount = parseNullableNumber(form.minAmount);
   const maxAmount = parseNullableNumber(form.maxAmount);
-  const expectedRecoveryAmount = parseNullableNumber(form.expectedRecoveryAmount);
-  const expectedRecoveryPercent = parseNullableNumber(form.expectedRecoveryPercent);
+  const expectedRecoveryAmount = parseNullableNumber(
+    form.expectedRecoveryAmount,
+  );
+  const expectedRecoveryPercent = parseNullableNumber(
+    form.expectedRecoveryPercent,
+  );
   const installmentNumber = parseNullableNumber(form.installmentNumber);
   const installmentTotal = parseNullableNumber(form.installmentTotal);
 
@@ -1365,8 +1589,8 @@ function buildUpdatePayload(
   const hasRange = minAmount != null || maxAmount != null;
 
   const clearInstallment =
-    form.installmentNumber.trim() === '' &&
-    form.installmentTotal.trim() === '' &&
+    form.installmentNumber.trim() === "" &&
+    form.installmentTotal.trim() === "" &&
     (item.installmentNumber != null || item.installmentTotal != null);
 
   return {
@@ -1391,17 +1615,20 @@ function buildUpdatePayload(
     clearAmount: !hasExactAmount && (item.amount != null || hasRange),
     clearRange:
       hasExactAmount ||
-      (form.minAmount.trim() === '' &&
-        form.maxAmount.trim() === '' &&
+      (form.minAmount.trim() === "" &&
+        form.maxAmount.trim() === "" &&
         (item.minAmount != null || item.maxAmount != null)),
     clearRecovery:
-      form.expectedRecoveryAmount.trim() === '' &&
-      form.expectedRecoveryPercent.trim() === '' &&
-      (item.expectedRecoveryAmount != null || item.expectedRecoveryPercent != null),
-    clearExpectedDate: form.expectedDate.trim() === '' && Boolean(item.expectedDate),
-    clearCounterparty: form.counterparty.trim() === '' && Boolean(item.counterparty),
-    clearAccount: form.accountId.trim() === '' && Boolean(item.accountId),
-    clearCategory: form.categoryId.trim() === '' && Boolean(item.categoryId),
+      form.expectedRecoveryAmount.trim() === "" &&
+      form.expectedRecoveryPercent.trim() === "" &&
+      (item.expectedRecoveryAmount != null ||
+        item.expectedRecoveryPercent != null),
+    clearExpectedDate:
+      form.expectedDate.trim() === "" && Boolean(item.expectedDate),
+    clearCounterparty:
+      form.counterparty.trim() === "" && Boolean(item.counterparty),
+    clearAccount: form.accountId.trim() === "" && Boolean(item.accountId),
+    clearCategory: form.categoryId.trim() === "" && Boolean(item.categoryId),
     ...(clearInstallment ? { clearInstallment: true } : {}),
   };
 }
@@ -1411,7 +1638,7 @@ function parseNullableNumber(value: string): number | null {
     return null;
   }
 
-  const normalized = value.replace(',', '.');
+  const normalized = value.replace(",", ".");
   const parsed = Number(normalized);
 
   return Number.isFinite(parsed) ? parsed : null;
@@ -1429,8 +1656,8 @@ function matchesSearch(
     return true;
   }
 
-  const accountName = accountById.get(item.accountId ?? '')?.name ?? '';
-  const categoryName = categoryById.get(item.categoryId ?? '')?.name ?? '';
+  const accountName = accountById.get(item.accountId ?? "")?.name ?? "";
+  const categoryName = categoryById.get(item.categoryId ?? "")?.name ?? "";
 
   return normalizeSearch(
     [
@@ -1444,26 +1671,33 @@ function matchesSearch(
       categoryName,
     ]
       .filter(Boolean)
-      .join(' '),
+      .join(" "),
   ).includes(search);
 }
 
 function normalizeSearch(value: string): string {
   return value
     .trim()
-    .toLocaleLowerCase('es-AR')
-    .normalize('NFD')
-    .replace(/\p{Diacritic}/gu, '');
+    .toLocaleLowerCase("es-AR")
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "");
 }
 
 function createLookup<T extends { id: string }>(items: T[]): Map<string, T> {
   return new Map(items.map((item) => [item.id, item]));
 }
 
-function getVisibleStats(items: MonthlyPlanItem[]): { incomplete: number; convertible: number } {
+function getVisibleStats(items: MonthlyPlanItem[]): {
+  incomplete: number;
+  convertible: number;
+} {
   return items.reduce(
     (acc, item) => ({
-      incomplete: acc.incomplete + (getPlanItemMissingLabels(item).some((label) => label.startsWith('Sin')) ? 1 : 0),
+      incomplete:
+        acc.incomplete +
+        (getPlanItemMissingLabels(item).some((label) => label.startsWith("Sin"))
+          ? 1
+          : 0),
       convertible: acc.convertible + (canConvertPlanItem(item) ? 1 : 0),
     }),
     { incomplete: 0, convertible: 0 },
@@ -1472,7 +1706,7 @@ function getVisibleStats(items: MonthlyPlanItem[]): { incomplete: number; conver
 
 function formatDateOrDash(value: string | null | undefined): string {
   if (!value) {
-    return '-';
+    return "-";
   }
 
   return value;
