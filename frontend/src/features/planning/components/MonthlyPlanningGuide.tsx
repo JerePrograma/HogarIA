@@ -1,62 +1,42 @@
 import { StatusBadge } from '../../../components/ui/StatusBadge';
 import type { MonthlyPlanSummary } from '../../../domain/types';
+import {
+  canConvertPlanItem,
+  isDueNextDays,
+  isMissingClassificationPlanItem,
+  isUnpricedPlanItem,
+} from '../planningUtils';
 
 type Props = {
   summary?: MonthlyPlanSummary;
 };
 
+type GuideStep = {
+  title: string;
+  text: string;
+};
+
+const steps: GuideStep[] = [
+  {
+    title: 'Cargar',
+    text: 'Anotá ingresos, gastos o pendientes con una frase simple.',
+  },
+  {
+    title: 'Revisar',
+    text: 'Confirmá fecha, monto, estado y prioridad.',
+  },
+  {
+    title: 'Completar',
+    text: 'Agregá cuenta/categoría o usá sugerencias.',
+  },
+  {
+    title: 'Confirmar',
+    text: 'Marcá pagado/cobrado o convertí a movimiento real.',
+  },
+];
+
 export function MonthlyPlanningGuide({ summary }: Props) {
-  const items = summary?.items ?? [];
-  const hasItems = items.length > 0;
-
-  const hasMissingAccountOrCategory = items.some(
-    (item) =>
-      !item.transactionId &&
-      item.status !== 'CANCELLED' &&
-      (item.accountId == null || item.categoryId == null),
-  );
-
-  const hasConvertibleOrPending =
-    items.some(
-      (item) =>
-        item.status !== 'CANCELLED' &&
-        !item.transactionId &&
-        item.amount != null &&
-        item.accountId &&
-        item.categoryId,
-    ) ||
-    (summary?.pendingExpense ?? 0) > 0 ||
-    (summary?.pendingIncome ?? 0) > 0;
-
-  const hasUnpriced = (summary?.unpricedCount ?? 0) > 0;
-
-  let activeStep = 1;
-  let doneLabel: string | null = null;
-
-  if (!hasItems) activeStep = 1;
-  else if (hasUnpriced) activeStep = 2;
-  else if (hasMissingAccountOrCategory) activeStep = 3;
-  else if (hasConvertibleOrPending) activeStep = 4;
-  else doneLabel = 'Mes ordenado';
-
-  const steps = [
-    {
-      title: 'Cargar',
-      text: 'Anotá ingresos, gastos o pendientes con una frase simple.',
-    },
-    {
-      title: 'Revisar',
-      text: 'Confirmá fecha, monto, estado y prioridad.',
-    },
-    {
-      title: 'Completar',
-      text: 'Agregá cuenta/categoría o usá sugerencias.',
-    },
-    {
-      title: 'Confirmar',
-      text: 'Marcá pagado/cobrado o convertí a movimiento real.',
-    },
-  ];
+  const model = buildGuideModel(summary);
 
   return (
     <section className="panel">
@@ -64,15 +44,18 @@ export function MonthlyPlanningGuide({ summary }: Props) {
         <div>
           <p className="eyebrow">Flujo sugerido</p>
           <h2>Paso a paso del mes</h2>
+          <p className="muted">
+            Usá esta guía como control rápido para cerrar el período sin huecos operativos.
+          </p>
         </div>
 
-        {doneLabel ? <StatusBadge tone="ok" label={doneLabel} /> : null}
+        {model.doneLabel ? <StatusBadge tone="ok" label={model.doneLabel} /> : null}
       </div>
 
       <div className="guide-steps">
         {steps.map((step, index) => {
           const stepNumber = index + 1;
-          const isActive = !doneLabel && activeStep === stepNumber;
+          const isActive = !model.doneLabel && model.activeStep === stepNumber;
 
           return (
             <article
@@ -88,4 +71,37 @@ export function MonthlyPlanningGuide({ summary }: Props) {
       </div>
     </section>
   );
+}
+
+function buildGuideModel(summary?: MonthlyPlanSummary): {
+  activeStep: number;
+  doneLabel: string | null;
+} {
+  const items = summary?.items ?? [];
+
+  if (items.length === 0) {
+    return { activeStep: 1, doneLabel: null };
+  }
+
+  if ((summary?.unpricedCount ?? 0) > 0 || items.some(isUnpricedPlanItem)) {
+    return { activeStep: 2, doneLabel: null };
+  }
+
+  if (items.some(isMissingClassificationPlanItem)) {
+    return { activeStep: 3, doneLabel: null };
+  }
+
+  const hasConvertible = items.some(canConvertPlanItem);
+  const hasDueSoon = items.some((item) => isDueNextDays(item.expectedDate, 7));
+
+  if (
+    hasConvertible ||
+    hasDueSoon ||
+    (summary?.pendingExpense ?? 0) > 0 ||
+    (summary?.pendingIncome ?? 0) > 0
+  ) {
+    return { activeStep: 4, doneLabel: null };
+  }
+
+  return { activeStep: 4, doneLabel: 'Mes ordenado' };
 }
