@@ -1,4 +1,6 @@
 export function buildPlanningPath(path: string, params: URLSearchParams): string {
-  const q = params.toString();
-  return q ? `${path}?${q}` : path;
+  const query = params.toString();
+  if (!query) return path;
+  const hasQuery = path.includes('?');
+  return `${path}${hasQuery ? '&' : '?'}${query}`;
 }
