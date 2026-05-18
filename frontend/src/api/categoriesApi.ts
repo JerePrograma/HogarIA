@@ -19,7 +19,7 @@ export const listCategories = (
   includeGlobal: boolean,
 ): Promise<Category[]> =>
   http
-    .get(`/api/profiles/${profileId}/categories`, {
+    .get(`/profiles/${profileId}/categories`, {
       params: { includeGlobal },
     })
     .then((response) => response.data);
@@ -29,17 +29,17 @@ export const createCategory = (
   payload: CategoryCreateRequest,
 ): Promise<Category> =>
   http
-    .post(`/api/profiles/${profileId}/categories`, payload)
+    .post(`/profiles/${profileId}/categories`, payload)
     .then((response) => response.data);
 
 export const getCategory = (id: string): Promise<Category> =>
-  http.get(`/api/categories/${id}`).then((response) => response.data);
+  http.get(`/categories/${id}`).then((response) => response.data);
 
 export const updateCategory = (
   id: string,
   payload: CategoryUpdateRequest,
 ): Promise<Category> =>
-  http.put(`/api/categories/${id}`, payload).then((response) => response.data);
+  http.put(`/categories/${id}`, payload).then((response) => response.data);
 
 export const deleteCategory = (id: string): Promise<void> =>
-  http.delete(`/api/categories/${id}`).then((response) => response.data);
+  http.delete(`/categories/${id}`).then((response) => response.data);

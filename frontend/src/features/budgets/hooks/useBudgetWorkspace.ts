@@ -4,12 +4,12 @@ import {
   getBudgetYear,
   getBudgetMonth,
   getBudgetComparison,
-} from "../api/budgetsApi";
-import { listCategories } from "../api/categoriesApi";
-import { Category, BudgetCategoryItem } from "../domain/types";
-import { isNotFound } from "../features/budgets/budgetErrors";
-import { budgetQueryKeys } from "../features/budgets/budgetQueryKeys";
-import { isBudgetableCategory } from "../features/budgets/budgetRules";
+} from "../../../api/budgetsApi";
+import { listCategories } from "../../../api/categoriesApi";
+import { Category, BudgetCategoryItem } from "../../../domain/types";
+import { isNotFound } from "../budgetErrors";
+import { budgetQueryKeys } from "../budgetQueryKeys";
+import { isBudgetableCategory } from "../budgetRules";
 
 export function useBudgetWorkspace(
   profileId: string,

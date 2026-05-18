@@ -13,10 +13,10 @@ export interface HabitCheckinRequest {
 }
 
 export const listHabits = (profileId: string) =>
-  http.get<Habit[]>(`/api/profiles/${profileId}/habits`).then((r) => r.data);
+  http.get<Habit[]>(`/profiles/${profileId}/habits`).then((r) => r.data);
 
 export const createHabit = (profileId: string, payload: HabitCreateRequest) =>
-  http.post<Habit>(`/api/profiles/${profileId}/habits`, payload).then((r) => r.data);
+  http.post<Habit>(`/profiles/${profileId}/habits`, payload).then((r) => r.data);
 
 export const upsertHabitCheckin = (
   profileId: string,
@@ -24,4 +24,4 @@ export const upsertHabitCheckin = (
   date: string,
   payload: HabitCheckinRequest,
 ) =>
-  http.put<HabitCheckin>(`/api/profiles/${profileId}/habits/${habitId}/checkins/${date}`, payload).then((r) => r.data);
+  http.put<HabitCheckin>(`/profiles/${profileId}/habits/${habitId}/checkins/${date}`, payload).then((r) => r.data);
