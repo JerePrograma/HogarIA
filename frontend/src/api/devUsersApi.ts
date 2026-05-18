@@ -1,17 +1,29 @@
 import { http } from './http';
-import type { DevUser } from '../domain/types';
 
-export interface DevUserCreateRequest {
-  fullName: string;
+export type DevUser = {
+  id: string;
   email: string;
-  password: string;
-}
+  displayName?: string | null;
+};
 
-export const listDevUsers = (): Promise<DevUser[]> =>
-  http.get<DevUser[]>('/dev/users').then((response) => response.data);
+export type DevUserCreateRequest = {
+  email: string;
+  displayName?: string | null;
+};
 
-export const createDevUser = (payload: DevUserCreateRequest): Promise<DevUser> =>
-  http.post<DevUser>('/dev/users', payload).then((response) => response.data);
+export const createDevUser = async (
+  payload: DevUserCreateRequest,
+): Promise<DevUser> => {
+  const { data } = await http.post<DevUser>('/api/dev/users', payload);
+  return data;
+};
 
-export const getDevUser = (id: string): Promise<DevUser> =>
-  http.get<DevUser>(`/dev/users/${id}`).then((response) => response.data);
+export const listDevUsers = async (): Promise<DevUser[]> => {
+  const { data } = await http.get<DevUser[]>('/api/dev/users');
+  return data;
+};
+
+export const getDevUser = async (id: string): Promise<DevUser> => {
+  const { data } = await http.get<DevUser>(`/api/dev/users/${id}`);
+  return data;
+};
