@@ -29,14 +29,9 @@ export type MovementType =
 
 export type TransactionOrigin = 'MANUAL' | 'IMPORT' | 'RECURRENT' | 'SYSTEM';
 export type TransactionStatus = 'CONFIRMED' | 'PENDING' | 'IGNORED';
-
 export type BudgetComparisonStatus = 'OK' | 'WARNING' | 'EXCEEDED';
-
-export type FinancialHealth =
-  | 'EXCELLENT'
-  | 'HEALTHY'
-  | 'WARNING'
-  | 'CRITICAL';
+export type FinancialHealth = 'EXCELLENT' | 'HEALTHY' | 'WARNING' | 'CRITICAL';
+export type FinancialRiskLevel = 'OK' | 'WATCH' | 'RISK' | 'CRITICAL';
 
 export interface DevUser {
   id: string;
@@ -182,20 +177,64 @@ export interface CategoryBreakdown {
   movementCount: number;
 }
 
-export type FinancialRiskLevel = 'OK' | 'WATCH' | 'RISK' | 'CRITICAL';
-
 export interface PlanningDashboardSummary {
-  totalIncomeMin: number; totalIncomeMax: number; totalExpenseMin: number; totalExpenseMax: number;
-  totalRecoveryMin: number; totalRecoveryMax: number; projectedNetMin: number; projectedNetMax: number;
-  pendingIncome: number; pendingExpense: number; unpricedCount: number; dueNext7DaysCount: number;
-  plannedItemsCount: number; cancelledItemsCount: number; convertedItemsCount: number;
+  totalIncomeMin: number;
+  totalIncomeMax: number;
+  totalExpenseMin: number;
+  totalExpenseMax: number;
+  totalRecoveryMin: number;
+  totalRecoveryMax: number;
+  projectedNetMin: number;
+  projectedNetMax: number;
+  pendingIncome: number;
+  pendingExpense: number;
+  unpricedCount: number;
+  dueNext7DaysCount: number;
+  plannedItemsCount: number;
+  cancelledItemsCount: number;
+  convertedItemsCount: number;
 }
 
 export interface DashboardOperationalSummary {
-  confirmedIncome: number; confirmedExpenses: number; confirmedSavings: number; confirmedBalance: number;
-  projectedNetMin: number; projectedNetMax: number; deltaProjectedMinVsConfirmed: number; deltaProjectedMaxVsConfirmed: number;
-  pendingIncome: number; pendingExpense: number; expectedRecoveriesMin: number; expectedRecoveriesMax: number;
-  unpricedCount: number; dueNext7DaysCount: number; financialRiskLevel: FinancialRiskLevel; alerts: string[];
+  confirmedIncome: number;
+  confirmedExpenses: number;
+  confirmedSavings: number;
+  confirmedBalance: number;
+  projectedNetMin: number;
+  projectedNetMax: number;
+  deltaProjectedMinVsConfirmed: number;
+  deltaProjectedMaxVsConfirmed: number;
+  pendingIncome: number;
+  pendingExpense: number;
+  expectedRecoveriesMin: number;
+  expectedRecoveriesMax: number;
+  unpricedCount: number;
+  dueNext7DaysCount: number;
+  financialRiskLevel: FinancialRiskLevel;
+  alerts: string[];
+}
+
+export interface MonthlyCashFlowSummary {
+  grossCashOutflow: number;
+  consumptionExpense: number;
+  fixedExpense: number;
+  variableExpense: number;
+  debtOutflow: number;
+  savingOutflow: number;
+  investmentOutflow: number;
+  recoverableOutflow: number;
+  principalRecovered: number;
+  refundsOrReimbursements: number;
+  earnedIncome: number;
+  interestIncome: number;
+  totalIncome: number;
+  netCashFlow: number;
+  economicNetExpense: number;
+  internalTransfers: number;
+  externalTransfers: number;
+  neutralAdjustments: number;
+  unknownOutflow: number;
+  alerts: string[];
 }
 
 export interface DashboardSummary {
@@ -208,43 +247,308 @@ export interface DashboardSummary {
   budgetSummary: BudgetSummary | null;
   planningSummary: PlanningDashboardSummary | null;
   operationalSummary: DashboardOperationalSummary | null;
+  monthlyCashFlowSummary: MonthlyCashFlowSummary | null;
 }
-export type GoalType = 'EMERGENCY_FUND' | 'DEBT_PAYOFF' | 'SAVING_TARGET' | 'INVESTMENT' | 'BUSINESS' | 'TRAVEL' | 'EDUCATION' | 'OTHER';
+
+export type GoalType =
+  | 'EMERGENCY_FUND'
+  | 'DEBT_PAYOFF'
+  | 'SAVING_TARGET'
+  | 'INVESTMENT'
+  | 'BUSINESS'
+  | 'TRAVEL'
+  | 'EDUCATION'
+  | 'OTHER';
+
 export type GoalStatus = 'ACTIVE' | 'PAUSED' | 'COMPLETED' | 'CANCELLED';
 export type HabitFrequency = 'DAILY' | 'WEEKLY' | 'MONTHLY';
 
-export interface FinancialGoal { id: string; profileId: string; name: string; goalType: GoalType; targetAmount: number; currentAmount: number; monthlyContribution?: number | null; targetDate?: string | null; status: GoalStatus; progressPercent?: number; monthsRemaining?: number | null; notes?: string | null; }
-export interface GoalSuggestion { averageMonthlyExpenses: number; targetMin: number; targetRecommended: number; suggestedType: GoalType; }
-export interface Habit { id: string; profileId: string; description: string; area?: string | null; frequency: HabitFrequency; active: boolean; }
-export interface HabitCheckin { id: string; habitId: string; checkinDate: string; completed: boolean; note?: string | null; }
-export interface HabitSummary { totalHabits: number; completedCheckins: number; expectedCheckins: number; completionRate: number; completionRateByArea: Record<string, number>; }
-export interface InflationIndex { id: string; year: number; month: number; categoryCode?: string | null; categoryName?: string | null; monthlyRate: number; source?: string | null; projection: boolean; }
-export interface InflationAccumulated { accumulatedRate: number; }
-export interface ExcelImportRow { id: string; sheetName: string; rowNumber?: number | null; concept?: string | null; month?: number | null; amount?: number | null; targetEntity?: string | null; status: string; errorMessage?: string | null; }
-export interface ExcelImportBatch { id: string; profileId: string; originalFileName?: string | null; status: string; detectedProfileType?: ProfileType | null; year?: number | null; currency: string; rows?: ExcelImportRow[]; }
-export interface BudgetExcelImportPreviewResponse { batchId: string; detectedSheets: string[]; missingSheets: string[]; rows: ExcelImportRow[]; warnings: string[]; errors: string[]; summary: Record<string, number>; }
-export interface BudgetExcelImportCommitRequest { createCategories: boolean; createAccounts: boolean; createBudgets: boolean; createTransactions: boolean; createGoals: boolean; createHabits: boolean; createInflation: boolean; updateExisting: boolean; ignoreInvalidRows: boolean; year: number; currency: string; profileType: ProfileType; }
-export interface BudgetExcelImportCommitResponse { batchId: string; status: string; importedByType: Record<string, number>; warnings: string[]; errors: string[]; }
+export interface FinancialGoal {
+  id: string;
+  profileId: string;
+  name: string;
+  goalType: GoalType;
+  targetAmount: number;
+  currentAmount: number;
+  monthlyContribution?: number | null;
+  targetDate?: string | null;
+  status: GoalStatus;
+  progressPercent?: number;
+  monthsRemaining?: number | null;
+  notes?: string | null;
+}
 
-export type MonthlyPlanItemType = 'INCOME'|'EXPENSE'|'SAVING'|'DEBT'|'TRANSFER'|'RECOVERY'|'TODO';
-export type MonthlyPlanPriority = 'ESSENTIAL'|'IMPORTANT'|'OPTIONAL';
-export type MonthlyPlanStatus = 'DRAFT'|'ESTIMATED'|'SCHEDULED'|'DUE'|'PAID'|'COLLECTED'|'CANCELLED';
-export type MonthlyPlanSource = 'MANUAL'|'IMPORT'|'QUICK_CAPTURE'|'SYSTEM';
-export interface MonthlyPlanItem { id:string; profileId:string; categoryId:string|null; accountId:string|null; type:MonthlyPlanItemType; title:string; description?:string|null; expectedDate?:string|null; periodYear:number; periodMonth:number; amount?:number|null; minAmount?:number|null; maxAmount?:number|null; currency:string; expectedRecoveryAmount?:number|null; expectedRecoveryPercent?:number|null; grossMin:number; grossMax:number; recoveryMin:number; recoveryMax:number; netMin:number; netMax:number; priority:MonthlyPlanPriority; status:MonthlyPlanStatus; source:MonthlyPlanSource; transactionId?:string|null; counterparty?:string|null; installmentNumber?:number|null; installmentTotal?:number|null; createdAt:string; updatedAt:string; }
-export interface MonthlyPlanSummary { totalIncomeMin:number; totalIncomeMax:number; totalExpenseMin:number; totalExpenseMax:number; totalRecoveryMin:number; totalRecoveryMax:number; netMin:number; netMax:number; pendingIncome:number; pendingExpense:number; unpricedCount:number; dueNext7DaysCount:number; items:MonthlyPlanItem[]; }
-export interface MonthlyPlanItemCreatePayload { type:MonthlyPlanItemType; title:string; description?:string; expectedDate?:string|null; periodYear:number; periodMonth:number; amount?:number|null; minAmount?:number|null; maxAmount?:number|null; currency?:string; expectedRecoveryAmount?:number|null; expectedRecoveryPercent?:number|null; counterparty?:string|null; installmentNumber?:number|null; installmentTotal?:number|null; priority?:MonthlyPlanPriority; status?:MonthlyPlanStatus; source?:MonthlyPlanSource; categoryId?:string|null; accountId?:string|null; }
-export interface MonthlyPlanItemUpdatePayload extends Partial<MonthlyPlanItemCreatePayload> { clearExpectedDate?:boolean; clearAmount?:boolean; clearRange?:boolean; clearRecovery?:boolean; clearCounterparty?:boolean; clearInstallment?:boolean; clearCategory?:boolean; clearAccount?:boolean; }
+export interface GoalSuggestion {
+  averageMonthlyExpenses: number;
+  targetMin: number;
+  targetRecommended: number;
+  suggestedType: GoalType;
+}
 
+export interface Habit {
+  id: string;
+  profileId: string;
+  description: string;
+  area?: string | null;
+  frequency: HabitFrequency;
+  active: boolean;
+}
 
-export type QuickCaptureConfidence = 'HIGH'|'MEDIUM'|'LOW';
-export interface QuickCapturePreviewRequest { rawText: string; defaultYear?: number | null; defaultMonth?: number | null; defaultCurrency?: string | null; }
-export interface QuickCapturePreviewResponse { rawText: string; confidence: QuickCaptureConfidence; warnings: string[]; parsed: MonthlyPlanItemCreatePayload; detectedDateText?: string | null; detectedAmountText?: string | null; detectedRangeText?: string | null; detectedRecoveryText?: string | null; detectedInstallmentText?: string | null; detectedCounterpartyText?: string | null; detectedTypeText?: string | null; }
-export interface QuickCaptureCommitRequest { rawText: string; payload: MonthlyPlanItemCreatePayload; }
-export interface QuickCaptureCommitResponse { item: MonthlyPlanItem; warnings: string[]; }
+export interface HabitCheckin {
+  id: string;
+  habitId: string;
+  checkinDate: string;
+  completed: boolean;
+  note?: string | null;
+}
 
+export interface HabitSummary {
+  totalHabits: number;
+  completedCheckins: number;
+  expectedCheckins: number;
+  completionRate: number;
+  completionRateByArea: Record<string, number>;
+}
 
-export type SuggestionConfidence = 'HIGH'|'MEDIUM'|'LOW'|'NONE';
-export interface PlanningSuggestionRequest { type: MonthlyPlanItemType; title: string; counterparty?: string | null; amount?: number | null; minAmount?: number | null; maxAmount?: number | null; expectedRecoveryAmount?: number | null; expectedRecoveryPercent?: number | null; }
-export interface SuggestedAccount { id: string; name: string; confidence: SuggestionConfidence; reason: string; }
-export interface SuggestedCategory { id: string; name: string; confidence: SuggestionConfidence; reason: string; }
-export interface PlanningSuggestionResponse { accountSuggestion?: SuggestedAccount | null; categorySuggestion?: SuggestedCategory | null; confidence: SuggestionConfidence; reasons: string[]; }
+export interface InflationIndex {
+  id: string;
+  year: number;
+  month: number;
+  categoryCode?: string | null;
+  categoryName?: string | null;
+  monthlyRate: number;
+  source?: string | null;
+  projection: boolean;
+}
+
+export interface InflationAccumulated {
+  accumulatedRate: number;
+}
+
+export interface ExcelImportRow {
+  id: string;
+  sheetName: string;
+  rowNumber?: number | null;
+  concept?: string | null;
+  month?: number | null;
+  amount?: number | null;
+  targetEntity?: string | null;
+  status: string;
+  errorMessage?: string | null;
+}
+
+export interface ExcelImportBatch {
+  id: string;
+  profileId: string;
+  originalFileName?: string | null;
+  status: string;
+  detectedProfileType?: ProfileType | null;
+  year?: number | null;
+  currency: string;
+  rows?: ExcelImportRow[];
+}
+
+export interface BudgetExcelImportPreviewResponse {
+  batchId: string;
+  detectedSheets: string[];
+  missingSheets: string[];
+  rows: ExcelImportRow[];
+  warnings: string[];
+  errors: string[];
+  summary: Record<string, number>;
+}
+
+export interface BudgetExcelImportCommitRequest {
+  createCategories: boolean;
+  createAccounts: boolean;
+  createBudgets: boolean;
+  createTransactions: boolean;
+  createGoals: boolean;
+  createHabits: boolean;
+  createInflation: boolean;
+  updateExisting: boolean;
+  ignoreInvalidRows: boolean;
+  year: number;
+  currency: string;
+  profileType: ProfileType;
+}
+
+export interface BudgetExcelImportCommitResponse {
+  batchId: string;
+  status: string;
+  importedByType: Record<string, number>;
+  warnings: string[];
+  errors: string[];
+}
+
+export type MonthlyPlanItemType =
+  | 'INCOME'
+  | 'EXPENSE'
+  | 'SAVING'
+  | 'DEBT'
+  | 'TRANSFER'
+  | 'RECOVERY'
+  | 'TODO';
+
+export type MonthlyPlanPriority = 'ESSENTIAL' | 'IMPORTANT' | 'OPTIONAL';
+
+export type MonthlyPlanStatus =
+  | 'DRAFT'
+  | 'ESTIMATED'
+  | 'SCHEDULED'
+  | 'DUE'
+  | 'PAID'
+  | 'COLLECTED'
+  | 'CANCELLED';
+
+export type MonthlyPlanSource = 'MANUAL' | 'IMPORT' | 'QUICK_CAPTURE' | 'SYSTEM';
+
+export interface MonthlyPlanItem {
+  id: string;
+  profileId: string;
+  categoryId: string | null;
+  accountId: string | null;
+  type: MonthlyPlanItemType;
+  title: string;
+  description?: string | null;
+  expectedDate?: string | null;
+  periodYear: number;
+  periodMonth: number;
+  amount?: number | null;
+  minAmount?: number | null;
+  maxAmount?: number | null;
+  currency: string;
+  expectedRecoveryAmount?: number | null;
+  expectedRecoveryPercent?: number | null;
+  grossMin: number;
+  grossMax: number;
+  recoveryMin: number;
+  recoveryMax: number;
+  netMin: number;
+  netMax: number;
+  priority: MonthlyPlanPriority;
+  status: MonthlyPlanStatus;
+  source: MonthlyPlanSource;
+  transactionId?: string | null;
+  counterparty?: string | null;
+  installmentNumber?: number | null;
+  installmentTotal?: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MonthlyPlanSummary {
+  totalIncomeMin: number;
+  totalIncomeMax: number;
+  totalExpenseMin: number;
+  totalExpenseMax: number;
+  totalRecoveryMin: number;
+  totalRecoveryMax: number;
+  netMin: number;
+  netMax: number;
+  pendingIncome: number;
+  pendingExpense: number;
+  unpricedCount: number;
+  dueNext7DaysCount: number;
+  items: MonthlyPlanItem[];
+}
+
+export interface MonthlyPlanItemCreatePayload {
+  type: MonthlyPlanItemType;
+  title: string;
+  description?: string;
+  expectedDate?: string | null;
+  periodYear: number;
+  periodMonth: number;
+  amount?: number | null;
+  minAmount?: number | null;
+  maxAmount?: number | null;
+  currency?: string;
+  expectedRecoveryAmount?: number | null;
+  expectedRecoveryPercent?: number | null;
+  counterparty?: string | null;
+  installmentNumber?: number | null;
+  installmentTotal?: number | null;
+  priority?: MonthlyPlanPriority;
+  status?: MonthlyPlanStatus;
+  source?: MonthlyPlanSource;
+  categoryId?: string | null;
+  accountId?: string | null;
+}
+
+export interface MonthlyPlanItemUpdatePayload extends Partial<MonthlyPlanItemCreatePayload> {
+  clearExpectedDate?: boolean;
+  clearAmount?: boolean;
+  clearRange?: boolean;
+  clearRecovery?: boolean;
+  clearCounterparty?: boolean;
+  clearInstallment?: boolean;
+  clearCategory?: boolean;
+  clearAccount?: boolean;
+}
+
+export type SuggestionConfidence = 'HIGH' | 'MEDIUM' | 'LOW' | 'NONE';
+export type QuickCaptureConfidence = Exclude<SuggestionConfidence, 'NONE'>;
+
+export interface SuggestedAccount {
+  id: string;
+  name: string;
+  confidence: SuggestionConfidence;
+  reason: string;
+}
+
+export interface SuggestedCategory {
+  id: string;
+  name: string;
+  confidence: SuggestionConfidence;
+  reason: string;
+}
+
+export interface PlanningSuggestionRequest {
+  type: MonthlyPlanItemType;
+  title: string;
+  counterparty?: string | null;
+  amount?: number | null;
+  minAmount?: number | null;
+  maxAmount?: number | null;
+  expectedRecoveryAmount?: number | null;
+  expectedRecoveryPercent?: number | null;
+}
+
+export interface PlanningSuggestionResponse {
+  accountSuggestion?: SuggestedAccount | null;
+  categorySuggestion?: SuggestedCategory | null;
+  confidence: SuggestionConfidence;
+  reasons: string[];
+}
+
+export interface QuickCapturePreviewRequest {
+  rawText: string;
+  defaultYear?: number | null;
+  defaultMonth?: number | null;
+  defaultCurrency?: string | null;
+}
+
+export interface QuickCapturePreviewResponse {
+  rawText: string;
+  confidence: QuickCaptureConfidence;
+  warnings: string[];
+  parsed: MonthlyPlanItemCreatePayload;
+  detectedDateText?: string | null;
+  detectedAmountText?: string | null;
+  detectedRangeText?: string | null;
+  detectedRecoveryText?: string | null;
+  detectedInstallmentText?: string | null;
+  detectedCounterpartyText?: string | null;
+  detectedTypeText?: string | null;
+}
+
+export interface QuickCaptureCommitRequest {
+  rawText: string;
+  payload: MonthlyPlanItemCreatePayload;
+}
+
+export interface QuickCaptureCommitResponse {
+  item: MonthlyPlanItem;
+  warnings: string[];
+}

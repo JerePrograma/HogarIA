@@ -1,30 +1,15 @@
-import { useMutation, useQuery } from '@tanstack/react-query';
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { listAccounts } from '../../api/accountsApi';
-import { listCategories } from '../../api/categoriesApi';
-import { getApiErrorMessage } from '../../api/http';
-import {
-  commitMonthlyPlanQuickCapture,
-  previewMonthlyPlanQuickCapture,
-} from '../../api/monthlyPlanQuickCaptureApi';
-import {
-  convertMonthlyPlanItemToTransaction,
-  createMonthlyPlanItem,
-  deleteMonthlyPlanItem,
-  getMonthlyPlan,
-  updateMonthlyPlanItem,
-} from '../../api/monthlyPlanningApi';
 import { AppLayout } from '../../components/layout/AppLayout';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { ErrorState } from '../../components/ui/ErrorState';
 import { MonthSelector } from '../../components/ui/MonthSelector';
-import type {
-  MonthlyPlanItemCreatePayload,
-  MonthlyPlanItemUpdatePayload,
-  MonthlyPlanSummary,
-  QuickCapturePreviewResponse,
-} from '../../domain/types';
+import { useInvalidateMonthlyViews } from '../../hooks/useInvalidateMonthlyViews';
+import { useMonthlyPeriod } from '../../hooks/useMonthlyPeriod';
+import { useMonthlyPlanItemActions } from '../../hooks/useMonthlyPlanItemActions';
+import { useMonthlyPlanningQueries } from '../../hooks/useMonthlyPlanningQueries';
+import { useQuickCaptureFlow } from '../../hooks/useQuickCaptureFlow';
+import { useStructuredPlanItemDraft } from '../../hooks/useStructuredPlanItemDraft';
 import { MonthlyPlanItemsTable, type TableFilterKey } from './components/MonthlyPlanItemsTable';
 import { MonthlyPlanningChecklist } from './components/MonthlyPlanningChecklist';
 import { MonthlyPlanningGuide } from './components/MonthlyPlanningGuide';
@@ -32,194 +17,57 @@ import { PlanningSummaryCards } from './components/PlanningSummaryCards';
 import { QuickCapturePanel } from './components/QuickCapturePanel';
 import { QuickCapturePreviewForm } from './components/QuickCapturePreviewForm';
 import { StructuredPlanItemForm } from './components/StructuredPlanItemForm';
-import { queryKeys } from '../../domain/queryKeys';
-import { useInvalidateMonthlyViews } from '../../hooks/useInvalidateMonthlyViews';
-import { useMonthlyPeriod } from '../../hooks/useMonthlyPeriod';
 
-const createEmptyForm = (year: number, month: number): MonthlyPlanItemCreatePayload => ({
-  type: 'EXPENSE',
-  title: '',
-  periodYear: year,
-  periodMonth: month,
-  priority: 'IMPORTANT',
-  status: 'ESTIMATED',
-  currency: 'ARS',
-});
+const DEFAULT_TABLE_FILTER: TableFilterKey = 'ALL';
 
 export function MonthlyPlanningPage() {
   const { profileId = '' } = useParams();
   const { year, month, setYear, setMonth } = useMonthlyPeriod();
-  const [tableFilter, setTableFilter] = useState<TableFilterKey>('ALL');
-
-  const [quickText, setQuickText] = useState('');
-  const [quickPreview, setQuickPreview] = useState<QuickCapturePreviewResponse | null>(null);
-  const [quickForm, setQuickForm] = useState<MonthlyPlanItemCreatePayload | null>(null);
-  const [quickError, setQuickError] = useState('');
-
-  const [form, setForm] = useState<MonthlyPlanItemCreatePayload>(() =>
-    createEmptyForm(year, month),
-  );
+  const [tableFilter, setTableFilter] = useState<TableFilterKey>(DEFAULT_TABLE_FILTER);
 
   const invalidatePlanningViews = useInvalidateMonthlyViews(profileId, year, month);
 
-  const planningQuery = useQuery<MonthlyPlanSummary>({
-    queryKey: queryKeys.planning(profileId, year, month),
-    queryFn: () => getMonthlyPlan(profileId, year, month),
-    enabled: Boolean(profileId),
+  const { planningQuery, summary, items, accounts, categories } = useMonthlyPlanningQueries(
+    profileId,
+    year,
+    month,
+  );
+
+  const draft = useStructuredPlanItemDraft(year, month);
+
+  const actions = useMonthlyPlanItemActions({
+    profileId,
+    year,
+    month,
+    form: draft.form,
+    resetFormAfterCreate: draft.resetAfterCreate,
+    invalidatePlanningViews,
   });
 
-  const accountsQuery = useQuery({
-    queryKey: queryKeys.accounts(profileId),
-    queryFn: () => listAccounts(profileId),
-    enabled: Boolean(profileId),
+  const quickCapture = useQuickCaptureFlow({
+    profileId,
+    year,
+    month,
+    invalidatePlanningViews,
   });
 
-  const categoriesQuery = useQuery({
-    queryKey: queryKeys.categories(profileId, true),
-    queryFn: () => listCategories(profileId, true),
-    enabled: Boolean(profileId),
-  });
-
-  const createMutation = useMutation({
-    mutationFn: () =>
-      createMonthlyPlanItem(profileId, {
-        ...form,
-        periodYear: year,
-        periodMonth: month,
-      }),
-    onSuccess: () => {
-      setForm((current) => ({
-        ...createEmptyForm(year, month),
-        type: current.type,
-        priority: current.priority,
-        status: current.status,
-        accountId: current.accountId,
-        categoryId: current.categoryId,
-      }));
-      invalidatePlanningViews();
-    },
-  });
-
-  const deleteMutation = useMutation({
-    mutationFn: (id: string) => deleteMonthlyPlanItem(profileId, id),
-    onSuccess: invalidatePlanningViews,
-  });
-
-  const convertMutation = useMutation({
-    mutationFn: (id: string) => convertMonthlyPlanItemToTransaction(profileId, id),
-    onSuccess: invalidatePlanningViews,
-  });
-
-  const updateMutation = useMutation({
-    mutationFn: ({ id, payload }: { id: string; payload: MonthlyPlanItemUpdatePayload }) =>
-      updateMonthlyPlanItem(profileId, id, payload),
-    onSuccess: invalidatePlanningViews,
-  });
-
-  const cancelMutation = useMutation({
-    mutationFn: (id: string) => updateMonthlyPlanItem(profileId, id, { status: 'CANCELLED' }),
-    onSuccess: invalidatePlanningViews,
-  });
-
-  const markPaidMutation = useMutation({
-    mutationFn: (id: string) => updateMonthlyPlanItem(profileId, id, { status: 'PAID' }),
-    onSuccess: invalidatePlanningViews,
-  });
-
-  const markCollectedMutation = useMutation({
-    mutationFn: (id: string) => updateMonthlyPlanItem(profileId, id, { status: 'COLLECTED' }),
-    onSuccess: invalidatePlanningViews,
-  });
-
-  const lastActionError =
-    convertMutation.error ??
-    updateMutation.error ??
-    cancelMutation.error ??
-    markPaidMutation.error ??
-    markCollectedMutation.error ??
-    deleteMutation.error;
-
-  const actionErrorMessage = lastActionError ? getApiErrorMessage(lastActionError) : null;
-
-  const quickPreviewMutation = useMutation({
-    mutationFn: () =>
-      previewMonthlyPlanQuickCapture(profileId, {
-        rawText: quickText,
-        defaultYear: year,
-        defaultMonth: month,
-        defaultCurrency: 'ARS',
-      }),
-    onSuccess: (response) => {
-      setQuickError('');
-      setQuickPreview(response);
-      setQuickForm(response.parsed);
-    },
-    onError: (error) => {
-      setQuickPreview(null);
-      setQuickForm(null);
-      setQuickError(getApiErrorMessage(error));
-    },
-  });
-
-  const quickCommitMutation = useMutation({
-    mutationFn: () =>
-      commitMonthlyPlanQuickCapture(profileId, {
-        rawText: quickText,
-        payload: (() => {
-          if (!quickForm) throw new Error('No hay previsualización confirmable.');
-          return quickForm;
-        })(),
-      }),
-    onSuccess: () => {
-      setQuickText('');
-      setQuickPreview(null);
-      setQuickForm(null);
-      invalidatePlanningViews();
-    },
-  });
-
-  const accounts = accountsQuery.data ?? [];
-  const categories = categoriesQuery.data ?? [];
-  const summary = planningQuery.data;
-  const items = summary?.items ?? [];
-
-  const pendingActionId = useMemo(() =>
-    (convertMutation.isPending ? convertMutation.variables : null) ??
-    (updateMutation.isPending ? updateMutation.variables?.id : null) ??
-    (cancelMutation.isPending ? cancelMutation.variables : null) ??
-    (markPaidMutation.isPending ? markPaidMutation.variables : null) ??
-    (markCollectedMutation.isPending ? markCollectedMutation.variables : null) ??
-    (deleteMutation.isPending ? deleteMutation.variables : null) ??
-    null,
-  [
-    convertMutation.isPending,
-    convertMutation.variables,
-    updateMutation.isPending,
-    updateMutation.variables,
-    cancelMutation.isPending,
-    cancelMutation.variables,
-    markPaidMutation.isPending,
-    markPaidMutation.variables,
-    markCollectedMutation.isPending,
-    markCollectedMutation.variables,
-    deleteMutation.isPending,
-    deleteMutation.variables,
-  ]);
+  const isLoading = planningQuery.isLoading;
+  const isError = planningQuery.isError;
+  const isReady = !isLoading && !isError;
 
   return (
     <AppLayout>
-      <div className="page-stack">
-        <section className="page-header">
-          <div>
+      <div className="page-stack monthly-planning-page">
+        <section className="page-header planning-hero">
+          <div className="planning-hero-copy">
             <p className="eyebrow">Plan operativo</p>
             <h1>Planificación mensual</h1>
             <p className="secondary-text">
-              Cargá ingresos, gastos y pendientes del mes. Después convertí lo confirmado en
-              movimientos reales.
+              Cargá estimaciones, completá faltantes y convertí sólo lo que ya está confirmado.
             </p>
           </div>
 
-          <div className="stack-ui md:min-w-[360px]">
+          <div className="planning-hero-controls">
             <MonthSelector
               year={year}
               month={month}
@@ -227,92 +75,107 @@ export function MonthlyPlanningPage() {
               onMonthChange={setMonth}
             />
 
-            <div className="page-actions">
-              <Link className="boton-secundario" to={`/profiles/${profileId}/dashboard`}>
+            <div className="page-actions planning-hero-actions">
+              <a className="boton-secundario" href="#plan-items">
+                Revisar ítems
+              </a>
+
+              <a className="boton-secundario" href="#new-plan-item">
+                Cargar manual
+              </a>
+
+              <Link className="boton-principal" to={`/profiles/${profileId}/dashboard`}>
                 Ver dashboard
               </Link>
             </div>
           </div>
         </section>
 
-        {planningQuery.isLoading && (
+        {isLoading ? (
           <EmptyState
             title="Cargando planificación"
             message="Estamos obteniendo los ítems planificados del período."
           />
-        )}
+        ) : null}
 
-        {planningQuery.isError && (
-          <ErrorState message="No se pudo cargar la planificación mensual." />
-        )}
+        {isError ? <ErrorState message="No se pudo cargar la planificación mensual." /> : null}
 
-        <PlanningSummaryCards summary={summary} />
+        {isReady ? (
+          <>
+            <PlanningSummaryCards summary={summary} />
 
-        <MonthlyPlanningChecklist summary={summary} items={items} onApply={setTableFilter} />
+            <section className="planning-layout-grid">
+              <div className="planning-layout-main">
+                <MonthlyPlanningChecklist
+                  summary={summary}
+                  items={items}
+                  onApply={setTableFilter}
+                />
+              </div>
 
-        <MonthlyPlanningGuide summary={summary} />
+              <aside className="planning-layout-side">
+                <MonthlyPlanningGuide summary={summary} />
+              </aside>
+            </section>
 
-        <QuickCapturePanel
-          input={quickText}
-          onChange={setQuickText}
-          onAnalyze={() => quickPreviewMutation.mutate()}
-          canAnalyze={Boolean(quickText.trim())}
-          error={quickError}
-          showDiscard={Boolean(quickPreview)}
-          onDiscard={() => {
-            setQuickPreview(null);
-            setQuickForm(null);
-          }}
-          onClear={() => {
-            setQuickText('');
-            setQuickError('');
-            setQuickPreview(null);
-            setQuickForm(null);
-          }}
-          isAnalyzing={quickPreviewMutation.isPending}
-        >
-          {quickPreview && quickForm ? (
-            <QuickCapturePreviewForm
-              profileId={profileId}
-              preview={quickPreview}
-              form={quickForm}
-              setForm={setQuickForm}
-              accounts={accounts}
-              categories={categories}
-              onConfirm={() => quickCommitMutation.mutate()}
-              isConfirming={quickCommitMutation.isPending}
-              error={quickCommitMutation.error ? getApiErrorMessage(quickCommitMutation.error) : null}
-            />
-          ) : null}
-        </QuickCapturePanel>
+            <QuickCapturePanel
+              input={quickCapture.quickText}
+              onChange={quickCapture.setQuickText}
+              onAnalyze={quickCapture.analyze}
+              canAnalyze={quickCapture.canAnalyze}
+              error={quickCapture.quickError}
+              showDiscard={quickCapture.hasPreview}
+              onDiscard={quickCapture.discard}
+              onClear={quickCapture.clear}
+              isAnalyzing={quickCapture.isAnalyzing}
+            >
+              {quickCapture.quickPreview && quickCapture.quickForm ? (
+                <QuickCapturePreviewForm
+                  profileId={profileId}
+                  preview={quickCapture.quickPreview}
+                  form={quickCapture.quickForm}
+                  setForm={quickCapture.setQuickForm}
+                  accounts={accounts}
+                  categories={categories}
+                  onConfirm={quickCapture.confirm}
+                  isConfirming={quickCapture.isConfirming}
+                  error={quickCapture.commitError}
+                />
+              ) : null}
+            </QuickCapturePanel>
 
-        <MonthlyPlanItemsTable
-          profileId={profileId}
-          items={items}
-          accounts={accounts}
-          categories={categories}
-          onConvert={(id) => convertMutation.mutate(id)}
-          onCancel={(id) => cancelMutation.mutate(id)}
-          onDelete={(id) => deleteMutation.mutate(id)}
-          onUpdate={(id, payload) =>
-            updateMutation.mutateAsync({ id, payload }).then(() => undefined)
-          }
-          onMarkPaid={(id) => markPaidMutation.mutate(id)}
-          onMarkCollected={(id) => markCollectedMutation.mutate(id)}
-          pendingActionId={pendingActionId}
-          actionError={actionErrorMessage}
-          externalFilterKey={tableFilter}
-        />
+            <div id="plan-items">
+              <MonthlyPlanItemsTable
+                profileId={profileId}
+                items={items}
+                accounts={accounts}
+                categories={categories}
+                onConvert={actions.convert}
+                onCancel={actions.cancel}
+                onDelete={actions.remove}
+                onUpdate={actions.update}
+                onMarkPaid={actions.markPaid}
+                onMarkCollected={actions.markCollected}
+                pendingActionId={actions.pendingActionId}
+                actionError={actions.actionErrorMessage}
+                externalFilterKey={tableFilter}
+                onExternalFilterChange={setTableFilter}
+              />
+            </div>
 
-        <StructuredPlanItemForm
-          form={form}
-          setForm={setForm}
-          accounts={accounts}
-          categories={categories}
-          onCreate={() => createMutation.mutate()}
-          isCreating={createMutation.isPending}
-          error={createMutation.error ? getApiErrorMessage(createMutation.error) : null}
-        />
+            <div id="new-plan-item">
+              <StructuredPlanItemForm
+                form={draft.form}
+                setForm={draft.setForm}
+                accounts={accounts}
+                categories={categories}
+                onCreate={actions.create}
+                isCreating={actions.isCreating}
+                error={actions.createErrorMessage}
+              />
+            </div>
+          </>
+        ) : null}
       </div>
     </AppLayout>
   );
