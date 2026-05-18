@@ -34,7 +34,7 @@ public class BudgetController {
 
     @PostMapping("/profiles/{profileId}/budgets")
     public BudgetYearResponse createBudgetYear(
-            @RequestHeader("X-User-Id") String userHeader,
+            @RequestHeader(value = "X-User-Id", required = false) String userHeader,
             @PathVariable UUID profileId,
             @Valid @RequestBody BudgetYearCreateRequest request
     ) {
@@ -47,7 +47,7 @@ public class BudgetController {
 
     @GetMapping("/profiles/{profileId}/budgets")
     public List<BudgetYearResponse> listBudgetYears(
-            @RequestHeader("X-User-Id") String userHeader,
+            @RequestHeader(value = "X-User-Id", required = false) String userHeader,
             @PathVariable UUID profileId
     ) {
         return budgetService.listBudgetYears(
@@ -58,7 +58,7 @@ public class BudgetController {
 
     @GetMapping("/profiles/{profileId}/budgets/{year}")
     public BudgetYearResponse getBudgetYear(
-            @RequestHeader("X-User-Id") String userHeader,
+            @RequestHeader(value = "X-User-Id", required = false) String userHeader,
             @PathVariable UUID profileId,
             @PathVariable Integer year
     ) {
@@ -71,7 +71,7 @@ public class BudgetController {
 
     @PutMapping("/profiles/{profileId}/budgets/{year}")
     public BudgetYearResponse updateBudgetYear(
-            @RequestHeader("X-User-Id") String userHeader,
+            @RequestHeader(value = "X-User-Id", required = false) String userHeader,
             @PathVariable UUID profileId,
             @PathVariable Integer year,
             @Valid @RequestBody BudgetYearUpdateRequest request
@@ -86,7 +86,7 @@ public class BudgetController {
 
     @PostMapping("/profiles/{profileId}/budgets/{year}/months")
     public BudgetMonthResponse createBudgetMonth(
-            @RequestHeader("X-User-Id") String userHeader,
+            @RequestHeader(value = "X-User-Id", required = false) String userHeader,
             @PathVariable UUID profileId,
             @PathVariable Integer year,
             @Valid @RequestBody BudgetMonthCreateRequest request
@@ -101,7 +101,7 @@ public class BudgetController {
 
     @GetMapping("/profiles/{profileId}/budgets/{year}/months/{month}")
     public BudgetMonthResponse getBudgetMonth(
-            @RequestHeader("X-User-Id") String userHeader,
+            @RequestHeader(value = "X-User-Id", required = false) String userHeader,
             @PathVariable UUID profileId,
             @PathVariable Integer year,
             @PathVariable Integer month
@@ -116,7 +116,7 @@ public class BudgetController {
 
     @PutMapping("/budget-months/{budgetMonthId}")
     public BudgetMonthResponse updateBudgetMonth(
-            @RequestHeader("X-User-Id") String userHeader,
+            @RequestHeader(value = "X-User-Id", required = false) String userHeader,
             @PathVariable UUID budgetMonthId,
             @Valid @RequestBody BudgetMonthUpdateRequest request
     ) {
@@ -129,7 +129,7 @@ public class BudgetController {
 
     @PutMapping("/budget-months/{budgetMonthId}/items")
     public BudgetCategoryItemResponse upsertBudgetCategoryItem(
-            @RequestHeader("X-User-Id") String userHeader,
+            @RequestHeader(value = "X-User-Id", required = false) String userHeader,
             @PathVariable UUID budgetMonthId,
             @Valid @RequestBody BudgetCategoryItemUpsertRequest request
     ) {
@@ -142,7 +142,7 @@ public class BudgetController {
 
     @DeleteMapping("/budget-category-items/{itemId}")
     public void deleteBudgetCategoryItem(
-            @RequestHeader("X-User-Id") String userHeader,
+            @RequestHeader(value = "X-User-Id", required = false) String userHeader,
             @PathVariable UUID itemId
     ) {
         budgetService.deleteBudgetCategoryItem(
@@ -153,7 +153,7 @@ public class BudgetController {
 
     @GetMapping("/profiles/{profileId}/budgets/{year}/months/{month}/comparison")
     public BudgetComparisonResponse getComparison(
-            @RequestHeader("X-User-Id") String userHeader,
+            @RequestHeader(value = "X-User-Id", required = false) String userHeader,
             @PathVariable UUID profileId,
             @PathVariable Integer year,
             @PathVariable Integer month

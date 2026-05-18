@@ -25,32 +25,32 @@ public class ExternalLoansController {
   }
 
   @GetMapping("/summary")
-  public ExternalLoansSummaryResponse summary(@PathVariable UUID profileId, @RequestHeader("X-User-Id") String xUserId) {
+  public ExternalLoansSummaryResponse summary(@PathVariable UUID profileId, @RequestHeader(value = "X-User-Id", required = false) String xUserId) {
     return service.getSummary(currentUserResolver.parse(xUserId), profileId);
   }
 
   @PostMapping("/sync")
-  public ExternalLoanManualSyncResponse sync(@PathVariable UUID profileId, @RequestHeader("X-User-Id") String xUserId) {
+  public ExternalLoanManualSyncResponse sync(@PathVariable UUID profileId, @RequestHeader(value = "X-User-Id", required = false) String xUserId) {
     return service.sync(currentUserResolver.parse(xUserId), profileId);
   }
 
   @GetMapping("/health")
-  public ExternalIntegrationDiagnosticResponse health(@PathVariable UUID profileId, @RequestHeader("X-User-Id") String xUserId) {
+  public ExternalIntegrationDiagnosticResponse health(@PathVariable UUID profileId, @RequestHeader(value = "X-User-Id", required = false) String xUserId) {
     return service.checkIntegration(currentUserResolver.parse(xUserId), profileId);
   }
 
   @PostMapping("/sync/dry-run")
-  public ExternalLoanManualSyncResponse dryRunSync(@PathVariable UUID profileId, @RequestHeader("X-User-Id") String xUserId) {
+  public ExternalLoanManualSyncResponse dryRunSync(@PathVariable UUID profileId, @RequestHeader(value = "X-User-Id", required = false) String xUserId) {
     return service.dryRunSync(currentUserResolver.parse(xUserId), profileId);
   }
 
   @GetMapping("/sync-config")
-  public ExternalLoanSyncConfigResponse getSyncConfig(@PathVariable UUID profileId, @RequestHeader("X-User-Id") String xUserId) {
+  public ExternalLoanSyncConfigResponse getSyncConfig(@PathVariable UUID profileId, @RequestHeader(value = "X-User-Id", required = false) String xUserId) {
     return syncConfigService.get(currentUserResolver.parse(xUserId), profileId);
   }
 
   @PutMapping("/sync-config")
-  public ExternalLoanSyncConfigResponse upsertSyncConfig(@PathVariable UUID profileId, @RequestHeader("X-User-Id") String xUserId, @Valid @RequestBody ExternalLoanSyncConfigUpsertRequest request) {
+  public ExternalLoanSyncConfigResponse upsertSyncConfig(@PathVariable UUID profileId, @RequestHeader(value = "X-User-Id", required = false) String xUserId, @Valid @RequestBody ExternalLoanSyncConfigUpsertRequest request) {
     return syncConfigService.upsert(currentUserResolver.parse(xUserId), profileId, request);
   }
 }
