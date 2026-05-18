@@ -49,6 +49,13 @@ type Props = {
   pendingActionId?: string | null;
   actionError?: string | null;
   profileId: string;
+  filter?: TableFilterKey;
+  statusFilter?: StatusFilterKey;
+  typeFilter?: string;
+  search?: string;
+  sortBy?: PlanItemSortKey;
+  focusedItemId?: string;
+  focusedMode?: string;
   externalFilterKey?: TableFilterKey;
   onExternalFilterChange?: (filter: TableFilterKey) => void;
 };
@@ -146,13 +153,20 @@ export function MonthlyPlanItemsTable({
   pendingActionId,
   actionError,
   profileId,
-  externalFilterKey = 'ALL',
+  filter = 'ALL',
+  statusFilter: statusFilterProp = 'ALL',
+  typeFilter: typeFilterProp = 'ALL',
+  search: searchProp = '',
+  sortBy: sortByProp = 'DATE',
+  focusedItemId,
+  focusedMode,
+  externalFilterKey,
   onExternalFilterChange,
 }: Props) {
-  const [statusFilter, setStatusFilter] = useState<StatusFilterKey>('ALL');
-  const [typeFilter, setTypeFilter] = useState<string>('ALL');
-  const [sortBy, setSortBy] = useState<PlanItemSortKey>('DATE');
-  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<StatusFilterKey>(statusFilterProp);
+  const [typeFilter, setTypeFilter] = useState<string>(typeFilterProp);
+  const [sortBy, setSortBy] = useState<PlanItemSortKey>(sortByProp);
+  const [search, setSearch] = useState(searchProp);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editMode, setEditMode] = useState<EditMode>('FULL');
   const [form, setForm] = useState<EditForm | null>(null);
@@ -168,12 +182,12 @@ export function MonthlyPlanItemsTable({
   const filtered = useMemo(
     () =>
       items
-        .filter((item) => matchesExternalFilter(item, externalFilterKey))
+        .filter((item) => matchesExternalFilter(item, externalFilterKey ?? filter))
         .filter((item) => matchesStatusFilter(item, statusFilter))
         .filter((item) => typeFilter === 'ALL' || item.type === typeFilter)
         .filter((item) => matchesSearch(item, search, accountById, categoryById))
         .sort((a, b) => sortPlanItems(a, b, sortBy)),
-    [items, externalFilterKey, statusFilter, typeFilter, search, accountById, categoryById, sortBy],
+    [items, filter, statusFilter, typeFilter, search, accountById, categoryById, sortBy],
   );
 
   const visibleStats = useMemo(() => getVisibleStats(filtered), [filtered]);
@@ -206,7 +220,7 @@ export function MonthlyPlanItemsTable({
     setTypeFilter('ALL');
     setSortBy('DATE');
     setSearch('');
-    onExternalFilterChange?.('ALL');
+    setStatusFilter('ALL');
   };
 
   const loadSuggestion = async (item: MonthlyPlanItem, sourceForm = form ?? toForm(item)) => {
@@ -293,7 +307,7 @@ export function MonthlyPlanItemsTable({
         setSortBy={setSortBy}
         search={search}
         setSearch={setSearch}
-        externalFilterKey={externalFilterKey}
+        externalFilterKey={externalFilterKey ?? filter}
         onExternalFilterChange={onExternalFilterChange}
         onClearAll={clearAllFilters}
       />
@@ -1477,3 +1491,5 @@ function formatDateOrDash(value: string | null | undefined): string {
 
   return value;
 }
+
+

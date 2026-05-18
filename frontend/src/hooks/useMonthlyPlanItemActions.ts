@@ -104,6 +104,7 @@ export function useMonthlyPlanItemActions({
 
   return {
     create: () => createMutation.mutate(),
+    createAsync: () => createMutation.mutateAsync().then(() => undefined),
     convert: (id: string) => convertMutation.mutate(id),
     cancel: (id: string) => cancelMutation.mutate(id),
     remove: (id: string) => deleteMutation.mutate(id),
