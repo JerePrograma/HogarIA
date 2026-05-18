@@ -552,3 +552,11 @@ export interface QuickCaptureCommitResponse {
   item: MonthlyPlanItem;
   warnings: string[];
 }
+export type PlanExecutionStatus = 'PENDING' | 'PARTIAL' | 'MATCHED';
+export type SuggestedMatchConfidence = 'LOW' | 'MEDIUM' | 'HIGH';
+export interface TransactionMatch { id: string; monthlyPlanItemId: string; moneyTransactionId: string; matchedAmount: number; matchType: 'MANUAL'|'SYSTEM_CONVERSION'|'SUGGESTED'; confidence: SuggestedMatchConfidence; }
+export interface PlanItemReconciliation { itemId: string; title: string; type: string; plannedAmount: number; matchedAmount: number; remainingAmount: number; executionStatus: PlanExecutionStatus; matches: TransactionMatch[]; }
+export interface UnplannedTransaction { transactionId: string; budgetDate: string; description: string; accountId: string; categoryId: string; movementType: string; amount: number; status: TransactionStatus; }
+export interface SuggestedPlanTransactionMatch { itemId: string; transactionId: string; suggestedAmount: number; confidence: SuggestedMatchConfidence; reasons: string[]; }
+export interface MonthlyPlanReconciliationSummary { plannedTotal:number; matchedTotal:number; pendingTotal:number; unplannedTransactionsTotal:number; unplannedCount:number; suggestedCount:number; unplannedTransactions: UnplannedTransaction[]; suggestedMatches: SuggestedPlanTransactionMatch[]; planItems: PlanItemReconciliation[]; }
+export interface ConfirmPlanTransactionMatchPayload { monthlyPlanItemId: string; moneyTransactionId: string; matchedAmount: number; matchType?: 'MANUAL'|'SYSTEM_CONVERSION'|'SUGGESTED'; confidence?: SuggestedMatchConfidence; }
