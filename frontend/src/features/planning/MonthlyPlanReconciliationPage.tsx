@@ -1,28 +1,49 @@
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { Link, useParams, useSearchParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { confirmPlanTransactionMatch, deletePlanTransactionMatch, getMonthlyPlanReconciliation } from '../../api/monthlyPlanReconciliationApi';
-import { formatMoney } from '../../domain/formatters';
+import { ErrorState } from '../../components/ui/ErrorState';
 import { queryKeys } from '../../domain/queryKeys';
-import type { MonthlyPlanReconciliationSummary, SuggestedPlanTransactionMatch, TransactionMatch } from '../../domain/types';
+import type { MonthlyPlanReconciliationSummary, SuggestedPlanTransactionMatch } from '../../domain/types';
+import { useMonthlyPeriod } from '../../hooks/useMonthlyPeriod';
 import { useInvalidateMonthlyViews } from '../../hooks/useInvalidateMonthlyViews';
+import { PlanItemsReconciliationPanel } from './components/reconciliation/PlanItemsReconciliationPanel';
+import { ReconciliationSummaryPanel } from './components/reconciliation/ReconciliationSummaryPanel';
+import { ReconciliationTabs } from './components/reconciliation/ReconciliationTabs';
+import { SuggestedMatchesPanel } from './components/reconciliation/SuggestedMatchesPanel';
+import type { ReconciliationTabKey } from './components/reconciliation/types';
+import { UnplannedTransactionsPanel } from './components/reconciliation/UnplannedTransactionsPanel';
 import { planningRoutes } from './planningRoutes';
+import { buildPlanningPath } from './utils/buildPlanningPath';
 
-export function MonthlyPlanReconciliationPage(){
- const { profileId='' }=useParams(); const [sp,setSp]=useSearchParams(); const year=Number(sp.get('year')); const month=Number(sp.get('month')); const tab=sp.get('tab')??'overview';
- const invalidateMonthly=useInvalidateMonthlyViews(profileId,year,month);
- const q=useQuery<MonthlyPlanReconciliationSummary>({queryKey: queryKeys.monthlyPlanReconciliation(profileId,year,month), queryFn:()=>getMonthlyPlanReconciliation(profileId,year,month), enabled:Boolean(profileId&&year&&month)});
- const refresh=()=>{invalidateMonthly();};
- const confirm=useMutation({mutationFn:(m:SuggestedPlanTransactionMatch)=>confirmPlanTransactionMatch(profileId,{monthlyPlanItemId:m.itemId,moneyTransactionId:m.transactionId,matchedAmount:m.suggestedAmount,matchType:'SUGGESTED'}),onSuccess:refresh});
- const del=useMutation({mutationFn:(matchId:string)=>deletePlanTransactionMatch(profileId,matchId),onSuccess:refresh});
- if(q.isLoading) return <p>Cargando conciliación...</p>; if(q.isError||!q.data) return <p>Error de conciliación.</p>; const s=q.data;
- const setTab=(next:string)=>{const p=new URLSearchParams(sp);p.set('tab',next);setSp(p)};
- return <section className='panel'><h2>Conciliación mensual</h2><p>Sin planificar: {formatMoney(s.unplannedTransactionsTotal)}</p>
- <div className='planning-filter-row'>{['overview','unplanned','suggestions','items'].map(t=><button key={t} onClick={()=>setTab(t)}>{t}</button>)}</div>
- {tab==='overview' && <div><p>Movimientos sin plan: {s.unplannedCount}</p><p>Sugerencias: {s.suggestedCount}</p></div>}
- {tab==='unplanned' && <ul>{s.unplannedTransactions.map(t=><li key={t.transactionId}><strong>{t.description || 'Sin descripción'}</strong> · {t.budgetDate} · {formatMoney(t.amount)} · Estado: {t.status}</li>)}</ul>}
- {tab==='suggestions' && <ul>{s.suggestedMatches.map(m=><li key={`${m.itemId}-${m.transactionId}`}><strong>{m.reasons.join(', ') || 'Sugerencia automática'}</strong> · {formatMoney(m.suggestedAmount)} <button onClick={()=>confirm.mutate(m)}>Aceptar</button></li>)}</ul>}
- {tab==='items' && <ul>{s.planItems.map(i=><li key={i.itemId}><strong>{i.title}</strong> · {i.executionStatus} · {formatMoney(i.matchedAmount)}/{formatMoney(i.plannedAmount)}<TransactionMatchList matches={i.matches} onDelete={(id)=>del.mutate(id)} /></li>)}</ul>}
- <Link to={planningRoutes.monthly(profileId)}>Volver</Link></section>;
+export function MonthlyPlanReconciliationPage() {
+  const { profileId = '' } = useParams();
+  const { year, month, searchParams, setSearchParams } = useMonthlyPeriod();
+  const tab = (searchParams.get('tab') ?? 'overview') as ReconciliationTabKey;
+  const invalidateMonthly = useInvalidateMonthlyViews(profileId, year, month);
+  const query = useQuery<MonthlyPlanReconciliationSummary>({ queryKey: queryKeys.monthlyPlanReconciliation(profileId, year, month), queryFn: () => getMonthlyPlanReconciliation(profileId, year, month), enabled: Boolean(profileId) });
+  const confirm = useMutation({ mutationFn: (m: SuggestedPlanTransactionMatch) => confirmPlanTransactionMatch(profileId, { monthlyPlanItemId: m.itemId, moneyTransactionId: m.transactionId, matchedAmount: m.suggestedAmount, matchType: 'SUGGESTED' }), onSuccess: invalidateMonthly });
+  const del = useMutation({ mutationFn: (matchId: string) => deletePlanTransactionMatch(profileId, matchId), onSuccess: invalidateMonthly });
+
+  const setTab = (next: ReconciliationTabKey) => {
+    const p = new URLSearchParams(searchParams);
+    p.set('tab', next);
+    p.set('year', String(year));
+    p.set('month', String(month));
+    setSearchParams(p);
+  };
+
+  const onDeleteMatch = (id: string) => {
+    if (!window.confirm('¿Querés eliminar esta conciliación?')) return;
+    del.mutate(id);
+  };
+
+  if (query.isLoading) return <p>Cargando conciliación...</p>;
+  if (query.isError || !query.data) return <ErrorState title='Error de conciliación' message='No se pudo cargar la conciliación mensual.' />;
+
+  return <section className='panel'><h2>Conciliación mensual</h2><ReconciliationTabs tab={tab} onChange={setTab} />{confirm.isError ? <p role='alert'>No se pudo confirmar la sugerencia.</p> : null}{del.isError ? <p role='alert'>No se pudo eliminar la conciliación.</p> : null}
+    {tab === 'overview' ? <ReconciliationSummaryPanel summary={query.data} /> : null}
+    {tab === 'unplanned' ? <UnplannedTransactionsPanel transactions={query.data.unplannedTransactions} /> : null}
+    {tab === 'suggestions' ? <SuggestedMatchesPanel matches={query.data.suggestedMatches} isConfirming={confirm.isPending} onConfirm={(m) => confirm.mutate(m)} /> : null}
+    {tab === 'items' ? <PlanItemsReconciliationPanel items={query.data.planItems} isDeleting={del.isPending} onDelete={onDeleteMatch} /> : null}
+    <Link to={buildPlanningPath(planningRoutes.monthly(profileId), new URLSearchParams([['year', String(year)], ['month', String(month)]]))}>Volver</Link></section>;
 }
-
-function TransactionMatchList({matches,onDelete}:{matches:TransactionMatch[];onDelete:(id:string)=>void}){return <ul>{matches.map(m=><li key={m.id}>{m.matchType} · {formatMoney(m.matchedAmount)} <button onClick={()=>onDelete(m.id)}>Eliminar</button></li>)}</ul>}
