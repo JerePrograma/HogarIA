@@ -21,7 +21,7 @@ class MonthlyPlanReconciliationServiceTest {
   @Mock MonthlyPlanItemRepository itemRepo;
   @Mock MoneyTransactionRepository txRepo;
   @Mock MonthlyPlanTransactionMatchRepository matchRepo;
-   MonthlyPlanAmountCalculator amountCalculator;
+  @Mock MonthlyPlanAmountCalculator amountCalculator;
   @InjectMocks MonthlyPlanReconciliationService service;
 
   UUID userId = UUID.randomUUID(); UUID profileId = UUID.randomUUID();

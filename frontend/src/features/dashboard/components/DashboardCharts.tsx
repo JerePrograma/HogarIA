@@ -78,7 +78,7 @@ const highContrastChartColors = [
 
 const otherCategoriesColor = '#64748b';
 
-const excludedTypesFromExpenseCharts: Array<CategoryType | null> = ['INCOME', null];
+const excludedTypesFromExpenseCharts: Array<CategoryType | null> = ['INCOME', 'SAVING', 'INVESTMENT', 'DEBT', null];
 
 export function DashboardCharts({ summary }: Props) {
   const model = useMemo(() => buildChartModel(summary), [summary]);
@@ -105,7 +105,7 @@ export function DashboardCharts({ summary }: Props) {
             <p className="eyebrow">Composición</p>
             <h2>Composición por categoría</h2>
             <p className="muted">
-              Distribución de gastos confirmados según las categorías cargadas.
+              Distribución de consumo confirmado (sin ahorro, inversión ni deuda).
             </p>
           </div>
         </div>
@@ -120,7 +120,7 @@ export function DashboardCharts({ summary }: Props) {
               <ChartMiniStat
                 label="Total analizado"
                 value={formatMoney(totalExpense)}
-                helper="Gastos, deudas, ahorro e inversión"
+                helper="Solo consumo fijo + variable"
               />
 
               <ChartMiniStat
@@ -137,7 +137,7 @@ export function DashboardCharts({ summary }: Props) {
               <ChartMiniStat
                 label="Concentración"
                 value={concentrationLabel}
-                helper={`${visibleCategoriesCount} categoría${visibleCategoriesCount === 1 ? '' : 's'} con gasto`}
+                helper={`${visibleCategoriesCount} categoría${visibleCategoriesCount === 1 ? '' : 's'} de consumo`}
               />
 
               <ChartMiniStat
@@ -195,7 +195,7 @@ export function DashboardCharts({ summary }: Props) {
         <div className="section-title">
           <div>
             <p className="eyebrow">Ranking</p>
-            <h2>Gasto real por categoría</h2>
+            <h2>Consumo real por categoría</h2>
             <p className="muted">
               Ranking de categorías con movimientos confirmados durante el período.
             </p>
@@ -204,7 +204,7 @@ export function DashboardCharts({ summary }: Props) {
 
         {barData.length === 0 ? (
           <p className="texto-muted">
-            Todavía no hay categorías con movimientos de gasto para graficar.
+            Todavía no hay categorías con movimientos de consumo para graficar.
           </p>
         ) : (
           <>
@@ -265,7 +265,7 @@ export function DashboardCharts({ summary }: Props) {
 
         {!hasData ? (
           <p className="texto-muted">
-            No hay gastos confirmados para detallar en este período.
+            No hay consumo confirmado para detallar en este período.
           </p>
         ) : (
           <CategoryBreakdownTable items={categoryData} />

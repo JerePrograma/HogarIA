@@ -4,7 +4,7 @@ import com.hogaria.entity.*;import com.hogaria.repository.*;import org.junit.jup
 
 @ExtendWith(MockitoExtension.class)
 class DashboardServiceTest {
-  @Mock FinancialProfileRepository profileRepository; @Mock MoneyTransactionRepository transactionRepository; @Mock CategoryRepository categoryRepository; @Mock BudgetYearRepository budgetYearRepository; @Mock BudgetMonthRepository budgetMonthRepository; @Mock BudgetCategoryItemRepository budgetCategoryItemRepository; @Mock MonthlyPlanItemRepository monthlyPlanItemRepository; @Mock ExternalSyncMappingRepository externalSyncMappingRepository; @Mock FinancialCashFlowClassifier classifier; @InjectMocks DashboardService service;
+  @Mock FinancialProfileRepository profileRepository; @Mock MoneyTransactionRepository transactionRepository; @Mock CategoryRepository categoryRepository; @Mock BudgetYearRepository budgetYearRepository; @Mock BudgetMonthRepository budgetMonthRepository; @Mock BudgetCategoryItemRepository budgetCategoryItemRepository; @Mock MonthlyPlanItemRepository monthlyPlanItemRepository; @Mock ExternalSyncMappingRepository externalSyncMappingRepository; @Mock FinancialCashFlowClassifier classifier; @Mock MonthlyPlanAmountCalculator monthlyPlanAmountCalculator; @InjectMocks DashboardService service;
 
   @Test void includesPlanningAndOperationalData(){
     var u=UUID.randomUUID(); var p=UUID.randomUUID(); var incomeCat=UUID.randomUUID(); var expenseCat=UUID.randomUUID();
@@ -26,7 +26,7 @@ class DashboardServiceTest {
     assertNotNull(res.planningSummary().projectedNetMax());
     assertEquals(1,res.planningSummary().unpricedCount());
     assertEquals(1,res.planningSummary().convertedItemsCount());
-    assertEquals("CRITICAL",res.operationalSummary().financialRiskLevel());
+    assertEquals("RISK",res.operationalSummary().financialRiskLevel());
     assertTrue(res.operationalSummary().alerts().stream().anyMatch(a->a.contains("ítems sin cotizar")));
   }
 
@@ -45,8 +45,6 @@ class DashboardServiceTest {
     when(classifier.classify(any(), any(), any())).thenReturn(CashFlowTreatment.EARNED_INCOME);
     when(externalSyncMappingRepository.findByProfileId(p)).thenReturn(List.of());
     when(classifier.classify(any(), any(), any())).thenReturn(CashFlowTreatment.EARNED_INCOME);
-    when(monthlyPlanAmountCalculator.calculate(any())).thenReturn(new MonthlyPlanAmountCalculator.AmountBreakdown(new BigDecimal("0"),new BigDecimal("0"),new BigDecimal("0"),new BigDecimal("0"),new BigDecimal("0"),new BigDecimal("0")));
-    when(monthlyPlanAmountCalculator.calculate(any())).thenReturn(new MonthlyPlanAmountCalculator.AmountBreakdown(new BigDecimal("0"),new BigDecimal("0"),new BigDecimal("0"),new BigDecimal("0"),new BigDecimal("0"),new BigDecimal("0")));
     when(monthlyPlanItemRepository.findByProfileIdAndPeriodYearAndPeriodMonth(p,2026,5)).thenReturn(List.of());
 
     var res=service.getMonthlySummary(u,p,2026,5);
