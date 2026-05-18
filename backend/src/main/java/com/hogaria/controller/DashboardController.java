@@ -4,4 +4,4 @@ import com.hogaria.dto.DashboardDtos.DashboardSummaryResponse;import com.hogaria
 public class DashboardController {
   private final DashboardService service; private final CurrentUserResolver parser;
   public DashboardController(DashboardService service, CurrentUserResolver parser){this.service=service;this.parser=parser;}
-  @GetMapping("/profiles/{profileId}/dashboard/monthly") public DashboardSummaryResponse monthly(@RequestHeader("X-User-Id") String h,@PathVariable UUID profileId,@RequestParam int year,@RequestParam int month){return service.getMonthlySummary(parser.parse(h),profileId,year,month);} }
+  @GetMapping("/profiles/{profileId}/dashboard/monthly") public DashboardSummaryResponse monthly(@RequestHeader(value = "X-User-Id", required = false) String h,@PathVariable UUID profileId,@RequestParam int year,@RequestParam int month){return service.getMonthlySummary(parser.parse(h),profileId,year,month);} }

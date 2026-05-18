@@ -23,12 +23,12 @@ public class MonthlyPlanQuickCaptureController {
   }
 
   @PostMapping("/profiles/{profileId}/planning/quick-capture/preview")
-  public QuickCapturePreviewResponse preview(@RequestHeader("X-User-Id") String h, @PathVariable UUID profileId, @Valid @RequestBody QuickCapturePreviewRequest request) {
+  public QuickCapturePreviewResponse preview(@RequestHeader(value = "X-User-Id", required = false) String h, @PathVariable UUID profileId, @Valid @RequestBody QuickCapturePreviewRequest request) {
     return quickCaptureService.preview(currentUserResolver.parse(h), profileId, request);
   }
 
   @PostMapping("/profiles/{profileId}/planning/quick-capture/commit")
-  public QuickCaptureCommitResponse commit(@RequestHeader("X-User-Id") String h, @PathVariable UUID profileId, @Valid @RequestBody QuickCaptureCommitRequest request) {
+  public QuickCaptureCommitResponse commit(@RequestHeader(value = "X-User-Id", required = false) String h, @PathVariable UUID profileId, @Valid @RequestBody QuickCaptureCommitRequest request) {
     return new QuickCaptureCommitResponse(monthlyPlanService.create(currentUserResolver.parse(h), profileId, request.payload()), List.of());
   }
 }

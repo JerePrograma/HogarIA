@@ -13,7 +13,7 @@ public class MonthlyPlanSuggestionController {
   private final MonthlyPlanSuggestionService service; private final CurrentUserResolver cu;
   public MonthlyPlanSuggestionController(MonthlyPlanSuggestionService service, CurrentUserResolver cu){this.service=service;this.cu=cu;}
   @PostMapping("/profiles/{profileId}/planning/suggestions")
-  public PlanningSuggestionResponse suggest(@RequestHeader("X-User-Id") String h, @PathVariable UUID profileId, @RequestBody PlanningSuggestionRequest request){
+  public PlanningSuggestionResponse suggest(@RequestHeader(value = "X-User-Id", required = false) String h, @PathVariable UUID profileId, @RequestBody PlanningSuggestionRequest request){
     return service.suggest(cu.parse(h), profileId, request);
   }
 }
