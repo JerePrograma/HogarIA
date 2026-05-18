@@ -3,7 +3,7 @@ import com.hogaria.dto.MonthlyPlanDtos.*;import com.hogaria.entity.*;import com.
 @ExtendWith(MockitoExtension.class)
 @org.mockito.junit.jupiter.MockitoSettings(strictness = org.mockito.quality.Strictness.LENIENT)
 class MonthlyPlanServiceTest {
- @Mock MonthlyPlanItemRepository repo; @Mock FinancialProfileRepository profiles; @Mock CategoryRepository categories; @Mock AccountRepository accounts; @Mock MoneyTransactionRepository txRepo; @InjectMocks MonthlyPlanService s;
+ @Mock MonthlyPlanItemRepository repo; @Mock FinancialProfileRepository profiles; @Mock CategoryRepository categories; @Mock AccountRepository accounts; @Mock MoneyTransactionRepository txRepo; @Mock MonthlyPlanTransactionMatchRepository matchRepo; @InjectMocks MonthlyPlanService s;
  UUID u=UUID.randomUUID(), p=UUID.randomUUID(), c=UUID.randomUUID(), a=UUID.randomUUID();
  void ok(){ when(profiles.findByIdAndUserId(p,u)).thenReturn(Optional.of(new FinancialProfile())); when(accounts.existsByIdAndProfileId(a,p)).thenReturn(true); var cat=new Category(); cat.setProfileId(p); when(categories.findById(c)).thenReturn(Optional.of(cat)); }
  @Test void creaItemExacto(){ ok(); var req=new MonthlyPlanItemCreateRequest(MonthlyPlanItem.Type.EXPENSE,"Colegio",null,LocalDate.now(),2026,5,new BigDecimal("10"),null,null,"ARS",null,null,null,null,null,null,null,null,c,a); when(repo.save(any())).thenAnswer(i->i.getArgument(0)); assertEquals(new BigDecimal("10"), s.create(u,p,req).amount()); }

@@ -4,6 +4,8 @@ export const queryKeys = {
     ['dashboard', profileId, year, month] as const,
   planning: (profileId: string, year: number, month: number) =>
     ['planning', profileId, year, month] as const,
+  monthlyPlanReconciliation: (profileId: string, year: number, month: number) =>
+    ['planning-reconciliation', profileId, year, month] as const,
   transactions: (profileId: string, year: number, month: number) =>
     ['tx', profileId, year, month] as const,
   accounts: (profileId: string) => ['accounts', profileId] as const,

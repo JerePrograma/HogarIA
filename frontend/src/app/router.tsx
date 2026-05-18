@@ -12,6 +12,7 @@ import { HabitsPage } from '../features/habits/HabitsPage';
 import { InflationPage } from '../features/inflation/InflationPage';
 import { PlanningLayout } from '../features/planning/PlanningLayout';
 import { LegacyPlanningRedirect, MonthlyPlanAlertsPage, MonthlyPlanConvertPage, MonthlyPlanImportPage, MonthlyPlanItemCreatePage, MonthlyPlanItemEditPage, MonthlyPlanItemsPage, MonthlyPlanningHomePage, PlanningOverviewPage } from '../features/planning/PlanningPages';
+import { MonthlyPlanReconciliationPage } from '../features/planning/MonthlyPlanReconciliationPage';
 import { ProfilesPage } from '../features/profiles/ProfilesPage';
 import { TransactionImportPage } from '../features/transactions/TransactionImportPage';
 import { TransactionsPage } from '../features/transactions/TransactionsPage';
@@ -94,6 +95,7 @@ export function AppRouter() {
         <Route path="monthly/import" element={<MonthlyPlanImportPage />} />
         <Route path="monthly/alerts" element={<MonthlyPlanAlertsPage />} />
         <Route path="monthly/convert" element={<MonthlyPlanConvertPage />} />
+        <Route path="monthly/reconciliation" element={<MonthlyPlanReconciliationPage />} />
       </Route>
       <Route path="/profiles/:profileId/monthly-planning" element={<ProtectedRoute><LegacyPlanningRedirect /></ProtectedRoute>} />
       <Route

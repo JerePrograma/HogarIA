@@ -16,6 +16,7 @@ export function PlanningLayout() {
     ['Importar', planningRoutes.import(profileId)],
     ['Alertas', planningRoutes.alerts(profileId)],
     ['Convertir', planningRoutes.convert(profileId)],
+    ['Conciliar', planningRoutes.reconciliation(profileId)],
   ] as const;
 
   return (
