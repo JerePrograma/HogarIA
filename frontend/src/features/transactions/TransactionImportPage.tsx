@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { listAccounts } from '../../api/accountsApi';
 import { listCategories } from '../../api/categoriesApi';
 import { commitTransactionImport, previewTransactionImport } from '../../api/transactionImportsApi';
@@ -24,6 +24,15 @@ export function TransactionImportPage() {
   const [preview, setPreview] = useState<TransactionImportPreview | null>(null);
   const [rows, setRows] = useState<TransactionImportRow[]>([]);
   const [createMissingFallbackCategory] = useState(true);
+  const duplicateSuggestionGroups = useMemo(() => {
+    const dupes = rows.filter((r) => r.status === 'DUPLICATE' && (r.suggestedCategoryName || r.suggestedCategoryId));
+    const groups = new Map<string, typeof dupes>();
+    dupes.forEach((row) => {
+      const key = row.suggestedCategoryName ?? row.suggestedCategoryId ?? 'Sin sugerencia';
+      groups.set(key, [...(groups.get(key) ?? []), row]);
+    });
+    return Array.from(groups.entries()).map(([key, list]) => ({ key, list }));
+  }, [rows]);
 
   const accountsQuery = useQuery({ queryKey: ['accounts', profileId], queryFn: () => listAccounts(profileId), enabled: Boolean(profileId) });
   const categoriesQuery = useQuery({ queryKey: ['categories', profileId], queryFn: () => listCategories(profileId, true), enabled: Boolean(profileId) });
@@ -57,7 +66,8 @@ export function TransactionImportPage() {
     {previewMutation.isError ? <ErrorState message={getApiErrorMessage(previewMutation.error)} /> : null}
     {preview ? <section className="panel stack-ui" aria-live="polite"><h2>Paso 2: Revisar y confirmar</h2><ImportPreviewSummary totalRows={preview.totalRows} importableRows={importableRows} duplicateRows={preview.duplicateRows} invalidRows={invalidRows} ignoredRows={ignoredRows} />
       {!importableRows ? <EmptyState title="No hay filas importables" message="Corregí categorías, tipos o volvé a subir el archivo con datos válidos." /> : null}
-      <ImportRowsTable rows={rows} categories={categoriesQuery.data ?? []} onRowsChange={setRows} />
+      {duplicateSuggestionGroups.length ? <section className="panel"><h3>Hay movimientos duplicados con categorías sugeridas</h3>{duplicateSuggestionGroups.map((group) => { const first = group.list[0]; const examples = group.list.slice(0, 3).map((it) => it.normalizedDescription).join(' · '); const dates = group.list.map((it) => it.realDate).sort(); const from = dates[0]; const to = dates[dates.length - 1]; return <div key={group.key}><p><strong>{group.key}</strong> ({group.list.length} filas)</p><p className="muted">Ejemplos: {examples}</p><Link className="btn btn-secondary" to={`/profiles/${profileId}/transactions/recategorize?accountId=${accountId}&from=${from}&to=${to}&descriptionContains=${encodeURIComponent(group.key)}${first.suggestedCategoryId ? `&toCategoryId=${first.suggestedCategoryId}` : ''}${first.suggestedCategoryName && !first.suggestedCategoryId ? `&suggestedCategoryName=${encodeURIComponent(first.suggestedCategoryName)}` : ''}`}>Revisar recategorización</Link></div>; })}</section> : null}
+      <ImportRowsTable rows={rows} categories={categoriesQuery.data ?? []} onRowsChange={setRows} createMissingFallbackCategory={createMissingFallbackCategory} />
       <ImportCommitPanel canCommit={canCommit} pending={commitMutation.isPending} hasMissingCategory={unresolvedRows > 0} onCommit={() => commitMutation.mutate()} />
       {commitMutation.isError ? <ErrorState message={getApiErrorMessage(commitMutation.error)} /> : null}
     </section> : null}
