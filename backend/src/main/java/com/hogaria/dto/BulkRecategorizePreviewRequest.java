@@ -10,6 +10,8 @@ public record BulkRecategorizePreviewRequest(
         LocalDate from,
         LocalDate to,
         UUID fromCategoryId,
+        Boolean onlyWithoutCategory,
+        String targetMode,
         UUID toCategoryId,
         MoneyTransaction.MovementType movementType,
         String descriptionContains,
