@@ -244,6 +244,7 @@ public class TransactionImportService {
   private final ExcelImportBatchRepository batchRepository;
   private final ExcelImportRowRepository rowRepository;
   private final TransactionService txService;
+  private final TransactionCategorySuggestionService suggestionService;
   private final ObjectMapper objectMapper;
 
   public TransactionImportService(
@@ -254,6 +255,7 @@ public class TransactionImportService {
           ExcelImportBatchRepository batchRepository,
           ExcelImportRowRepository rowRepository,
           TransactionService txService,
+          TransactionCategorySuggestionService suggestionService,
           ObjectMapper objectMapper
   ) {
     this.profileRepository = profileRepository;
@@ -263,6 +265,7 @@ public class TransactionImportService {
     this.batchRepository = batchRepository;
     this.rowRepository = rowRepository;
     this.txService = txService;
+    this.suggestionService = suggestionService;
     this.objectMapper = objectMapper;
   }
 
@@ -1421,52 +1424,17 @@ public class TransactionImportService {
           String normalizedDescription,
           MoneyTransaction.MovementType movementType
   ) {
-    for (var rule : CATEGORY_RULES) {
-      if (!rule.matches(normalizedDescription, movementType)) {
-        continue;
-      }
-
-      var category = findCategoryByNameAndCompatibleType(categories, rule.categoryName(), movementType, rule.categoryType());
-
-      if (category != null) {
-        return new CategorySuggestion(
-                category.getId(),
-                category.getName(),
-                rule.confidence(),
-                RowStatus.READY,
-                category.getType()
-        );
-      }
-
-      return new CategorySuggestion(
-              null,
-              rule.categoryName(),
-              Confidence.LOW,
-              RowStatus.NEEDS_CATEGORY,
-              rule.categoryType()
-      );
+    var suggestion = suggestionService.suggest(null, normalizedDescription, movementType, null, null);
+    if (suggestion.status() == TransactionCategorySuggestionService.Status.READY && suggestion.suggestedCategoryId() != null) {
+      return new CategorySuggestion(suggestion.suggestedCategoryId(), suggestion.suggestedCategoryName(), Confidence.valueOf(suggestion.confidence().name()), RowStatus.READY, suggestion.suggestedCategoryType());
     }
-
+    if (suggestion.status() == TransactionCategorySuggestionService.Status.NEEDS_CATEGORY) {
+      return new CategorySuggestion(null, suggestion.suggestedCategoryName(), Confidence.LOW, RowStatus.NEEDS_CATEGORY, suggestion.suggestedCategoryType());
+    }
     var fallbackName = fallbackCategoryName(movementType);
     var fallback = findCategoryByName(categories, fallbackName);
-
-    if (fallback != null) {
-      return new CategorySuggestion(
-              fallback.getId(),
-              fallback.getName(),
-              Confidence.LOW,
-              RowStatus.READY,
-              fallback.getType()
-      );
-    }
-
-    return new CategorySuggestion(
-            null,
-            fallbackName,
-            Confidence.LOW,
-            RowStatus.NEEDS_CATEGORY,
-            inferCategoryType(fallbackName, movementType)
-    );
+    if (fallback != null) return new CategorySuggestion(fallback.getId(), fallback.getName(), Confidence.LOW, RowStatus.READY, fallback.getType());
+    return new CategorySuggestion(null, fallbackName, Confidence.LOW, RowStatus.NEEDS_CATEGORY, inferCategoryType(fallbackName, movementType));
   }
 
   private Category findCategoryByName(List<Category> categories, String name) {
