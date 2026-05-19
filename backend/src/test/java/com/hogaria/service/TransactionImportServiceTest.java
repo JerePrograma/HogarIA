@@ -31,6 +31,7 @@ class TransactionImportServiceTest {
   @Mock ExcelImportBatchRepository batchRepository;
   @Mock ExcelImportRowRepository rowRepository;
   @Mock TransactionService txService;
+  @Mock TransactionCategorySuggestionService suggestionService;
 
   TransactionImportService service;
   UUID userId = UUID.randomUUID();
@@ -39,7 +40,7 @@ class TransactionImportServiceTest {
 
   @BeforeEach
   void setup() {
-    service = new TransactionImportService(profileRepository, accountRepository, categoryRepository, txRepository, batchRepository, rowRepository, txService, new ObjectMapper().findAndRegisterModules());
+    service = new TransactionImportService(profileRepository, accountRepository, categoryRepository, txRepository, batchRepository, rowRepository, txService, suggestionService, new ObjectMapper().findAndRegisterModules());
     lenient().when(profileRepository.findByIdAndUserId(eq(profileId), eq(userId))).thenReturn(Optional.of(FinancialProfile.builder().id(profileId).userId(userId).build()));
     lenient().when(accountRepository.existsByIdAndProfileId(eq(accountId), eq(profileId))).thenReturn(true);
   }
