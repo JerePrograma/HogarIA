@@ -15,6 +15,7 @@ import { LegacyPlanningRedirect, MonthlyPlanAlertsPage, MonthlyPlanConvertPage, 
 import { MonthlyPlanReconciliationPage } from '../features/planning/MonthlyPlanReconciliationPage';
 import { ProfilesPage } from '../features/profiles/ProfilesPage';
 import { TransactionImportPage } from '../features/transactions/TransactionImportPage';
+import { TransactionRecategorizationPage } from '../features/transactions/recategorization/TransactionRecategorizationPage';
 import { TransactionsPage } from '../features/transactions/TransactionsPage';
 
 function DevGuard({ children }: { children: JSX.Element }) {
@@ -82,6 +83,7 @@ export function AppRouter() {
         path="/profiles/:profileId/transactions/import"
         element={<ProtectedRoute><TransactionImportPage /></ProtectedRoute>}
       />
+      <Route path="/profiles/:profileId/transactions/recategorize" element={<ProtectedRoute><TransactionRecategorizationPage /></ProtectedRoute>} />
       <Route path="/profiles/:profileId/budgets" element={<ProtectedRoute><BudgetPage /></ProtectedRoute>} />
       <Route path="/profiles/:profileId/goals" element={<ProtectedRoute><GoalsPage /></ProtectedRoute>} />
       <Route path="/profiles/:profileId/habits" element={<ProtectedRoute><HabitsPage /></ProtectedRoute>} />
