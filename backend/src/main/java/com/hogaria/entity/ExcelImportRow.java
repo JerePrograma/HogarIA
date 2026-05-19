@@ -1,17 +1,24 @@
 package com.hogaria.entity;
 
 import jakarta.persistence.*;
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.UUID;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
-import java.math.BigDecimal;
-import java.time.LocalDateTime;
-import java.util.UUID;
-
 @Entity
-@Table(name = "excel_import_row")
+@Table(
+        name = "excel_import_row",
+        indexes = {
+                @Index(name = "idx_excel_import_row_batch_row", columnList = "batch_id, row_number"),
+                @Index(name = "idx_excel_import_row_source_hash", columnList = "source_hash"),
+                @Index(name = "idx_excel_import_row_source_operation", columnList = "source_operation_id")
+        }
+)
 @Getter
 @Setter
 @Builder
@@ -39,8 +46,39 @@ public class ExcelImportRow {
     @Column(name = "month")
     private Integer month;
 
+    @Column(name = "real_date")
+    private LocalDate realDate;
+
+    @Column(name = "budget_date")
+    private LocalDate budgetDate;
+
     @Column(name = "amount", precision = 19, scale = 2)
     private BigDecimal amount;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "movement_type", length = 40)
+    private MoneyTransaction.MovementType movementType;
+
+    @Column(name = "source_operation_id", length = 120)
+    private String sourceOperationId;
+
+    @Column(name = "source_hash", length = 64)
+    private String sourceHash;
+
+    @Column(name = "external_sequence", length = 120)
+    private String externalSequence;
+
+    @Column(name = "raw_description", length = 255)
+    private String rawDescription;
+
+    @Column(name = "normalized_description", length = 500)
+    private String normalizedDescription;
+
+    @Column(name = "extended_description", length = 500)
+    private String extendedDescription;
+
+    @Column(name = "merchant_name", length = 255)
+    private String merchantName;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "target_entity", length = 40)

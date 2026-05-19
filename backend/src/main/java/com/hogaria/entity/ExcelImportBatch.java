@@ -1,17 +1,23 @@
 package com.hogaria.entity;
 
 import jakarta.persistence.*;
-import lombok.*;
-import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.UpdateTimestamp;
-import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.type.SqlTypes;
-
 import java.time.LocalDateTime;
 import java.util.UUID;
+import lombok.*;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.annotations.UpdateTimestamp;
+import org.hibernate.type.SqlTypes;
 
 @Entity
-@Table(name = "excel_import_batch")
+@Table(
+        name = "excel_import_batch",
+        indexes = {
+                @Index(name = "idx_excel_import_batch_profile_created", columnList = "profile_id, created_at"),
+                @Index(name = "idx_excel_import_batch_profile_source", columnList = "profile_id, source"),
+                @Index(name = "idx_excel_import_batch_account", columnList = "account_id")
+        }
+)
 @Getter
 @Setter
 @Builder
@@ -27,6 +33,12 @@ public class ExcelImportBatch {
     @Column(name = "profile_id", nullable = false)
     private UUID profileId;
 
+    @Column(name = "account_id")
+    private UUID accountId;
+
+    @Column(name = "source", length = 40)
+    private String source;
+
     @Column(name = "original_file_name", length = 255)
     private String originalFileName;
 
@@ -39,6 +51,9 @@ public class ExcelImportBatch {
 
     @Column(name = "year")
     private Integer year;
+
+    @Column(name = "month")
+    private Integer month;
 
     @Column(name = "currency", nullable = false, length = 3)
     private String currency;
