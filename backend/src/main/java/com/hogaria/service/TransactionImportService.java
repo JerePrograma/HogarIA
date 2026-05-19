@@ -166,13 +166,13 @@ public class TransactionImportService {
 
           rule("\\b(LINK\\s+DE\\s+PAGO|PRESTAMOS|PRÉSTAMOS)\\b",
                   CAT_CJ_CAPITAL_RECUPERADO,
-                  MoneyTransaction.MovementType.INCOME,
+                  MoneyTransaction.MovementType.SAVING,
                   Category.Type.INVESTMENT,
                   Confidence.MEDIUM),
 
           rule("\\b(PAYMENT\\s+LINKED\\s+TO\\s+A\\s+LOAN\\s+ORIGINATION|MERCADOCREDITO|MERCADOCRÉDITO)\\b",
                   CAT_CREDITOS,
-                  MoneyTransaction.MovementType.INCOME,
+                  MoneyTransaction.MovementType.ADJUSTMENT,
                   Category.Type.DEBT,
                   Confidence.MEDIUM),
 
@@ -396,6 +396,16 @@ public class TransactionImportService {
     if (commitRow.status() == RowStatus.SKIPPED || previewRow.status() == RowStatus.SKIPPED) {
       return skippedResult();
     }
+    if (commitRow.status() == RowStatus.DUPLICATE || previewRow.status() == RowStatus.DUPLICATE) {
+      if (request.skipDuplicates()) {
+        return duplicateResult();
+      }
+      warnings.add("Fila " + commitRow.rowNumber() + ": marcada como duplicada, se intenta importar.");
+    }
+    if (commitRow.status() == RowStatus.ERROR || previewRow.status() == RowStatus.ERROR) {
+      errors.add("Fila " + commitRow.rowNumber() + ": fila inválida en preview.");
+      return failedResult();
+    }
 
     var amount = commitRow.amount() != null ? commitRow.amount() : previewRow.amount();
 
@@ -433,6 +443,15 @@ public class TransactionImportService {
 
     if (categoryId == null) {
       errors.add("Fila " + commitRow.rowNumber() + ": falta categoría.");
+      return failedResult();
+    }
+    var category = categoryRepository.findById(categoryId).orElse(null);
+    if (category == null) {
+      errors.add("Fila " + commitRow.rowNumber() + ": categoría inexistente.");
+      return failedResult();
+    }
+    if (!isMovementCategoryCompatible(movementType, category.getType())) {
+      errors.add("Fila " + commitRow.rowNumber() + ": tipo de movimiento/categoría incompatible.");
       return failedResult();
     }
 
@@ -2204,11 +2223,11 @@ public class TransactionImportService {
             "MONEDA DIGITAL"
     )) {
       return new MercadoPagoClassification(
-              MoneyTransaction.MovementType.INCOME,
+              MoneyTransaction.MovementType.SAVING,
               CAT_CJ_CAPITAL_RECUPERADO,
               Confidence.HIGH,
               null,
-              ""
+              "Recupero/inversión identificado. Se clasifica como ahorro/inversión para no inflar ingresos operativos."
       );
     }
 
@@ -2304,5 +2323,21 @@ public class TransactionImportService {
             confidence,
             RowStatus.NEEDS_CATEGORY
     );
+  }
+
+  private boolean isMovementCategoryCompatible(
+          MoneyTransaction.MovementType movementType,
+          Category.Type categoryType
+  ) {
+    if (movementType == MoneyTransaction.MovementType.INCOME) {
+      return categoryType == Category.Type.INCOME;
+    }
+    if (movementType == MoneyTransaction.MovementType.SAVING) {
+      return categoryType == Category.Type.SAVING || categoryType == Category.Type.INVESTMENT;
+    }
+    if (movementType == MoneyTransaction.MovementType.EXPENSE) {
+      return categoryType != Category.Type.INCOME;
+    }
+    return true;
   }
 }
