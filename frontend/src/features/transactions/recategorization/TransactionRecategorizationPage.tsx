@@ -44,6 +44,7 @@ const PREVIEW_STATUS_LABELS: Record<string, string> = {
   READY: 'Actualizable',
   AMBIGUOUS: 'Ambiguo',
   SKIPPED: 'Omitido',
+  NEEDS_CATEGORY: 'Sin sugerencia',
   ERROR: 'Error',
 };
 
@@ -104,6 +105,8 @@ export function TransactionRecategorizationPage() {
     from: search.get('from'),
     to: search.get('to'),
     fromCategoryId: null,
+    onlyWithoutCategory: null,
+    targetMode: 'MANUAL',
     toCategoryId: search.get('toCategoryId') ?? '',
     movementType:
       (search.get('movementType') as BulkRecategorizePreviewPayload['movementType']) ?? null,
@@ -152,6 +155,7 @@ export function TransactionRecategorizationPage() {
   const selectedTargetCategory = form.toCategoryId
     ? categoriesById.get(form.toCategoryId)
     : null;
+  const isAutoTargetMode = form.targetMode === 'AUTO_BY_IMPORT_RULES';
 
   const previewMutation = useMutation({
     mutationFn: () => previewBulkRecategorize(profileId, form),
@@ -215,8 +219,14 @@ export function TransactionRecategorizationPage() {
   const applyMutation = useMutation({
     mutationFn: () =>
       applyBulkRecategorize(profileId, {
-        toCategoryId: form.toCategoryId,
-        transactionIds: readyIds,
+        targetMode: form.targetMode ?? 'MANUAL',
+        toCategoryId: isAutoTargetMode ? null : form.toCategoryId,
+        transactionIds: isAutoTargetMode ? [] : readyIds,
+        updates: isAutoTargetMode
+          ? candidates
+              .filter((candidate) => candidate.previewStatus === 'READY' && candidate.targetCategoryId)
+              .map((candidate) => ({ transactionId: candidate.transactionId, targetCategoryId: candidate.targetCategoryId! }))
+          : [],
       }),
     onSuccess: async () => {
       await Promise.all([
@@ -234,6 +244,7 @@ export function TransactionRecategorizationPage() {
       form.from ||
       form.to ||
       form.fromCategoryId ||
+      form.onlyWithoutCategory != null ||
       form.movementType ||
       form.descriptionContains ||
       form.exactAmount != null ||
@@ -251,13 +262,12 @@ export function TransactionRecategorizationPage() {
     Boolean(missingCategoryName.trim()) && !createCategoryMutation.isPending;
 
   const canPreview =
-    Boolean(form.toCategoryId) &&
+    (isAutoTargetMode || Boolean(form.toCategoryId)) &&
     hasAnySearchCriteria &&
     !previewMutation.isPending;
 
   const canApply =
     readyIds.length > 0 &&
-    Boolean(form.toCategoryId) &&
     !applyMutation.isPending;
 
   const updateForm = (patch: Partial<BulkRecategorizePreviewPayload>) => {
@@ -283,6 +293,7 @@ export function TransactionRecategorizationPage() {
       from: null,
       to: null,
       fromCategoryId: null,
+      onlyWithoutCategory: null,
       movementType: null,
       descriptionContains: null,
       exactAmount: null,
@@ -426,14 +437,17 @@ export function TransactionRecategorizationPage() {
                   Categoría actual
                   <select
                     className="input-ui"
-                    value={form.fromCategoryId ?? ''}
+                    value={form.onlyWithoutCategory ? '__WITHOUT_CATEGORY__' : (form.fromCategoryId ?? '')}
                     onChange={(event) =>
-                      updateForm({
-                        fromCategoryId: toNullableString(event.target.value),
-                      })
+                      updateForm(
+                        event.target.value === '__WITHOUT_CATEGORY__'
+                          ? { fromCategoryId: null, onlyWithoutCategory: true }
+                          : { fromCategoryId: toNullableString(event.target.value), onlyWithoutCategory: null },
+                      )
                     }
                   >
                     <option value="">Todas</option>
+                    <option value="__WITHOUT_CATEGORY__">Sin categoría</option>
 
                     {categories.map((category) => (
                       <option key={category.id} value={category.id}>
@@ -444,10 +458,27 @@ export function TransactionRecategorizationPage() {
                 </label>
 
                 <label>
+                  Modo destino
+                  <select
+                    className="input-ui"
+                    value={form.targetMode ?? 'MANUAL'}
+                    onChange={(event) =>
+                      updateForm({
+                        targetMode: event.target.value as 'MANUAL' | 'AUTO_BY_IMPORT_RULES',
+                      })
+                    }
+                  >
+                    <option value="MANUAL">Categoría fija</option>
+                    <option value="AUTO_BY_IMPORT_RULES">Automático según importación</option>
+                  </select>
+                </label>
+
+                <label>
                   Categoría destino
                   <select
                     className="input-ui"
-                    value={form.toCategoryId}
+                    value={form.toCategoryId ?? ''}
+                    disabled={isAutoTargetMode}
                     onChange={(event) =>
                       updateForm({
                         toCategoryId: event.target.value,
@@ -463,6 +494,7 @@ export function TransactionRecategorizationPage() {
                     ))}
                   </select>
                 </label>
+                {isAutoTargetMode ? <p className="muted">Se intentará resolver la categoría usando las mismas reglas del importador.</p> : null}
 
                 <label>
                   Tipo
@@ -607,7 +639,7 @@ export function TransactionRecategorizationPage() {
                   {previewMutation.isPending ? 'Previsualizando...' : 'Previsualizar cambios'}
                 </button>
 
-                {!form.toCategoryId ? (
+                {!isAutoTargetMode && !form.toCategoryId ? (
                   <span className="muted">
                     Seleccioná una categoría destino para poder previsualizar.
                   </span>
@@ -668,6 +700,12 @@ export function TransactionRecategorizationPage() {
                     <span>Omitidos</span>
                     <strong>{previewMutation.data.skippedCount}</strong>
                     <p>No serán actualizados.</p>
+                  </article>
+
+                  <article className="recategorization-summary-card tone-warning">
+                    <span>Sin sugerencia</span>
+                    <strong>{statusCounters.NEEDS_CATEGORY ?? 0}</strong>
+                    <p>No se resolverá automáticamente.</p>
                   </article>
                 </section>
 
@@ -759,6 +797,7 @@ export function TransactionRecategorizationPage() {
                             <th className="amount-cell">Monto</th>
                             <th>Tipo</th>
                             <th>Estado</th>
+                            <th>Categoría destino</th>
                             <th>Warning</th>
                           </tr>
                         </thead>
@@ -790,6 +829,10 @@ export function TransactionRecategorizationPage() {
                                   tone={getPreviewStatusTone(candidate.previewStatus)}
                                   label={getPreviewStatusLabel(candidate.previewStatus)}
                                 />
+                              </td>
+
+                              <td>
+                                {candidate.targetCategoryName ?? 'Sin sugerencia'}
                               </td>
 
                               <td>
@@ -919,6 +962,7 @@ export function TransactionRecategorizationPage() {
               <div className="recategorization-destination-card">
                 <span>Categoría destino</span>
                 <strong>{selectedTargetCategory?.name ?? 'No seleccionada'}</strong>
+                {isAutoTargetMode ? <strong>Automático según importación</strong> : null}
               </div>
 
               <p className="muted">
@@ -932,7 +976,7 @@ export function TransactionRecategorizationPage() {
 
               <ul className="recategorization-rule-list">
                 <li>No se aplica nada sin previsualización.</li>
-                <li>No se permite previsualizar sin categoría destino.</li>
+                <li>En modo manual, se requiere categoría destino.</li>
                 <li>No se permite buscar sin al menos un criterio.</li>
                 <li>Solo se aplican candidatos marcados como actualizables.</li>
               </ul>

@@ -7,7 +7,9 @@ export interface BulkRecategorizePreviewPayload {
   from?: string | null;
   to?: string | null;
   fromCategoryId?: string | null;
-  toCategoryId: string;
+  onlyWithoutCategory?: boolean | null;
+  targetMode?: 'MANUAL' | 'AUTO_BY_IMPORT_RULES';
+  toCategoryId?: string | null;
   movementType?: BulkRecategorizeMovementType | null;
   descriptionContains?: string | null;
   exactAmount?: number | null;
@@ -20,7 +22,9 @@ export interface BulkRecategorizeCandidate {
   transactionId: string;
   accountId: string;
   currentCategoryId: string | null;
-  targetCategoryId: string;
+  currentCategoryName?: string | null;
+  targetCategoryId: string | null;
+  targetCategoryName?: string | null;
   movementType: BulkRecategorizeMovementType;
   realDate: string;
   budgetDate: string;
@@ -28,7 +32,7 @@ export interface BulkRecategorizeCandidate {
   description: string;
   origin: string;
   status: string;
-  previewStatus: 'READY' | 'SKIPPED' | 'AMBIGUOUS';
+  previewStatus: 'READY' | 'SKIPPED' | 'AMBIGUOUS' | 'NEEDS_CATEGORY';
   warning: string;
 }
 
@@ -45,8 +49,10 @@ export interface BulkRecategorizePreviewResult {
 }
 
 export interface BulkRecategorizeApplyPayload {
-  toCategoryId: string;
-  transactionIds: string[];
+  targetMode?: 'MANUAL' | 'AUTO_BY_IMPORT_RULES';
+  toCategoryId?: string | null;
+  transactionIds?: string[];
+  updates?: Array<{ transactionId: string; targetCategoryId: string }>;
 }
 
 export interface BulkRecategorizeApplyResult {

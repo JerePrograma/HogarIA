@@ -2,6 +2,7 @@ package com.hogaria.service;
 
 import com.hogaria.dto.BulkRecategorizeApplyRequest;
 import com.hogaria.dto.BulkRecategorizeApplyResponse;
+import com.hogaria.dto.BulkRecategorizeApplyItem;
 import com.hogaria.dto.BulkRecategorizeCandidate;
 import com.hogaria.dto.BulkRecategorizePreviewRequest;
 import com.hogaria.dto.BulkRecategorizePreviewResponse;
@@ -35,17 +36,20 @@ public class TransactionService {
   private final FinancialProfileRepository profileRepository;
   private final AccountRepository accountRepository;
   private final CategoryRepository categoryRepository;
+  private final TransactionCategorySuggestionService suggestionService;
 
   public TransactionService(
           MoneyTransactionRepository repository,
           FinancialProfileRepository profileRepository,
           AccountRepository accountRepository,
-          CategoryRepository categoryRepository
+          CategoryRepository categoryRepository,
+          TransactionCategorySuggestionService suggestionService
   ) {
     this.repository = repository;
     this.profileRepository = profileRepository;
     this.accountRepository = accountRepository;
     this.categoryRepository = categoryRepository;
+    this.suggestionService = suggestionService;
   }
 
   @Transactional
@@ -185,19 +189,20 @@ public class TransactionService {
     var warnings = new ArrayList<String>();
     var errors = new ArrayList<String>();
 
-    if (request.toCategoryId() == null) {
+    var targetMode = normalizeTargetMode(request.targetMode());
+    if (isManualMode(targetMode) && request.toCategoryId() == null) {
       errors.add("Falta toCategoryId.");
       return emptyBulkPreview(profileId, null, errors);
     }
 
-    var targetCategory = getCategoryForProfile(profileId, request.toCategoryId());
+    Category targetCategory = isManualMode(targetMode) ? getCategoryForProfile(profileId, request.toCategoryId()) : null;
 
     LocalDate from = request.from() != null ? request.from() : LocalDate.of(1900, 1, 1);
     LocalDate to = request.to() != null ? request.to() : LocalDate.of(2999, 12, 31);
 
     if (from.isAfter(to)) {
       errors.add("El rango de fechas es inválido: from no puede ser posterior a to.");
-      return emptyBulkPreview(profileId, targetCategory.getId(), errors);
+      return emptyBulkPreview(profileId, targetCategory == null ? null : targetCategory.getId(), errors);
     }
 
     List<MoneyTransaction> baseTransactions = loadBulkBaseTransactions(profileId, request, from, to);
@@ -221,11 +226,23 @@ public class TransactionService {
       var key = ambiguityKey(transaction);
       boolean ambiguous = ambiguityCountByKey.getOrDefault(key, 0) > 1;
 
-      if (Objects.equals(transaction.getCategoryId(), targetCategory.getId())) {
+      UUID candidateTargetCategoryId = targetCategory != null ? targetCategory.getId() : null;
+      String candidateTargetCategoryName = targetCategory != null ? targetCategory.getName() : null;
+      if (isAutoMode(targetMode)) {
+        var suggestion = suggestionService.suggest(profileId, transaction.getDescription(), transaction.getMovementType(), null, transaction.getAmount());
+        candidateTargetCategoryId = suggestion.suggestedCategoryId();
+        candidateTargetCategoryName = suggestion.suggestedCategoryName();
+      }
+
+      if (candidateTargetCategoryId == null) {
+        previewStatus = "NEEDS_CATEGORY";
+        warning = "No se pudo resolver categoría destino automáticamente.";
+        skippedCount++;
+      } else if (Objects.equals(transaction.getCategoryId(), candidateTargetCategoryId)) {
         previewStatus = "SKIPPED";
         warning = "Ya tiene esa categoría.";
         skippedCount++;
-      } else if (!isMovementCategoryCompatible(transaction.getMovementType(), targetCategory.getType())) {
+      } else if (!isMovementCategoryCompatible(transaction.getMovementType(), getCategoryForProfile(profileId, candidateTargetCategoryId).getType())) {
         previewStatus = "SKIPPED";
         warning = "La categoría destino no es compatible con el tipo de movimiento.";
         skippedCount++;
@@ -239,7 +256,8 @@ public class TransactionService {
 
       candidates.add(toBulkCandidate(
               transaction,
-              targetCategory.getId(),
+              candidateTargetCategoryId,
+              candidateTargetCategoryName,
               previewStatus,
               warning
       ));
@@ -251,7 +269,7 @@ public class TransactionService {
 
     return new BulkRecategorizePreviewResponse(
             profileId,
-            targetCategory.getId(),
+            targetCategory == null ? null : targetCategory.getId(),
             filtered.size(),
             updatableCount,
             ambiguousCount,
@@ -270,7 +288,7 @@ public class TransactionService {
   ) {
     ensureProfile(profileId, userId);
 
-    var targetCategory = getCategoryForProfile(profileId, request.toCategoryId());
+    var targetMode = normalizeTargetMode(request.targetMode());
 
     int updated = 0;
     int skipped = 0;
@@ -280,26 +298,44 @@ public class TransactionService {
     var warnings = new ArrayList<String>();
     var errors = new ArrayList<String>();
 
-    for (var transactionId : request.transactionIds()) {
+    List<BulkRecategorizeApplyItem> items = new ArrayList<>();
+    if (isManualMode(targetMode)) {
+      var targetCategory = getCategoryForProfile(profileId, request.toCategoryId());
+      for (var transactionId : request.transactionIds()) {
+        items.add(new BulkRecategorizeApplyItem(transactionId, targetCategory.getId()));
+      }
+    } else {
+      if (request.updates() != null) {
+        items.addAll(request.updates());
+      }
+    }
+
+    for (var item : items) {
       try {
-        var transaction = repository.findByIdAndProfileId(transactionId, profileId)
+        if (item.targetCategoryId() == null || item.transactionId() == null) {
+          failed++;
+          errors.add("Fila inválida de actualización.");
+          continue;
+        }
+        var targetCategory = getCategoryForProfile(profileId, item.targetCategoryId());
+        var transaction = repository.findByIdAndProfileId(item.transactionId(), profileId)
                 .orElse(null);
 
         if (transaction == null) {
           failed++;
-          errors.add("Movimiento no encontrado o no pertenece al perfil: " + transactionId);
+          errors.add("Movimiento no encontrado o no pertenece al perfil: " + item.transactionId());
           continue;
         }
 
         if (Objects.equals(transaction.getCategoryId(), targetCategory.getId())) {
           skipped++;
-          warnings.add("Movimiento omitido porque ya tiene la categoría destino: " + transactionId);
+          warnings.add("Movimiento omitido porque ya tiene la categoría destino: " + item.transactionId());
           continue;
         }
 
         if (!isMovementCategoryCompatible(transaction.getMovementType(), targetCategory.getType())) {
           failed++;
-          errors.add("Movimiento incompatible con la categoría destino: " + transactionId);
+          errors.add("Movimiento incompatible con la categoría destino: " + item.transactionId());
           continue;
         }
 
@@ -310,7 +346,7 @@ public class TransactionService {
         updatedIds.add(transaction.getId());
       } catch (Exception ex) {
         failed++;
-        errors.add("Error actualizando movimiento " + transactionId + ": " + ex.getMessage());
+        errors.add("Error actualizando movimiento " + item.transactionId() + ": " + ex.getMessage());
       }
     }
 
@@ -330,7 +366,7 @@ public class TransactionService {
           LocalDate from,
           LocalDate to
   ) {
-    if (request.accountId() != null && request.fromCategoryId() != null) {
+    if (request.accountId() != null && request.fromCategoryId() != null && !Boolean.TRUE.equals(request.onlyWithoutCategory())) {
       return repository.findByProfileIdAndAccountIdAndCategoryIdAndRealDateBetween(
               profileId,
               request.accountId(),
@@ -349,7 +385,7 @@ public class TransactionService {
       );
     }
 
-    if (request.fromCategoryId() != null) {
+    if (request.fromCategoryId() != null && !Boolean.TRUE.equals(request.onlyWithoutCategory())) {
       return repository.findByProfileIdAndCategoryIdAndRealDateBetween(
               profileId,
               request.fromCategoryId(),
@@ -367,6 +403,9 @@ public class TransactionService {
   ) {
     if (request.movementType() != null
             && transaction.getMovementType() != request.movementType()) {
+      return false;
+    }
+    if (Boolean.TRUE.equals(request.onlyWithoutCategory()) && transaction.getCategoryId() != null) {
       return false;
     }
 
@@ -422,14 +461,20 @@ public class TransactionService {
   private BulkRecategorizeCandidate toBulkCandidate(
           MoneyTransaction transaction,
           UUID targetCategoryId,
+          String targetCategoryName,
           String previewStatus,
           String warning
   ) {
+    String currentCategoryName = transaction.getCategoryId() == null
+            ? null
+            : categoryRepository.findById(transaction.getCategoryId()).map(Category::getName).orElse(null);
     return new BulkRecategorizeCandidate(
             transaction.getId(),
             transaction.getAccountId(),
             transaction.getCategoryId(),
+            currentCategoryName,
             targetCategoryId,
+            targetCategoryName,
             transaction.getMovementType(),
             transaction.getRealDate(),
             transaction.getBudgetDate(),
@@ -574,5 +619,17 @@ public class TransactionService {
             .toUpperCase()
             .replaceAll("\\s+", " ")
             .trim();
+  }
+
+  private String normalizeTargetMode(String targetMode) {
+    return targetMode == null ? "MANUAL" : targetMode;
+  }
+
+  private boolean isManualMode(String targetMode) {
+    return !"AUTO_BY_IMPORT_RULES".equals(targetMode);
+  }
+
+  private boolean isAutoMode(String targetMode) {
+    return "AUTO_BY_IMPORT_RULES".equals(targetMode);
   }
 }

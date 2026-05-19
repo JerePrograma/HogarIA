@@ -1,12 +1,12 @@
 package com.hogaria.dto;
 
-import jakarta.validation.constraints.NotEmpty;
-import jakarta.validation.constraints.NotNull;
 import java.util.List;
 import java.util.UUID;
 
 public record BulkRecategorizeApplyRequest(
-        @NotNull UUID toCategoryId,
-        @NotEmpty List<UUID> transactionIds
+        String targetMode,
+        UUID toCategoryId,
+        List<UUID> transactionIds,
+        List<BulkRecategorizeApplyItem> updates
 ) {
 }
