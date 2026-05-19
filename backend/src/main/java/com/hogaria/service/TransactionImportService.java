@@ -1345,6 +1345,7 @@ public class TransactionImportService {
     var existing = loadVisibleCategories(profileId)
             .stream()
             .filter(category -> sameCategoryName(category.getName(), name))
+            .filter(category -> isMovementCategoryCompatible(toMovementType(type), category.getType()))
             .findFirst();
 
       return existing.orElseGet(() -> categoryRepository.save(
@@ -1357,6 +1358,12 @@ public class TransactionImportService {
                       .build()
       ));
 
+  }
+
+  private MoneyTransaction.MovementType toMovementType(Category.Type type) {
+    if (type == Category.Type.INCOME) return MoneyTransaction.MovementType.INCOME;
+    if (type == Category.Type.SAVING || type == Category.Type.INVESTMENT) return MoneyTransaction.MovementType.SAVING;
+    return MoneyTransaction.MovementType.EXPENSE;
   }
 
   private void ensureProfileBelongsToUser(UUID profileId, UUID userId) {
@@ -1419,14 +1426,15 @@ public class TransactionImportService {
         continue;
       }
 
-      var category = findCategoryByName(categories, rule.categoryName());
+      var category = findCategoryByNameAndCompatibleType(categories, rule.categoryName(), movementType, rule.categoryType());
 
       if (category != null) {
         return new CategorySuggestion(
                 category.getId(),
                 category.getName(),
                 rule.confidence(),
-                RowStatus.READY
+                RowStatus.READY,
+                category.getType()
         );
       }
 
@@ -1434,7 +1442,8 @@ public class TransactionImportService {
               null,
               rule.categoryName(),
               Confidence.LOW,
-              RowStatus.NEEDS_CATEGORY
+              RowStatus.NEEDS_CATEGORY,
+              rule.categoryType()
       );
     }
 
@@ -1446,7 +1455,8 @@ public class TransactionImportService {
               fallback.getId(),
               fallback.getName(),
               Confidence.LOW,
-              RowStatus.READY
+              RowStatus.READY,
+              fallback.getType()
       );
     }
 
@@ -1454,7 +1464,8 @@ public class TransactionImportService {
             null,
             fallbackName,
             Confidence.LOW,
-            RowStatus.NEEDS_CATEGORY
+            RowStatus.NEEDS_CATEGORY,
+            inferCategoryType(fallbackName, movementType)
     );
   }
 
@@ -1462,6 +1473,16 @@ public class TransactionImportService {
     return categories
             .stream()
             .filter(category -> sameCategoryName(category.getName(), name))
+            .findFirst()
+            .orElse(null);
+  }
+
+  private Category findCategoryByNameAndCompatibleType(List<Category> categories, String name, MoneyTransaction.MovementType movementType, Category.Type preferredType) {
+    return categories
+            .stream()
+            .filter(category -> sameCategoryName(category.getName(), name))
+            .filter(category -> isMovementCategoryCompatible(movementType, category.getType()))
+            .filter(category -> preferredType == null || category.getType() == preferredType)
             .findFirst()
             .orElse(null);
   }
@@ -2006,7 +2027,8 @@ public class TransactionImportService {
           UUID categoryId,
           String categoryName,
           Confidence confidence,
-          RowStatus status
+          RowStatus status,
+          Category.Type categoryType
   ) {
   }
 
@@ -2304,7 +2326,8 @@ public class TransactionImportService {
               category.getId(),
               category.getName(),
               confidence,
-              preferredStatus != null ? preferredStatus : RowStatus.READY
+              preferredStatus != null ? preferredStatus : RowStatus.READY,
+              category.getType()
       );
     }
 
@@ -2313,7 +2336,8 @@ public class TransactionImportService {
               null,
               categoryName,
               confidence,
-              RowStatus.SKIPPED
+              RowStatus.SKIPPED,
+              null
       );
     }
 
@@ -2321,7 +2345,8 @@ public class TransactionImportService {
             null,
             categoryName,
             confidence,
-            RowStatus.NEEDS_CATEGORY
+            RowStatus.NEEDS_CATEGORY,
+            null
     );
   }
 
