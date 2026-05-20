@@ -44,6 +44,9 @@ const rowStatusLabels: Record<string, string> = {
   READY: "Listas",
   NEEDS_CATEGORY: "Necesitan categoría",
   DUPLICATE: "Duplicadas",
+  DUPLICATE_EXACT: "Duplicados exactos",
+  POSSIBLE_INTERNAL_TRANSFER: "Posibles transferencias internas",
+  INTERNAL_TRANSFER_MATCHED: "Transferencias internas",
   ERROR: "Con error",
   SKIPPED: "Omitidas",
 };
@@ -190,6 +193,9 @@ export function TransactionImportPage() {
           READY: 0,
           NEEDS_CATEGORY: 0,
           DUPLICATE: 0,
+          DUPLICATE_EXACT: 0,
+          POSSIBLE_INTERNAL_TRANSFER: 0,
+          INTERNAL_TRANSFER_MATCHED: 0,
           ERROR: 0,
           SKIPPED: 0,
         } as Record<RowStatus | "total", number>,
@@ -220,13 +226,13 @@ export function TransactionImportPage() {
 
   const invalidRows = rowCounters.ERROR ?? 0;
   const ignoredRows = rowCounters.SKIPPED ?? 0;
-  const duplicateRows = rowCounters.DUPLICATE ?? preview?.duplicateRows ?? 0;
+  const duplicateRows = (rowCounters.DUPLICATE ?? 0) + (rowCounters.DUPLICATE_EXACT ?? 0) + (rowCounters.POSSIBLE_INTERNAL_TRANSFER ?? 0) + (rowCounters.INTERNAL_TRANSFER_MATCHED ?? 0) || preview?.duplicateRows || 0;
   const needsCategoryRows = rowCounters.NEEDS_CATEGORY ?? 0;
 
   const duplicateSuggestionGroups = useMemo(() => {
     const duplicates = rows.filter(
       (row) =>
-        row.status === "DUPLICATE" &&
+        (row.status === "DUPLICATE" || row.status === "DUPLICATE_EXACT") &&
         (row.suggestedCategoryName || row.suggestedCategoryId),
     );
 

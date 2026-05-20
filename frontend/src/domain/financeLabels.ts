@@ -206,6 +206,9 @@ export const importRowStatusLabels: Record<string, string> = {
   WARNING: "Atención",
   ERROR: "Error",
   DUPLICATE: "Duplicado",
+  DUPLICATE_EXACT: "Duplicado exacto",
+  POSSIBLE_INTERNAL_TRANSFER: "Posible transferencia interna",
+  INTERNAL_TRANSFER_MATCHED: "Transferencia interna",
   NEEDS_CATEGORY: "Requiere categoría",
 };
 

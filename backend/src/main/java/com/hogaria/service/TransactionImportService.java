@@ -78,6 +78,8 @@ public class TransactionImportService {
   private static final String CAT_CJ_CAPITAL_RECUPERADO = "CJ - Capital recuperado";
   private static final String CAT_FONDEO_MERCADO_PAGO = "Fondeo MercadoPago / transferencias internas";
   private static final String CAT_AJUSTES_MERCADO_PAGO = "Ajustes MercadoPago";
+  private enum ImportMatchType { NONE, EXACT_DUPLICATE, SOURCE_DUPLICATE, STRONG_SAME_ACCOUNT_DUPLICATE, POSSIBLE_INTERNAL_TRANSFER }
+  private record ImportMatch(ImportMatchType type, UUID matchedTransactionId, String reason) {}
 
   private static final List<CategoryRule> CATEGORY_RULES = List.of(
           rule("\\b(COMISION|COMISIÓN|CARGO|PUNTO\\s+EFECTIVO)\\b",
@@ -400,11 +402,17 @@ public class TransactionImportService {
     if (commitRow.status() == RowStatus.SKIPPED || previewRow.status() == RowStatus.SKIPPED) {
       return skippedResult();
     }
-    if (commitRow.status() == RowStatus.DUPLICATE || previewRow.status() == RowStatus.DUPLICATE) {
+    if (commitRow.status() == RowStatus.DUPLICATE || commitRow.status() == RowStatus.DUPLICATE_EXACT
+            || previewRow.status() == RowStatus.DUPLICATE || previewRow.status() == RowStatus.DUPLICATE_EXACT) {
       if (request.skipDuplicates()) {
         return duplicateResult();
       }
       warnings.add("Fila " + commitRow.rowNumber() + ": marcada como duplicada, se intenta importar.");
+    }
+    if (commitRow.status() == RowStatus.POSSIBLE_INTERNAL_TRANSFER || commitRow.status() == RowStatus.INTERNAL_TRANSFER_MATCHED
+            || previewRow.status() == RowStatus.POSSIBLE_INTERNAL_TRANSFER || previewRow.status() == RowStatus.INTERNAL_TRANSFER_MATCHED) {
+      warnings.add("Fila " + commitRow.rowNumber() + ": omitida por posible transferencia interna.");
+      return skippedResult();
     }
     if (commitRow.status() == RowStatus.ERROR || previewRow.status() == RowStatus.ERROR) {
       errors.add("Fila " + commitRow.rowNumber() + ": fila inválida en preview.");
@@ -466,7 +474,7 @@ public class TransactionImportService {
             "Movimiento importado"
     );
 
-    if (isDuplicate(profileId, accountId, previewRow.realDate(), amount, description)) {
+    if (findImportMatch(profileId, accountId, previewRow).type() != ImportMatchType.NONE) {
       if (request.skipDuplicates()) {
         warnings.add("Fila " + commitRow.rowNumber() + ": omitida por duplicado.");
         return duplicateResult();
@@ -1207,8 +1215,9 @@ public class TransactionImportService {
     return rows
             .stream()
             .map(row -> {
-              if (isDuplicate(profileId, accountId, row.realDate(), row.amount(), row.normalizedDescription())) {
-                return copyWithStatus(row);
+              var match = findImportMatch(profileId, accountId, row);
+              if (match.type() != ImportMatchType.NONE) {
+                return copyWithStatus(row, match);
               }
 
               return row;
@@ -1217,8 +1226,14 @@ public class TransactionImportService {
   }
 
   private TransactionImportPreviewRow copyWithStatus(
-          TransactionImportPreviewRow row
+          TransactionImportPreviewRow row,
+          ImportMatch match
   ) {
+    RowStatus resolvedStatus = switch (match.type()) {
+      case EXACT_DUPLICATE -> RowStatus.DUPLICATE_EXACT;
+      case POSSIBLE_INTERNAL_TRANSFER -> RowStatus.POSSIBLE_INTERNAL_TRANSFER;
+      default -> RowStatus.DUPLICATE;
+    };
     return new TransactionImportPreviewRow(
             row.rowNumber(),
             row.source(),
@@ -1235,8 +1250,8 @@ public class TransactionImportService {
             row.suggestedCategoryId(),
             row.suggestedCategoryName(),
             row.confidence(),
-            RowStatus.DUPLICATE,
-            "Movimiento posiblemente duplicado.",
+            resolvedStatus,
+            match.reason(),
             row.rawPayload()
     );
   }
@@ -1279,7 +1294,7 @@ public class TransactionImportService {
       case READY -> ImportRowStatus.READY;
       case SKIPPED -> ImportRowStatus.SKIPPED;
       case ERROR -> ImportRowStatus.ERROR;
-      case NEEDS_CATEGORY, DUPLICATE -> ImportRowStatus.WARNING;
+      case NEEDS_CATEGORY, DUPLICATE, DUPLICATE_EXACT, POSSIBLE_INTERNAL_TRANSFER, INTERNAL_TRANSFER_MATCHED -> ImportRowStatus.WARNING;
     };
   }
 
@@ -1310,7 +1325,8 @@ public class TransactionImportService {
     int importable = 0;
 
     for (var row : rows) {
-      if (row.status() == RowStatus.DUPLICATE) {
+      if (row.status() == RowStatus.DUPLICATE || row.status() == RowStatus.DUPLICATE_EXACT
+              || row.status() == RowStatus.POSSIBLE_INTERNAL_TRANSFER || row.status() == RowStatus.INTERNAL_TRANSFER_MATCHED) {
         duplicates++;
       } else if (row.status() == RowStatus.SKIPPED) {
         skipped++;
@@ -1414,25 +1430,34 @@ public class TransactionImportService {
     }
   }
 
-  private boolean isDuplicate(
-          UUID profileId,
-          UUID accountId,
-          LocalDate realDate,
-          BigDecimal amount,
-          String description
-  ) {
-    return txRepository
-            .findByProfileId(profileId)
-            .stream()
-            .anyMatch(transaction ->
-                    Objects.equals(transaction.getAccountId(), accountId)
-                            && Objects.equals(transaction.getRealDate(), realDate)
-                            && transaction.getAmount().compareTo(amount) == 0
-                            && Objects.equals(
-                            normalizeDescription(transaction.getDescription()),
-                            normalizeDescription(description)
-                    )
-            );
+  private ImportMatch findImportMatch(UUID profileId, UUID accountId, TransactionImportPreviewRow row) {
+    if (row.sourceHash() != null && txRepository.existsByProfileIdAndSourceHash(profileId, row.sourceHash())) {
+      var tx = txRepository.findByProfileIdAndSourceHash(profileId, row.sourceHash()).orElse(null);
+      return new ImportMatch(ImportMatchType.EXACT_DUPLICATE, tx == null ? null : tx.getId(), "Duplicado exacto: ya existe una operación con el mismo origen/hash.");
+    }
+    if (row.source() != null && row.sourceOperationId() != null) {
+      var tx = txRepository.findByProfileIdAndSourceAndSourceOperationId(profileId, row.source().name(), row.sourceOperationId());
+      if (!tx.isEmpty()) return new ImportMatch(ImportMatchType.SOURCE_DUPLICATE, tx.get(0).getId(), "Duplicado de origen: source + sourceOperationId.");
+    }
+    var nearby = txRepository.findByProfileIdAndRealDateBetweenAndAmount(profileId, row.realDate().minusDays(1), row.realDate().plusDays(1), row.amount());
+    for (var transaction : nearby) {
+      if (Objects.equals(transaction.getAccountId(), accountId)
+              && normalizeDescription(transaction.getDescription()).equals(normalizeDescription(row.normalizedDescription()))) {
+        return new ImportMatch(ImportMatchType.STRONG_SAME_ACCOUNT_DUPLICATE, transaction.getId(), "Duplicado fuerte en misma cuenta/fecha/monto.");
+      }
+      if (!Objects.equals(transaction.getAccountId(), accountId) && isPotentialInternalTransferText(row.normalizedDescription() + " " + transaction.getDescription())) {
+        return new ImportMatch(ImportMatchType.POSSIBLE_INTERNAL_TRANSFER, transaction.getId(), "Posible transferencia interna: mismo monto, fecha cercana y cuenta distinta. Se omite para no inflar ingresos/gastos.");
+      }
+    }
+    return new ImportMatch(ImportMatchType.NONE, null, null);
+  }
+
+  private boolean isPotentialInternalTransferText(String raw) {
+    var t = normalizeText(raw);
+    return t.contains("DEBIN") || t.contains("PAGO DEBIN") || t.contains("BANK TRANSFER")
+            || t.contains("TRANSFERENCIA BANCARIA") || t.contains("CUENTA BANCARIA DIGITAL")
+            || t.contains("CUENTA DNI") || t.contains("TRASPASO") || t.contains("FONDEO")
+            || t.contains("DEBITO INMEDIATO") || t.contains("MERCADO PAGO");
   }
 
   private List<Category> loadVisibleCategories(UUID profileId) {
