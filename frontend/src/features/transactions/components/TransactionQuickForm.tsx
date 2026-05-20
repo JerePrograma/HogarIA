@@ -1,62 +1,46 @@
+import type { FormEvent } from "react";
+import { ErrorState } from "../../../components/ui/ErrorState";
 import {
   labelOrValue,
   movementTypeLabels,
   transactionStatusLabels,
-} from "../../domain/financeLabels";
+} from "../../../domain/financeLabels";
 import {
+  currencyOptions,
   movementTypeOptions,
   transactionStatusOptions,
-} from "../../domain/financeOptions";
-import { formatMoney } from "../../domain/formatters";
-import { getCompatibleCategories } from "../../domain/transactionRules";
-import {
-  MovementType,
-  TransactionStatus,
+} from "../../../domain/financeOptions";
+import { formatMoney } from "../../../domain/formatters";
+import type {
   Account,
   Category,
-} from "../../domain/types";
-
-export interface TransactionForm {
-  accountId: string;
-  categoryId: string;
-  movementType: MovementType;
-  realDate: string;
-  budgetDate: string;
-  amount: number;
-  currency: string;
-  description: string;
-  status: TransactionStatus;
-}
+  MovementType,
+  TransactionStatus,
+} from "../../../domain/types";
+import type { TransactionForm } from "../types";
+import { FilterChip } from "./FilterChip";
 
 interface Props {
   form: TransactionForm;
   accounts: Account[];
-  categories: Category[];
-  pending: boolean;
+  compatibleCategories: Category[];
   canSave: boolean;
-  onChange: (patch: Partial<TransactionForm>) => void;
-  onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
+  pending: boolean;
+  isError: boolean;
+  onFormChange: (patch: Partial<TransactionForm>) => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }
-
-const currencyOptions = ["ARS", "USD"];
 
 export function TransactionQuickForm({
   form,
   accounts,
-  categories,
-  pending,
+  compatibleCategories,
   canSave,
-  onChange,
+  pending,
+  isError,
+  onFormChange,
   onSubmit,
 }: Props) {
-  const compatibleCategories = getCompatibleCategories(
-    categories,
-    form.movementType,
-    {
-      includeTechnical: false,
-    },
-  );
-
   return (
     <form className="panel transactions-form-panel" onSubmit={onSubmit}>
       <div className="section-title">
@@ -72,19 +56,18 @@ export function TransactionQuickForm({
 
       <div className="transactions-type-picker">
         {movementTypeOptions.map((option) => (
-          <button
+          <FilterChip
             key={option.value}
-            type="button"
-            className={`tx-filter-chip ${form.movementType === option.value ? "active" : ""}`}
+            active={form.movementType === option.value}
             onClick={() =>
-              onChange({
+              onFormChange({
                 movementType: option.value as MovementType,
                 categoryId: "",
               })
             }
           >
             {option.label}
-          </button>
+          </FilterChip>
         ))}
       </div>
 
@@ -94,7 +77,9 @@ export function TransactionQuickForm({
           <select
             className="input-ui"
             value={form.accountId}
-            onChange={(event) => onChange({ accountId: event.target.value })}
+            onChange={(event) =>
+              onFormChange({ accountId: event.target.value })
+            }
           >
             <option value="">Seleccionar cuenta</option>
             {accounts.map((account) => (
@@ -110,12 +95,16 @@ export function TransactionQuickForm({
           <select
             className="input-ui"
             value={form.categoryId}
-            onChange={(event) => onChange({ categoryId: event.target.value })}
+            onChange={(event) =>
+              onFormChange({ categoryId: event.target.value })
+            }
           >
             <option value="">Seleccionar categoría</option>
             {compatibleCategories.map((category) => (
               <option key={category.id} value={category.id}>
-                {category.name}
+                {category.technical
+                  ? `${category.name} · técnica`
+                  : category.name}
               </option>
             ))}
           </select>
@@ -127,7 +116,9 @@ export function TransactionQuickForm({
             className="input-ui"
             value={form.status}
             onChange={(event) =>
-              onChange({ status: event.target.value as TransactionStatus })
+              onFormChange({
+                status: event.target.value as TransactionStatus,
+              })
             }
           >
             {transactionStatusOptions.map((option) => (
@@ -143,11 +134,11 @@ export function TransactionQuickForm({
           <select
             className="input-ui"
             value={form.currency}
-            onChange={(event) => onChange({ currency: event.target.value })}
+            onChange={(event) => onFormChange({ currency: event.target.value })}
           >
             {currencyOptions.map((currency) => (
-              <option key={currency} value={currency}>
-                {currency}
+              <option key={currency.value} value={currency.value}>
+                {currency.label}
               </option>
             ))}
           </select>
@@ -159,7 +150,7 @@ export function TransactionQuickForm({
             className="input-ui"
             type="date"
             value={form.realDate}
-            onChange={(event) => onChange({ realDate: event.target.value })}
+            onChange={(event) => onFormChange({ realDate: event.target.value })}
           />
         </label>
 
@@ -169,7 +160,9 @@ export function TransactionQuickForm({
             className="input-ui"
             type="date"
             value={form.budgetDate}
-            onChange={(event) => onChange({ budgetDate: event.target.value })}
+            onChange={(event) =>
+              onFormChange({ budgetDate: event.target.value })
+            }
           />
         </label>
 
@@ -183,7 +176,9 @@ export function TransactionQuickForm({
             value={form.amount === 0 ? "" : form.amount}
             placeholder="0,00"
             onChange={(event) =>
-              onChange({ amount: Number(event.target.value) })
+              onFormChange({
+                amount: Number(event.target.value),
+              })
             }
           />
         </label>
@@ -194,7 +189,9 @@ export function TransactionQuickForm({
             className="input-ui"
             value={form.description}
             placeholder="Ej: supermercado, sueldo, alquiler"
-            onChange={(event) => onChange({ description: event.target.value })}
+            onChange={(event) =>
+              onFormChange({ description: event.target.value })
+            }
           />
         </label>
       </div>
@@ -217,10 +214,14 @@ export function TransactionQuickForm({
 
         {!canSave ? (
           <span className="muted">
-            Completá cuenta, categoría compatible, monto y fechas para guardar.
+            Completá cuenta, categoría, monto y fechas para guardar.
           </span>
         ) : null}
       </div>
+
+      {isError ? (
+        <ErrorState message="No se pudo guardar el movimiento. Revisá los datos ingresados." />
+      ) : null}
     </form>
   );
 }

@@ -1,1 +1,61 @@
-import {http} from './http'; export const listTransactions=(pid:string,year:number,month:number)=>http.get(`/profiles/${pid}/transactions?year=${year}&month=${month}`).then(r=>r.data); export const createTransaction=(p:unknown)=>http.post('/transactions',p).then(r=>r.data); export const getTransaction=(id:string)=>http.get(`/transactions/${id}`).then(r=>r.data); export const updateTransaction=(id:string,p:unknown)=>http.put(`/transactions/${id}`,p).then(r=>r.data); export const deleteTransaction=(id:string)=>http.delete(`/transactions/${id}`).then(r=>r.data);
+import { http } from "./http";
+import type {
+  MoneyTransaction,
+  MovementType,
+  TransactionOrigin,
+  TransactionStatus,
+} from "../domain/types";
+
+export interface TransactionCreatePayload {
+  profileId: string;
+  accountId: string;
+  categoryId: string | null;
+  movementType: MovementType;
+  realDate: string;
+  budgetDate: string;
+  amount: number;
+  currency: string;
+  description?: string | null;
+  origin?: TransactionOrigin;
+  status?: TransactionStatus;
+}
+
+export type TransactionUpdatePayload = Partial<
+  Omit<TransactionCreatePayload, "profileId">
+>;
+
+export async function listTransactions(
+  profileId: string,
+  year: number,
+  month: number,
+): Promise<MoneyTransaction[]> {
+  const { data } = await http.get(`/profiles/${profileId}/transactions`, {
+    params: { year, month },
+  });
+
+  return data;
+}
+
+export async function createTransaction(
+  payload: TransactionCreatePayload,
+): Promise<MoneyTransaction> {
+  const { data } = await http.post("/transactions", payload);
+  return data;
+}
+
+export async function getTransaction(id: string): Promise<MoneyTransaction> {
+  const { data } = await http.get(`/transactions/${id}`);
+  return data;
+}
+
+export async function updateTransaction(
+  id: string,
+  payload: TransactionUpdatePayload,
+): Promise<MoneyTransaction> {
+  const { data } = await http.put(`/transactions/${id}`, payload);
+  return data;
+}
+
+export async function deleteTransaction(id: string): Promise<void> {
+  await http.delete(`/transactions/${id}`);
+}

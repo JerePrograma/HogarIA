@@ -1,87 +1,118 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from "react";
+import {
+  classificationStatusLabels,
+  labelOrValue,
+  paymentChannelLabels,
+} from "../../../domain/financeLabels";
 import type {
   Account,
   Category,
   MoneyTransaction,
-  MovementType,
-  TransactionStatus,
-} from '../../../domain/types';
-
-export type AllOption = 'ALL';
-
-export interface TransactionFilters {
-  search: string;
-  accountId: string | AllOption;
-  categoryId: string | AllOption;
-  movementType: MovementType | AllOption;
-  status: TransactionStatus | AllOption;
-}
-
-const ALL: AllOption = 'ALL';
-
-function normalizeSearch(value: string) {
-  return value.trim().toLowerCase();
-}
+} from "../../../domain/types";
+import { getDefaultClassificationStatus } from "../../../domain/transactionRules";
+import { normalizeSearch } from "../utils/transactionUtils";
+import { ALL, WITHOUT_CATEGORY, type TransactionFilters } from "../types";
 
 export function useTransactionFilters(
   transactions: MoneyTransaction[],
+  filters: TransactionFilters,
   accountsById: Map<string, Account>,
   categoriesById: Map<string, Category>,
 ) {
-  const [filters, setFilters] = useState<TransactionFilters>({
-    search: '',
-    accountId: ALL,
-    categoryId: ALL,
-    movementType: ALL,
-    status: ALL,
-  });
-
   const filteredTransactions = useMemo(() => {
     const search = normalizeSearch(filters.search);
 
     return transactions
       .filter((transaction) => {
-        const accountName = accountsById.get(transaction.accountId)?.name ?? '';
+        const accountName = accountsById.get(transaction.accountId)?.name ?? "";
+
         const categoryName = transaction.categoryId
-          ? categoriesById.get(transaction.categoryId)?.name ?? ''
-          : 'sin categoría';
+          ? (categoriesById.get(transaction.categoryId)?.name ??
+            "Categoría no encontrada")
+          : "Sin categoría";
+
+        const classificationStatus =
+          getDefaultClassificationStatus(transaction);
+
+        const classificationLabel = labelOrValue(
+          classificationStatusLabels,
+          classificationStatus,
+        );
+
+        const paymentChannelLabel = transaction.paymentChannel
+          ? labelOrValue(paymentChannelLabels, transaction.paymentChannel)
+          : "";
 
         const matchesSearch =
-          !search
-          || normalizeSearch(transaction.description ?? '').includes(search)
-          || normalizeSearch(accountName).includes(search)
-          || normalizeSearch(categoryName).includes(search)
-          || normalizeSearch(transaction.currency).includes(search)
-          || normalizeSearch(transaction.paymentChannel ?? '').includes(search)
-          || normalizeSearch(transaction.classificationStatus ?? '').includes(search);
+          !search ||
+          normalizeSearch(transaction.description).includes(search) ||
+          normalizeSearch(accountName).includes(search) ||
+          normalizeSearch(categoryName).includes(search) ||
+          normalizeSearch(transaction.currency).includes(search) ||
+          normalizeSearch(transaction.paymentChannel).includes(search) ||
+          normalizeSearch(paymentChannelLabel).includes(search) ||
+          normalizeSearch(classificationStatus).includes(search) ||
+          normalizeSearch(classificationLabel).includes(search) ||
+          normalizeSearch(transaction.classificationReason).includes(search);
 
         const matchesAccount =
-          filters.accountId === ALL || transaction.accountId === filters.accountId;
+          filters.accountId === ALL ||
+          transaction.accountId === filters.accountId;
 
         const matchesCategory =
-          filters.categoryId === ALL
-          || (filters.categoryId === '__WITHOUT_CATEGORY__' && !transaction.categoryId)
-          || transaction.categoryId === filters.categoryId;
+          filters.categoryId === ALL ||
+          (filters.categoryId === WITHOUT_CATEGORY &&
+            !transaction.categoryId) ||
+          transaction.categoryId === filters.categoryId;
 
         const matchesMovement =
-          filters.movementType === ALL || transaction.movementType === filters.movementType;
+          filters.movementType === ALL ||
+          transaction.movementType === filters.movementType;
 
         const matchesStatus =
           filters.status === ALL || transaction.status === filters.status;
 
-        return matchesSearch
-          && matchesAccount
-          && matchesCategory
-          && matchesMovement
-          && matchesStatus;
+        const matchesClassification =
+          filters.classificationStatus === ALL ||
+          classificationStatus === filters.classificationStatus;
+
+        return (
+          matchesSearch &&
+          matchesAccount &&
+          matchesCategory &&
+          matchesMovement &&
+          matchesStatus &&
+          matchesClassification
+        );
       })
       .sort((a, b) => {
         const byDate = b.realDate.localeCompare(a.realDate);
         if (byDate !== 0) return byDate;
 
-        return (b.createdAt ?? '').localeCompare(a.createdAt ?? '');
+        return (b.createdAt ?? "").localeCompare(a.createdAt ?? "");
       });
   }, [accountsById, categoriesById, filters, transactions]);
+
+  const filteredTotal = useMemo(
+    () =>
+      filteredTransactions.reduce((acc, transaction) => {
+        if (transaction.status === "IGNORED") return acc;
+
+        if (transaction.movementType === "INCOME") {
+          return acc + Number(transaction.amount ?? 0);
+        }
+
+        if (
+          transaction.movementType === "EXPENSE" ||
+          transaction.movementType === "SAVING"
+        ) {
+          return acc - Number(transaction.amount ?? 0);
+        }
+
+        return acc;
+      }, 0),
+    [filteredTransactions],
+  );
 
   const activeFilterCount = [
     filters.search,
@@ -89,24 +120,12 @@ export function useTransactionFilters(
     filters.categoryId !== ALL,
     filters.movementType !== ALL,
     filters.status !== ALL,
+    filters.classificationStatus !== ALL,
   ].filter(Boolean).length;
 
-  const resetFilters = () => {
-    setFilters({
-      search: '',
-      accountId: ALL,
-      categoryId: ALL,
-      movementType: ALL,
-      status: ALL,
-    });
-  };
-
   return {
-    allValue: ALL,
-    filters,
-    setFilters,
     filteredTransactions,
+    filteredTotal,
     activeFilterCount,
-    resetFilters,
   };
 }
