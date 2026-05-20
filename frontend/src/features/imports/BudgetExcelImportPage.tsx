@@ -8,6 +8,7 @@ import { AppLayout } from "../../components/layout/AppLayout";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { MetricCard } from "../../components/ui/MetricCard";
 import { StatusBadge } from "../../components/ui/StatusBadge";
+import { importTargetEntityLabels, labelOrValue, profileTypeLabels } from "../../domain/financeLabels";
 import {
   formatNumber,
   normalizeOptionalText,
@@ -18,8 +19,8 @@ import {
   BudgetExcelImportCommitRequest,
   BudgetExcelImportPreviewResponse,
 } from "../../domain/types";
-import { importRowStatusLabels } from "../../imports/importUtils";
 import { getApiErrorMessage } from "../budgets/budgetErrors";
+import { importRowStatusLabels } from "./utils/importUtils";
 
 const defaultOptions: BudgetExcelImportCommitRequest = {
   createCategories: true,

@@ -1,6 +1,6 @@
-import { getCompatibleCategories } from "../domain/financeLabels";
-import { Category } from "../domain/types";
-import { TransactionImportMovementType, TransactionImportRowStatus, TransactionImportRow } from "../features/imports/types";
+import { getCompatibleCategories } from "../../../domain/financeLabels";
+import { Category } from "../../../domain/types";
+import { TransactionImportMovementType, TransactionImportRowStatus, TransactionImportRow } from "../types";
 
 export const importMovementLabels: Record<TransactionImportMovementType, string> = {
   INCOME: 'Ingreso',

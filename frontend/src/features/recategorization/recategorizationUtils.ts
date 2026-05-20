@@ -3,6 +3,7 @@ import type {
   BulkRecategorizePreviewPayload,
   BulkRecategorizePreviewStatus,
 } from "../../api/bulkRecategorizeApi";
+import { movementTypeLabels, movementTypeTones } from "../../domain/financeLabels";
 import { MovementType } from "../../domain/types";
 
 export const WITHOUT_CATEGORY_VALUE = "__WITHOUT_CATEGORY__";

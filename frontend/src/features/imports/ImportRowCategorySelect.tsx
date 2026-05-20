@@ -1,5 +1,5 @@
 import { Category } from "../../domain/types";
-import { getSelectableCategoriesForImportRow } from "../../imports/importUtils";
+import { getSelectableCategoriesForImportRow } from "./utils/importUtils";
 import { TransactionImportRow } from "./types";
 
 interface Props {

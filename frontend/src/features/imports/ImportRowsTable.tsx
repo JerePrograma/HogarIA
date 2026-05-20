@@ -7,7 +7,9 @@ import type {
   TransactionImportRow,
 } from './types';
 import { ImportRowCategorySelect } from './ImportRowCategorySelect';
-import { getImportRowIssueMessage, getSuggestedCategoryName, importMovementLabels, getImportRowStatusTone, importRowStatusLabels } from '../../imports/importUtils';
+import { getImportRowIssueMessage, getSuggestedCategoryName, importMovementLabels, getImportRowStatusTone, importRowStatusLabels } from './utils/importUtils';
+import { movementTypeTones } from '../../domain/financeLabels';
+import { ImportRowsMobileList } from './ImportRowsMobileList';
 
 interface Props {
   rows: TransactionImportRow[];

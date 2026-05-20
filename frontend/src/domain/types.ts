@@ -131,17 +131,6 @@ export interface Account {
   updatedAt: string;
 }
 
-export interface Category {
-  id: string;
-  profileId: string | null;
-  parentId: string | null;
-  name: string;
-  type: CategoryType;
-  scope: CategoryScope;
-  active: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
 export interface BudgetYear {
   id: string;
   profileId: string;

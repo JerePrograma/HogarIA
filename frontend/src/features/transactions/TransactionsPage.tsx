@@ -1,13 +1,13 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { useQueryClient, useQuery, useMutation } from "@tanstack/react-query";
+import { useState, useMemo } from "react";
+import { useParams, Link } from "react-router-dom";
 import { listAccounts } from "../../api/accountsApi";
 import { listCategories } from "../../api/categoriesApi";
 import {
-  createTransaction,
-  deleteTransaction,
   listTransactions,
+  createTransaction,
   updateTransaction,
+  deleteTransaction,
 } from "../../api/transactionsApi";
 import { AppLayout } from "../../components/layout/AppLayout";
 import { EmptyState } from "../../components/ui/EmptyState";
@@ -16,16 +16,20 @@ import { MetricCard } from "../../components/ui/MetricCard";
 import { MonthSelector } from "../../components/ui/MonthSelector";
 import { StatusBadge } from "../../components/ui/StatusBadge";
 import {
+  movementTypeLabels,
+  transactionStatusLabels,
+} from "../../domain/financeLabels";
+import {
   movementTypeOptions,
   transactionStatusOptions,
 } from "../../domain/financeOptions";
 import { formatMoney } from "../../domain/formatters";
-import type {
-  Account,
-  Category,
-  MoneyTransaction,
+import {
   MovementType,
   TransactionStatus,
+  MoneyTransaction,
+  Account,
+  Category,
 } from "../../domain/types";
 
 interface TransactionForm {
@@ -263,8 +267,10 @@ export function TransactionsPage() {
     return transactions
       .filter((transaction) => {
         const accountName = accountsById.get(transaction.accountId)?.name ?? "";
-        const categoryName =
-          categoriesById.get(transaction.categoryId)?.name ?? "";
+        const categoryName = transaction.categoryId
+          ? (categoriesById.get(transaction.categoryId)?.name ??
+            "Categoría no encontrada")
+          : "Sin categoría";
 
         const matchesSearch =
           !search ||
@@ -1011,9 +1017,10 @@ export function TransactionsPage() {
                         accountsById.get(transaction.accountId)?.name ??
                         "Cuenta no encontrada";
 
-                      const categoryName =
-                        categoriesById.get(transaction.categoryId)?.name ??
-                        "Categoría no encontrada";
+                      const categoryName = transaction.categoryId
+                        ? (categoriesById.get(transaction.categoryId)?.name ??
+                          "Categoría no encontrada")
+                        : "Sin categoría";
 
                       const isUpdating =
                         updateTransactionMutation.isPending &&
@@ -1123,9 +1130,10 @@ export function TransactionsPage() {
                     accountsById.get(transaction.accountId)?.name ??
                     "Cuenta no encontrada";
 
-                  const categoryName =
-                    categoriesById.get(transaction.categoryId)?.name ??
-                    "Categoría no encontrada";
+                  const categoryName = transaction.categoryId
+                    ? (categoriesById.get(transaction.categoryId)?.name ??
+                      "Categoría no encontrada")
+                    : "Sin categoría";
 
                   function labelOrValue(
                     movementTypeLabels: any,
