@@ -1,31 +1,31 @@
-import { useMemo, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link, useParams } from 'react-router-dom';
-import { listAccounts } from '../../api/accountsApi';
-import { listCategories } from '../../api/categoriesApi';
+import { useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link, useParams } from "react-router-dom";
+import { listAccounts } from "../../api/accountsApi";
+import { listCategories } from "../../api/categoriesApi";
 import {
   commitTransactionImport,
   previewTransactionImport,
-} from '../../api/transactionImportsApi';
-import { getApiErrorMessage } from '../../api/http';
-import { AppLayout } from '../../components/layout/AppLayout';
-import { EmptyState } from '../../components/ui/EmptyState';
-import { ErrorState } from '../../components/ui/ErrorState';
-import { ImportCommitPanel } from '../imports/ImportCommitPanel';
-import { ImportPreviewSummary } from '../imports/ImportPreviewSummary';
-import { ImportResultPanel } from '../imports/ImportResultPanel';
-import { ImportRowsTable } from '../imports/ImportRowsTable';
-import { ImportSourceForm } from '../imports/ImportSourceForm';
+} from "../../api/transactionImportsApi";
+import { getApiErrorMessage } from "../../api/http";
+import { AppLayout } from "../../components/layout/AppLayout";
+import { EmptyState } from "../../components/ui/EmptyState";
+import { ErrorState } from "../../components/ui/ErrorState";
+import { ImportCommitPanel } from "../imports/ImportCommitPanel";
+import { ImportPreviewSummary } from "../imports/ImportPreviewSummary";
+import { ImportResultPanel } from "../imports/ImportResultPanel";
+import { ImportRowsTable } from "../imports/ImportRowsTable";
+import { ImportSourceForm } from "../imports/ImportSourceForm";
 import type {
   TransactionImportCommitPayload,
   TransactionImportCommitResult,
   TransactionImportPreview,
   TransactionImportRow,
   TransactionImportSource,
-} from '../imports/types';
+} from "../imports/types";
 
-type RowStatus = TransactionImportRow['status'];
-type RowStatusFilter = RowStatus | 'ALL';
+type RowStatus = TransactionImportRow["status"];
+type RowStatusFilter = RowStatus | "ALL";
 
 interface RowFilters {
   search: string;
@@ -33,19 +33,19 @@ interface RowFilters {
   categoryId: string;
 }
 
-const ALL = 'ALL';
+const ALL = "ALL";
 
 const sourceLabels: Record<string, string> = {
-  BANCO_PROVINCIA: 'Banco Provincia',
-  MERCADO_PAGO: 'Mercado Pago',
+  BANCO_PROVINCIA: "Banco Provincia",
+  MERCADO_PAGO: "Mercado Pago",
 };
 
 const rowStatusLabels: Record<string, string> = {
-  READY: 'Listas',
-  NEEDS_CATEGORY: 'Necesitan categoría',
-  DUPLICATE: 'Duplicadas',
-  ERROR: 'Con error',
-  SKIPPED: 'Omitidas',
+  READY: "Listas",
+  NEEDS_CATEGORY: "Necesitan categoría",
+  DUPLICATE: "Duplicadas",
+  ERROR: "Con error",
+  SKIPPED: "Omitidas",
 };
 
 function getSourceLabel(source: TransactionImportSource) {
@@ -53,20 +53,22 @@ function getSourceLabel(source: TransactionImportSource) {
 }
 
 function getRowStatusLabel(status: RowStatusFilter) {
-  if (status === ALL) return 'Todos los estados';
+  if (status === ALL) return "Todos los estados";
 
   return rowStatusLabels[status] ?? status;
 }
 
-function getRowStatusTone(status: RowStatus): 'ok' | 'watch' | 'critical' | 'neutral' {
-  if (status === 'READY') return 'ok';
-  if (status === 'NEEDS_CATEGORY') return 'watch';
-  if (status === 'ERROR') return 'critical';
-  return 'neutral';
+function getRowStatusTone(
+  status: RowStatus,
+): "ok" | "watch" | "critical" | "neutral" {
+  if (status === "READY") return "ok";
+  if (status === "NEEDS_CATEGORY") return "watch";
+  if (status === "ERROR") return "critical";
+  return "neutral";
 }
 
 function normalize(value: string | null | undefined) {
-  return (value ?? '').trim().toLowerCase();
+  return (value ?? "").trim().toLowerCase();
 }
 
 function buildCommitPayload(
@@ -90,30 +92,32 @@ function buildCommitPayload(
 }
 
 export function TransactionImportPage() {
-  const { profileId = '' } = useParams();
+  const { profileId = "" } = useParams();
   const qc = useQueryClient();
 
-  const [source, setSource] = useState<TransactionImportSource>('BANCO_PROVINCIA');
-  const [accountId, setAccountId] = useState('');
+  const [source, setSource] =
+    useState<TransactionImportSource>("BANCO_PROVINCIA");
+  const [accountId, setAccountId] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<TransactionImportPreview | null>(null);
   const [rows, setRows] = useState<TransactionImportRow[]>([]);
-  const [createMissingFallbackCategory, setCreateMissingFallbackCategory] = useState(true);
+  const [createMissingFallbackCategory, setCreateMissingFallbackCategory] =
+    useState(true);
 
   const [filters, setFilters] = useState<RowFilters>({
-    search: '',
+    search: "",
     status: ALL,
     categoryId: ALL,
   });
 
   const accountsQuery = useQuery({
-    queryKey: ['accounts', profileId],
+    queryKey: ["accounts", profileId],
     queryFn: () => listAccounts(profileId),
     enabled: Boolean(profileId),
   });
 
   const categoriesQuery = useQuery({
-    queryKey: ['categories', profileId],
+    queryKey: ["categories", profileId],
     queryFn: () => listCategories(profileId, true),
     enabled: Boolean(profileId),
   });
@@ -134,12 +138,13 @@ export function TransactionImportPage() {
   const selectedAccount = accountId ? accountsById.get(accountId) : undefined;
 
   const previewMutation = useMutation({
-    mutationFn: () => previewTransactionImport(profileId, source, accountId, file!),
+    mutationFn: () =>
+      previewTransactionImport(profileId, source, accountId, file!),
     onSuccess: (data) => {
       setPreview(data);
       setRows(data.rows ?? []);
       setFilters({
-        search: '',
+        search: "",
         status: ALL,
         categoryId: ALL,
       });
@@ -149,20 +154,24 @@ export function TransactionImportPage() {
   const commitMutation = useMutation({
     mutationFn: () => {
       if (!preview?.batchId) {
-        throw new Error('No hay una previsualización activa para confirmar.');
+        throw new Error("No hay una previsualización activa para confirmar.");
       }
 
-      const payload = buildCommitPayload(rows, accountId, createMissingFallbackCategory);
+      const payload = buildCommitPayload(
+        rows,
+        accountId,
+        createMissingFallbackCategory,
+      );
 
       return commitTransactionImport(profileId, preview.batchId, payload);
     },
     onSuccess: async () => {
       await Promise.all([
-        qc.invalidateQueries({ queryKey: ['transactions', profileId] }),
-        qc.invalidateQueries({ queryKey: ['tx', profileId] }),
-        qc.invalidateQueries({ queryKey: ['categories', profileId] }),
-        qc.invalidateQueries({ queryKey: ['dashboard', profileId] }),
-        qc.invalidateQueries({ queryKey: ['budget-comp', profileId] }),
+        qc.invalidateQueries({ queryKey: ["transactions", profileId] }),
+        qc.invalidateQueries({ queryKey: ["tx", profileId] }),
+        qc.invalidateQueries({ queryKey: ["categories", profileId] }),
+        qc.invalidateQueries({ queryKey: ["dashboard", profileId] }),
+        qc.invalidateQueries({ queryKey: ["budget-comp", profileId] }),
       ]);
     },
   });
@@ -183,7 +192,7 @@ export function TransactionImportPage() {
           DUPLICATE: 0,
           ERROR: 0,
           SKIPPED: 0,
-        } as Record<RowStatus | 'total', number>,
+        } as Record<RowStatus | "total", number>,
       ),
     [rows],
   );
@@ -192,7 +201,7 @@ export function TransactionImportPage() {
     () =>
       rows.filter(
         (row) =>
-          row.status === 'NEEDS_CATEGORY' &&
+          row.status === "NEEDS_CATEGORY" &&
           !row.suggestedCategoryId &&
           !createMissingFallbackCategory,
       ).length,
@@ -203,7 +212,7 @@ export function TransactionImportPage() {
     () =>
       rows.filter(
         (row) =>
-          (row.status === 'READY' || row.status === 'NEEDS_CATEGORY') &&
+          (row.status === "READY" || row.status === "NEEDS_CATEGORY") &&
           (createMissingFallbackCategory || Boolean(row.suggestedCategoryId)),
       ).length,
     [rows, createMissingFallbackCategory],
@@ -217,14 +226,17 @@ export function TransactionImportPage() {
   const duplicateSuggestionGroups = useMemo(() => {
     const duplicates = rows.filter(
       (row) =>
-        row.status === 'DUPLICATE' &&
+        row.status === "DUPLICATE" &&
         (row.suggestedCategoryName || row.suggestedCategoryId),
     );
 
     const groups = new Map<string, typeof duplicates>();
 
     duplicates.forEach((row) => {
-      const key = row.suggestedCategoryName ?? row.suggestedCategoryId ?? 'Sin sugerencia';
+      const key =
+        row.suggestedCategoryName ??
+        row.suggestedCategoryId ??
+        "Sin sugerencia";
       groups.set(key, [...(groups.get(key) ?? []), row]);
     });
 
@@ -237,8 +249,8 @@ export function TransactionImportPage() {
     return rows.filter((row) => {
       const suggestedCategoryName =
         row.suggestedCategoryName ??
-        categoriesById.get(row.suggestedCategoryId ?? '')?.name ??
-        '';
+        categoriesById.get(row.suggestedCategoryId ?? "")?.name ??
+        "";
 
       const matchesSearch =
         !search ||
@@ -246,12 +258,14 @@ export function TransactionImportPage() {
         normalize(row.normalizedDescription).includes(search) ||
         normalize(suggestedCategoryName).includes(search) ||
         normalize(row.realDate).includes(search) ||
-        String(row.amount ?? '').includes(search);
+        String(row.amount ?? "").includes(search);
 
-      const matchesStatus = filters.status === ALL || row.status === filters.status;
+      const matchesStatus =
+        filters.status === ALL || row.status === filters.status;
 
       const matchesCategory =
-        filters.categoryId === ALL || row.suggestedCategoryId === filters.categoryId;
+        filters.categoryId === ALL ||
+        row.suggestedCategoryId === filters.categoryId;
 
       return matchesSearch && matchesStatus && matchesCategory;
     });
@@ -267,9 +281,9 @@ export function TransactionImportPage() {
 
   const canCommit = Boolean(
     preview?.batchId &&
-      importableRows > 0 &&
-      unresolvedRows === 0 &&
-      !commitMutation.isPending,
+    importableRows > 0 &&
+    unresolvedRows === 0 &&
+    !commitMutation.isPending,
   );
 
   const currentStep = commitMutation.data ? 3 : preview ? 2 : 1;
@@ -278,7 +292,7 @@ export function TransactionImportPage() {
     setPreview(null);
     setRows([]);
     setFilters({
-      search: '',
+      search: "",
       status: ALL,
       categoryId: ALL,
     });
@@ -313,7 +327,7 @@ export function TransactionImportPage() {
 
   const resetFilters = () => {
     setFilters({
-      search: '',
+      search: "",
       status: ALL,
       categoryId: ALL,
     });
@@ -330,18 +344,27 @@ export function TransactionImportPage() {
             <p className="eyebrow">Movimientos</p>
             <h1>Importación guiada</h1>
             <p className="muted">
-              Subí un archivo, revisá las filas detectadas y confirmá solo lo que esté
-              listo para impactar en tus movimientos.
+              Subí un archivo, revisá las filas detectadas y confirmá solo lo
+              que esté listo para impactar en tus movimientos.
             </p>
 
-            <div className="transaction-import-steps" aria-label="Progreso de importación">
-              <span className={`transaction-import-step ${currentStep >= 1 ? 'active' : ''}`}>
+            <div
+              className="transaction-import-steps"
+              aria-label="Progreso de importación"
+            >
+              <span
+                className={`transaction-import-step ${currentStep >= 1 ? "active" : ""}`}
+              >
                 1 · Archivo
               </span>
-              <span className={`transaction-import-step ${currentStep >= 2 ? 'active' : ''}`}>
+              <span
+                className={`transaction-import-step ${currentStep >= 2 ? "active" : ""}`}
+              >
                 2 · Revisión
               </span>
-              <span className={`transaction-import-step ${currentStep >= 3 ? 'active' : ''}`}>
+              <span
+                className={`transaction-import-step ${currentStep >= 3 ? "active" : ""}`}
+              >
                 3 · Resultado
               </span>
             </div>
@@ -352,23 +375,25 @@ export function TransactionImportPage() {
 
             <strong>
               {commitMutation.data
-                ? 'Importación finalizada'
+                ? "Importación finalizada"
                 : preview
                   ? hasBlockingIssues
-                    ? 'Revisión requerida'
-                    : 'Lista para confirmar'
-                  : 'Esperando archivo'}
+                    ? "Revisión requerida"
+                    : "Lista para confirmar"
+                  : "Esperando archivo"}
             </strong>
 
             <p className="muted">
               {selectedAccount
                 ? `Cuenta destino: ${selectedAccount.name}`
-                : 'Seleccioná una cuenta destino para iniciar.'}
+                : "Seleccioná una cuenta destino para iniciar."}
             </p>
 
             <div className="transaction-import-status-badges">
               <span className="badge badge-info">{getSourceLabel(source)}</span>
-              {file ? <span className="badge badge-muted">{file.name}</span> : null}
+              {file ? (
+                <span className="badge badge-muted">{file.name}</span>
+              ) : null}
             </div>
           </aside>
         </section>
@@ -381,7 +406,8 @@ export function TransactionImportPage() {
                   <p className="eyebrow">Paso 1</p>
                   <h2>Fuente y archivo</h2>
                   <p className="muted">
-                    Elegí el origen, la cuenta destino y el archivo a previsualizar.
+                    Elegí el origen, la cuenta destino y el archivo a
+                    previsualizar.
                   </p>
                 </div>
 
@@ -407,18 +433,24 @@ export function TransactionImportPage() {
               />
 
               {previewMutation.isError ? (
-                <ErrorState message={getApiErrorMessage(previewMutation.error)} />
+                <ErrorState
+                  message={getApiErrorMessage(previewMutation.error)}
+                />
               ) : null}
             </section>
 
             {preview ? (
-              <section className="panel transaction-import-review-panel" aria-live="polite">
+              <section
+                className="panel transaction-import-review-panel"
+                aria-live="polite"
+              >
                 <div className="section-title">
                   <div>
                     <p className="eyebrow">Paso 2</p>
                     <h2>Revisar y confirmar</h2>
                     <p className="muted">
-                      Revisá categorías, errores y duplicados antes de confirmar la importación.
+                      Revisá categorías, errores y duplicados antes de confirmar
+                      la importación.
                     </p>
                   </div>
 
@@ -447,8 +479,9 @@ export function TransactionImportPage() {
                     <p className="eyebrow">Regla de categorías</p>
                     <h3>Categoría fallback automática</h3>
                     <p className="muted">
-                      Si una fila necesita categoría y no tiene sugerencia, se puede crear o usar
-                      una categoría fallback para no bloquear la importación.
+                      Si una fila necesita categoría y no tiene sugerencia, se
+                      puede crear o usar una categoría fallback para no bloquear
+                      la importación.
                     </p>
                   </div>
 
@@ -472,7 +505,8 @@ export function TransactionImportPage() {
                       <div className="mensaje-error">
                         <strong>{invalidRows} fila(s) con error.</strong>
                         <span>
-                          No se van a importar. Revisá el archivo o corregí los datos de origen.
+                          No se van a importar. Revisá el archivo o corregí los
+                          datos de origen.
                         </span>
                       </div>
                     ) : null}
@@ -481,7 +515,8 @@ export function TransactionImportPage() {
                       <div className="mensaje-warning">
                         <strong>{unresolvedRows} fila(s) sin categoría.</strong>
                         <span>
-                          Asigná una categoría o activá la categoría fallback para continuar.
+                          Asigná una categoría o activá la categoría fallback
+                          para continuar.
                         </span>
                       </div>
                     ) : null}
@@ -502,8 +537,8 @@ export function TransactionImportPage() {
                         <p className="eyebrow">Duplicados</p>
                         <h3>Movimientos duplicados con categorías sugeridas</h3>
                         <p className="muted">
-                          No se importan por defecto, pero podés revisar si conviene
-                          recategorizar movimientos existentes.
+                          No se importan por defecto, pero podés revisar si
+                          conviene recategorizar movimientos existentes.
                         </p>
                       </div>
                     </div>
@@ -515,7 +550,7 @@ export function TransactionImportPage() {
                           .slice(0, 3)
                           .map((item) => item.normalizedDescription)
                           .filter(Boolean)
-                          .join(' · ');
+                          .join(" · ");
 
                         const dates = group.list
                           .map((item) => item.realDate)
@@ -528,34 +563,41 @@ export function TransactionImportPage() {
                         const recategorizeUrl =
                           `/profiles/${profileId}/transactions/recategorize` +
                           `?accountId=${accountId}` +
-                          `${from ? `&from=${from}` : ''}` +
-                          `${to ? `&to=${to}` : ''}` +
+                          `${from ? `&from=${from}` : ""}` +
+                          `${to ? `&to=${to}` : ""}` +
                           `&descriptionContains=${encodeURIComponent(group.key)}` +
                           `${
                             first.suggestedCategoryId
                               ? `&toCategoryId=${first.suggestedCategoryId}`
-                              : ''
+                              : ""
                           }` +
                           `${
-                            first.suggestedCategoryName && !first.suggestedCategoryId
+                            first.suggestedCategoryName &&
+                            !first.suggestedCategoryId
                               ? `&suggestedCategoryName=${encodeURIComponent(
                                   first.suggestedCategoryName,
                                 )}`
-                              : ''
+                              : ""
                           }`;
 
                         return (
-                          <article key={group.key} className="transaction-import-duplicate-card">
+                          <article
+                            key={group.key}
+                            className="transaction-import-duplicate-card"
+                          >
                             <div>
                               <strong>{group.key}</strong>
                               <p className="muted">
                                 {group.list.length} fila
-                                {group.list.length === 1 ? '' : 's'} ·{' '}
-                                {examples || 'Sin ejemplos disponibles'}
+                                {group.list.length === 1 ? "" : "s"} ·{" "}
+                                {examples || "Sin ejemplos disponibles"}
                               </p>
                             </div>
 
-                            <Link className="boton-secundario" to={recategorizeUrl}>
+                            <Link
+                              className="boton-secundario"
+                              to={recategorizeUrl}
+                            >
                               Revisar recategorización
                             </Link>
                           </article>
@@ -573,8 +615,9 @@ export function TransactionImportPage() {
                         <h3>Detalle de importación</h3>
                         <p className="muted">
                           {visibleRows.length} visible
-                          {visibleRows.length === 1 ? '' : 's'} de {rows.length} total
-                          {rows.length === 1 ? '' : 'es'}.
+                          {visibleRows.length === 1 ? "" : "s"} de {rows.length}{" "}
+                          total
+                          {rows.length === 1 ? "" : "es"}.
                         </p>
                       </div>
 
@@ -619,11 +662,13 @@ export function TransactionImportPage() {
                             }
                           >
                             <option value={ALL}>Todos los estados</option>
-                            {Object.entries(rowStatusLabels).map(([value, label]) => (
-                              <option key={value} value={value}>
-                                {label}
-                              </option>
-                            ))}
+                            {Object.entries(rowStatusLabels).map(
+                              ([value, label]) => (
+                                <option key={value} value={value}>
+                                  {label}
+                                </option>
+                              ),
+                            )}
                           </select>
                         </label>
 
@@ -654,30 +699,32 @@ export function TransactionImportPage() {
                       <button
                         type="button"
                         className={`transaction-import-chip ${
-                          filters.status === ALL ? 'active' : ''
+                          filters.status === ALL ? "active" : ""
                         }`}
                         onClick={() => setFilters({ ...filters, status: ALL })}
                       >
                         Todos · {rowCounters.total}
                       </button>
 
-                      {Object.entries(rowStatusLabels).map(([status, label]) => (
-                        <button
-                          key={status}
-                          type="button"
-                          className={`transaction-import-chip ${
-                            filters.status === status ? 'active' : ''
-                          }`}
-                          onClick={() =>
-                            setFilters({
-                              ...filters,
-                              status: status as RowStatus,
-                            })
-                          }
-                        >
-                          {label} · {rowCounters[status as RowStatus] ?? 0}
-                        </button>
-                      ))}
+                      {Object.entries(rowStatusLabels).map(
+                        ([status, label]) => (
+                          <button
+                            key={status}
+                            type="button"
+                            className={`transaction-import-chip ${
+                              filters.status === status ? "active" : ""
+                            }`}
+                            onClick={() =>
+                              setFilters({
+                                ...filters,
+                                status: status as RowStatus,
+                              })
+                            }
+                          >
+                            {label} · {rowCounters[status as RowStatus] ?? 0}
+                          </button>
+                        ),
+                      )}
                     </div>
 
                     {visibleRows.length === 0 ? (
@@ -690,7 +737,9 @@ export function TransactionImportPage() {
                         rows={visibleRows}
                         categories={categories}
                         onRowsChange={handleVisibleRowsChange}
-                        createMissingFallbackCategory={createMissingFallbackCategory}
+                        createMissingFallbackCategory={
+                          createMissingFallbackCategory
+                        }
                       />
                     )}
                   </section>
@@ -704,7 +753,9 @@ export function TransactionImportPage() {
                 />
 
                 {commitMutation.isError ? (
-                  <ErrorState message={getApiErrorMessage(commitMutation.error)} />
+                  <ErrorState
+                    message={getApiErrorMessage(commitMutation.error)}
+                  />
                 ) : null}
               </section>
             ) : null}
@@ -716,8 +767,8 @@ export function TransactionImportPage() {
                     <p className="eyebrow">Paso 3</p>
                     <h2>Resultado</h2>
                     <p className="muted">
-                      La importación ya fue procesada. Revisá el resultado antes de volver al
-                      listado.
+                      La importación ya fue procesada. Revisá el resultado antes
+                      de volver al listado.
                     </p>
                   </div>
                 </div>
@@ -746,24 +797,28 @@ export function TransactionImportPage() {
                   <strong>{importableRows}</strong>
                 </div>
 
-                <div className={needsCategoryRows > 0 ? 'tone-warning' : ''}>
+                <div className={needsCategoryRows > 0 ? "tone-warning" : ""}>
                   <span>Sin categoría</span>
                   <strong>{needsCategoryRows}</strong>
                 </div>
 
-                <div className={duplicateRows > 0 ? 'tone-neutral' : ''}>
+                <div className={duplicateRows > 0 ? "tone-neutral" : ""}>
                   <span>Duplicadas</span>
                   <strong>{duplicateRows}</strong>
                 </div>
 
-                <div className={invalidRows > 0 ? 'tone-danger' : ''}>
+                <div className={invalidRows > 0 ? "tone-danger" : ""}>
                   <span>Con error</span>
                   <strong>{invalidRows}</strong>
                 </div>
               </div>
 
               <p className="muted">
-                Estado de filtros: {activeFilterCount > 0 ? `${activeFilterCount} activo(s)` : 'sin filtros'}.
+                Estado de filtros:{" "}
+                {activeFilterCount > 0
+                  ? `${activeFilterCount} activo(s)`
+                  : "sin filtros"}
+                .
               </p>
             </section>
 

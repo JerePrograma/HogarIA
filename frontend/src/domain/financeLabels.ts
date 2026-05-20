@@ -1,90 +1,43 @@
-import {
-  MovementType,
-  TransactionStatus,
-  PaymentChannel,
-  TransactionClassificationStatus,
-  Category,
-  ProfileType,
+// src/domain/financeLabels.ts
+
+import type {
   AccountType,
-  CategoryType,
-  CategoryScope,
-  TransactionOrigin,
   BudgetComparisonStatus,
+  CategoryScope,
+  CategoryType,
   FinancialHealth,
-  GoalType,
+  FinancialRiskLevel,
   GoalStatus,
+  GoalType,
   HabitFrequency,
   MonthlyPlanItemType,
   MonthlyPlanPriority,
-  MonthlyPlanStatus,
   MonthlyPlanSource,
+  MonthlyPlanStatus,
+  MovementType,
+  PaymentChannel,
+  ProfileType,
+  TransactionClassificationStatus,
+  TransactionOrigin,
+  TransactionStatus,
 } from "./types";
 
-export type Tone = "ok" | "watch" | "risk" | "critical" | "neutral";
-
-export const movementTypeLabels: Record<MovementType, string> = {
-  INCOME: "Ingreso",
-  EXPENSE: "Gasto",
-  SAVING: "Ahorro",
-  TRANSFER: "Transferencia",
-  ADJUSTMENT: "Ajuste",
-};
-
-export const movementTypeTones: Record<MovementType, Tone> = {
-  INCOME: "ok",
-  EXPENSE: "critical",
-  SAVING: "ok",
-  TRANSFER: "neutral",
-  ADJUSTMENT: "watch",
-};
-
-export const transactionStatusLabels: Record<TransactionStatus, string> = {
-  CONFIRMED: "Confirmado",
-  PENDING: "Pendiente",
-  IGNORED: "Ignorado",
-};
-
-export const transactionStatusTones: Record<TransactionStatus, Tone> = {
-  CONFIRMED: "ok",
-  PENDING: "watch",
-  IGNORED: "neutral",
-};
-
-export const paymentChannelLabels: Record<PaymentChannel, string> = {
-  UNKNOWN: "Canal no identificado",
-  CASH: "Efectivo",
-  BANK_TRANSFER: "Transferencia bancaria",
-  DEBIN: "DEBIN",
-  CUENTA_DNI: "Cuenta DNI",
-  DEBIT_CARD: "Tarjeta débito",
-  CREDIT_CARD: "Tarjeta crédito",
-  MERCADO_PAGO: "Mercado Pago",
-  MERCADO_CREDITO: "MercadoCrédito",
-  INTERNAL_TRANSFER: "Transferencia interna",
-  OTHER: "Otro",
-};
-
-export const classificationStatusLabels: Record<
-  TransactionClassificationStatus,
-  string
-> = {
-  CLASSIFIED: "Clasificado",
-  NEEDS_CATEGORY: "Sin categoría",
-  REVIEW: "Revisar",
-  TECHNICAL: "Técnico",
-  IGNORED_BY_RULE: "Ignorado por regla",
-};
-
-export const classificationStatusTones: Record<
-  TransactionClassificationStatus,
-  Tone
-> = {
-  CLASSIFIED: "ok",
-  NEEDS_CATEGORY: "watch",
-  REVIEW: "risk",
-  TECHNICAL: "neutral",
-  IGNORED_BY_RULE: "neutral",
-};
+// Backward-compatible re-export.
+// Permite que componentes viejos sigan importando tones desde financeLabels
+// mientras migrás gradualmente a financeTones.
+export {
+  budgetComparisonStatusTones,
+  classificationStatusTones,
+  financialHealthTones,
+  financialRiskLevelTones,
+  goalStatusTones,
+  importStatusTones,
+  movementTypeTones,
+  monthlyPlanPriorityTones,
+  monthlyPlanStatusTones,
+  transactionStatusTones,
+  type Tone,
+} from "./financeTones";
 
 export function labelOrValue<T extends string>(
   labels: Partial<Record<T, string>>,
@@ -94,28 +47,9 @@ export function labelOrValue<T extends string>(
   return labels[value] ?? value;
 }
 
-export function getCompatibleCategories(
-  categories: Category[],
-  movementType: MovementType,
-  options?: {
-    includeTechnical?: boolean;
-    includeInactive?: boolean;
-  },
-) {
-  return categories.filter((category) => {
-    if (!options?.includeInactive && !category.active) return false;
-    if (!options?.includeTechnical && category.technical) return false;
-
-    return isCategoryCompatibleWithMovement(category, movementType);
-  });
-}
-
-export function isCategoryCompatibleWithMovement(
-  category: Category,
-  movementType: MovementType,
-) {
-  return isCategoryCompatibleWithMovement(category, movementType);
-}
+// ============================================================
+// Core labels
+// ============================================================
 
 export const profileTypeLabels: Record<ProfileType, string> = {
   PERSONAL: "Personal",
@@ -148,12 +82,59 @@ export const categoryScopeLabels: Record<CategoryScope, string> = {
   GLOBAL: "Global",
 };
 
+// ============================================================
+// Transaction labels
+// ============================================================
+
+export const movementTypeLabels: Record<MovementType, string> = {
+  INCOME: "Ingreso",
+  EXPENSE: "Gasto",
+  SAVING: "Ahorro",
+  TRANSFER: "Transferencia",
+  ADJUSTMENT: "Ajuste",
+};
+
+export const transactionStatusLabels: Record<TransactionStatus, string> = {
+  CONFIRMED: "Confirmado",
+  PENDING: "Pendiente",
+  IGNORED: "Ignorado",
+};
+
 export const transactionOriginLabels: Record<TransactionOrigin, string> = {
   MANUAL: "Manual",
   IMPORT: "Importado",
   RECURRENT: "Recurrente",
   SYSTEM: "Sistema",
 };
+
+export const paymentChannelLabels: Record<PaymentChannel, string> = {
+  UNKNOWN: "Canal no identificado",
+  CASH: "Efectivo",
+  BANK_TRANSFER: "Transferencia bancaria",
+  DEBIN: "DEBIN",
+  CUENTA_DNI: "Cuenta DNI",
+  DEBIT_CARD: "Tarjeta débito",
+  CREDIT_CARD: "Tarjeta crédito",
+  MERCADO_PAGO: "Mercado Pago",
+  MERCADO_CREDITO: "MercadoCrédito",
+  INTERNAL_TRANSFER: "Transferencia interna",
+  OTHER: "Otro",
+};
+
+export const classificationStatusLabels: Record<
+  TransactionClassificationStatus,
+  string
+> = {
+  CLASSIFIED: "Clasificado",
+  NEEDS_CATEGORY: "Sin categoría",
+  REVIEW: "Revisar",
+  TECHNICAL: "Técnico",
+  IGNORED_BY_RULE: "Ignorado por regla",
+};
+
+// ============================================================
+// Budget / dashboard labels
+// ============================================================
 
 export const budgetComparisonStatusLabels: Record<
   BudgetComparisonStatus,
@@ -170,6 +151,17 @@ export const financialHealthLabels: Record<FinancialHealth, string> = {
   WARNING: "Atención",
   CRITICAL: "Crítico",
 };
+
+export const financialRiskLevelLabels: Record<FinancialRiskLevel, string> = {
+  OK: "Correcto",
+  WATCH: "Atención",
+  RISK: "Riesgo",
+  CRITICAL: "Crítico",
+};
+
+// ============================================================
+// Goals / habits labels
+// ============================================================
 
 export const goalTypeLabels: Record<GoalType, string> = {
   EMERGENCY_FUND: "Fondo de emergencia",
@@ -195,6 +187,10 @@ export const habitFrequencyLabels: Record<HabitFrequency, string> = {
   MONTHLY: "Mensual",
 };
 
+// ============================================================
+// Import labels
+// ============================================================
+
 export const importBatchStatusLabels: Record<string, string> = {
   READY: "Listo",
   IMPORTED: "Importado",
@@ -209,6 +205,8 @@ export const importRowStatusLabels: Record<string, string> = {
   SKIPPED: "Omitido",
   WARNING: "Atención",
   ERROR: "Error",
+  DUPLICATE: "Duplicado",
+  NEEDS_CATEGORY: "Requiere categoría",
 };
 
 export const importTargetEntityLabels: Record<string, string> = {
@@ -226,10 +224,18 @@ export const importTargetEntityLabels: Record<string, string> = {
   UNKNOWN: "Sin clasificar",
 };
 
-export const inflationProjectionLabels = {
+// ============================================================
+// Inflation labels
+// ============================================================
+
+export const inflationProjectionLabels: Record<"real" | "projected", string> = {
   real: "Real",
   projected: "Proyectado",
 };
+
+// ============================================================
+// Monthly planning labels
+// ============================================================
 
 export const monthlyPlanTypeLabels: Record<MonthlyPlanItemType, string> = {
   INCOME: "Ingreso",
@@ -240,11 +246,13 @@ export const monthlyPlanTypeLabels: Record<MonthlyPlanItemType, string> = {
   RECOVERY: "Recupero",
   TODO: "Pendiente",
 };
+
 export const monthlyPlanPriorityLabels: Record<MonthlyPlanPriority, string> = {
   ESSENTIAL: "Esencial",
   IMPORTANT: "Importante",
   OPTIONAL: "Opcional",
 };
+
 export const monthlyPlanStatusLabels: Record<MonthlyPlanStatus, string> = {
   DRAFT: "Borrador",
   ESTIMATED: "Estimado",
@@ -254,12 +262,17 @@ export const monthlyPlanStatusLabels: Record<MonthlyPlanStatus, string> = {
   COLLECTED: "Cobrado",
   CANCELLED: "Cancelado",
 };
+
 export const monthlyPlanSourceLabels: Record<MonthlyPlanSource, string> = {
   MANUAL: "Manual",
   IMPORT: "Importado",
   QUICK_CAPTURE: "Captura rápida",
   SYSTEM: "Sistema",
 };
+
+// ============================================================
+// Calendar labels
+// ============================================================
 
 export const monthLabels: Record<number, string> = {
   1: "Enero",

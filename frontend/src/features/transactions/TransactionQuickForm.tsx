@@ -1,8 +1,20 @@
-import { getCompatibleCategories, labelOrValue, movementTypeLabels, transactionStatusLabels } from "../../domain/financeLabels";
-import { movementTypeOptions, transactionStatusOptions } from "../../domain/financeOptions";
+import {
+  labelOrValue,
+  movementTypeLabels,
+  transactionStatusLabels,
+} from "../../domain/financeLabels";
+import {
+  movementTypeOptions,
+  transactionStatusOptions,
+} from "../../domain/financeOptions";
 import { formatMoney } from "../../domain/formatters";
-import { MovementType, TransactionStatus, Account, Category } from "../../domain/types";
-
+import { getCompatibleCategories } from "../../domain/transactionRules";
+import {
+  MovementType,
+  TransactionStatus,
+  Account,
+  Category,
+} from "../../domain/types";
 
 export interface TransactionForm {
   accountId: string;
