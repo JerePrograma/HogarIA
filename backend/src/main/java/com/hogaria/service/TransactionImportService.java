@@ -357,7 +357,7 @@ public class TransactionImportService {
     var errors = new ArrayList<String>();
 
     for (var commitRow : request.rows()) {
-      var result = commitSingleRow(userId, profileId, rowsByNumber, commitRow, request, warnings, errors);
+      var result = commitSingleRow(userId, profileId, batchId, rowsByNumber, commitRow, request, warnings, errors);
 
       created += result.createdCount();
       skipped += result.skippedCount();
@@ -383,6 +383,7 @@ public class TransactionImportService {
   private CommitRowResult commitSingleRow(
           UUID userId,
           UUID profileId,
+          UUID batchId,
           Map<Integer, TransactionImportPreviewRow> rowsByNumber,
           TransactionImportCommitRow commitRow,
           TransactionImportCommitRequest request,
@@ -489,7 +490,20 @@ public class TransactionImportService {
                       MoneyTransaction.Origin.IMPORT,
                       MoneyTransaction.Status.CONFIRMED
               ),
-              userId
+              userId,
+              new TransactionService.TransactionMetadata(
+                      previewRow.source().name(),
+                      previewRow.sourceOperationId(),
+                      previewRow.sourceHash(),
+                      inferPaymentChannel(previewRow.source(), description),
+                      null,
+                      categoryId == null
+                              ? MoneyTransaction.ClassificationStatus.NEEDS_CATEGORY
+                              : MoneyTransaction.ClassificationStatus.CLASSIFIED,
+                      previewRow.skipReason(),
+                      batchId,
+                      null
+              )
       );
 
       return createdResult(response.id());
@@ -584,7 +598,7 @@ public class TransactionImportService {
         var movementType = inferMovementType(signedAmount);
         var normalizedDescription = normalizeDescription(description);
         var budgetDate = resolveBudgetDate(date, year, month);
-        var categorySuggestion = suggestCategory(categories, normalizedDescription, movementType);
+        var categorySuggestion = suggestCategory(profileId, categories, normalizedDescription, movementType);
 
         outputRowNumber++;
 
@@ -979,7 +993,7 @@ public class TransactionImportService {
             classification.confidence(),
             classification.status()
     )
-            : suggestCategory(categories, normalizedDescription, classification.movementType());
+            : suggestCategory(profileId, categories, normalizedDescription, classification.movementType());
 
     var rowStatus = classification.status() != null
             ? classification.status()
@@ -1235,8 +1249,17 @@ public class TransactionImportService {
                       .sheetName(source.name())
                       .rowNumber(row.rowNumber())
                       .concept(row.rawDescription())
+                      .month(row.budgetDate() == null ? null : row.budgetDate().getMonthValue())
+                      .realDate(row.realDate())
+                      .budgetDate(row.budgetDate())
                       .amount(row.amount())
+                      .movementType(row.movementType())
+                      .sourceOperationId(row.sourceOperationId())
+                      .sourceHash(row.sourceHash())
+                      .rawDescription(row.rawDescription())
+                      .normalizedDescription(row.normalizedDescription())
                       .status(toImportRowStatus(row.status()))
+                      .errorMessage(row.skipReason())
                       .rawJson(objectMapper.writeValueAsString(row))
                       .build()
       );
@@ -1420,11 +1443,18 @@ public class TransactionImportService {
   }
 
   private CategorySuggestion suggestCategory(
+          UUID profileId,
           List<Category> categories,
           String normalizedDescription,
           MoneyTransaction.MovementType movementType
   ) {
-    var suggestion = suggestionService.suggest(null, normalizedDescription, movementType, null, null);
+    var suggestion = suggestionService.suggest(
+            profileId,
+            normalizedDescription,
+            movementType,
+            null,
+            null
+    );
     if (suggestion.status() == TransactionCategorySuggestionService.Status.READY && suggestion.suggestedCategoryId() != null) {
       return new CategorySuggestion(suggestion.suggestedCategoryId(), suggestion.suggestedCategoryName(), Confidence.valueOf(suggestion.confidence().name()), RowStatus.READY, suggestion.suggestedCategoryType());
     }
@@ -2332,5 +2362,38 @@ public class TransactionImportService {
       return categoryType != Category.Type.INCOME;
     }
     return true;
+  }
+
+  private MoneyTransaction.PaymentChannel inferPaymentChannel(
+          TransactionImportSource source,
+          String description
+  ) {
+    var text = normalizeDescription(description);
+
+    if (source == TransactionImportSource.MERCADO_PAGO) {
+      return MoneyTransaction.PaymentChannel.MERCADO_PAGO;
+    }
+
+    if (text.contains("DEBIN")) {
+      return MoneyTransaction.PaymentChannel.DEBIN;
+    }
+
+    if (text.contains("CUENTA DNI") || text.contains("CDNI")) {
+      return MoneyTransaction.PaymentChannel.CUENTA_DNI;
+    }
+
+    if (text.contains("TARJETA DEBITO") || text.contains("T.D.")) {
+      return MoneyTransaction.PaymentChannel.DEBIT_CARD;
+    }
+
+    if (text.contains("MASTERCARD") || text.contains("VISA")) {
+      return MoneyTransaction.PaymentChannel.CREDIT_CARD;
+    }
+
+    if (text.contains("TRANSFERENCIA") || text.contains("BANK TRANSFER")) {
+      return MoneyTransaction.PaymentChannel.BANK_TRANSFER;
+    }
+
+    return MoneyTransaction.PaymentChannel.UNKNOWN;
   }
 }

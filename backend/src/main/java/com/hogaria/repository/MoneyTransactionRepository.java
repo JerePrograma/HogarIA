@@ -46,4 +46,14 @@ public interface MoneyTransactionRepository extends JpaRepository<MoneyTransacti
             LocalDate from,
             LocalDate to
     );
+
+    boolean existsByProfileIdAndSourceHash(UUID profileId, String sourceHash);
+
+    Optional<MoneyTransaction> findByProfileIdAndSourceHash(UUID profileId, String sourceHash);
+
+    List<MoneyTransaction> findByProfileIdAndSourceAndSourceOperationId(
+            UUID profileId,
+            String source,
+            String sourceOperationId
+    );
 }

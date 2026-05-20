@@ -54,6 +54,15 @@ public class TransactionService {
 
   @Transactional
   public TransactionResponse create(TransactionCreateRequest request, UUID userId) {
+    return create(request, userId, null);
+  }
+
+  @Transactional
+  public TransactionResponse create(
+          TransactionCreateRequest request,
+          UUID userId,
+          TransactionMetadata metadata
+  ) {
     if (request.amount().signum() <= 0) {
       throw new BadRequestException("Amount must be positive");
     }
@@ -65,6 +74,12 @@ public class TransactionService {
             request.movementType(),
             userId
     );
+
+    var classificationStatus = metadata != null && metadata.classificationStatus() != null
+            ? metadata.classificationStatus()
+            : request.categoryId() == null
+              ? MoneyTransaction.ClassificationStatus.NEEDS_CATEGORY
+              : MoneyTransaction.ClassificationStatus.CLASSIFIED;
 
     var transaction = MoneyTransaction.builder()
             .profileId(request.profileId())
@@ -78,6 +93,15 @@ public class TransactionService {
             .description(request.description())
             .origin(request.origin() == null ? MoneyTransaction.Origin.MANUAL : request.origin())
             .status(request.status() == null ? MoneyTransaction.Status.CONFIRMED : request.status())
+            .source(metadata == null ? null : metadata.source())
+            .sourceOperationId(metadata == null ? null : metadata.sourceOperationId())
+            .sourceHash(metadata == null ? null : metadata.sourceHash())
+            .paymentChannel(metadata == null ? null : metadata.paymentChannel())
+            .counterparty(metadata == null ? null : metadata.counterparty())
+            .classificationStatus(classificationStatus)
+            .classificationReason(metadata == null ? null : metadata.classificationReason())
+            .importBatchId(metadata == null ? null : metadata.importBatchId())
+            .internalTransferGroupId(metadata == null ? null : metadata.internalTransferGroupId())
             .build();
 
     return toResponse(repository.save(transaction));
@@ -229,9 +253,20 @@ public class TransactionService {
       UUID candidateTargetCategoryId = targetCategory != null ? targetCategory.getId() : null;
       String candidateTargetCategoryName = targetCategory != null ? targetCategory.getName() : null;
       if (isAutoMode(targetMode)) {
-        var suggestion = suggestionService.suggest(profileId, transaction.getDescription(), transaction.getMovementType(), null, transaction.getAmount());
+        var suggestion = suggestionService.suggest(
+                profileId,
+                transaction.getDescription(),
+                transaction.getMovementType(),
+                transaction.getSource(),
+                transaction.getAmount()
+        );
+
         candidateTargetCategoryId = suggestion.suggestedCategoryId();
         candidateTargetCategoryName = suggestion.suggestedCategoryName();
+
+        if (suggestion.warning() != null && !suggestion.warning().isBlank()) {
+          warning = suggestion.warning();
+        }
       }
 
       if (candidateTargetCategoryId == null) {
@@ -506,6 +541,10 @@ public class TransactionService {
   }
 
   private Category getCategoryForProfile(UUID profileId, UUID categoryId) {
+    if (categoryId == null) {
+      throw new BadRequestException("Category is required");
+    }
+
     var category = categoryRepository.findById(categoryId)
             .orElseThrow(() -> new NotFoundException("Category not found"));
 
@@ -531,6 +570,10 @@ public class TransactionService {
 
     if (!accountRepository.existsByIdAndProfileId(accountId, profileId)) {
       throw new BadRequestException("Account does not belong to profile");
+    }
+
+    if (categoryId == null) {
+      return;
     }
 
     var category = getCategoryForProfile(profileId, categoryId);
@@ -563,6 +606,10 @@ public class TransactionService {
           MoneyTransaction.MovementType movementType,
           Category.Type categoryType
   ) {
+    if (movementType == null || categoryType == null) {
+      return false;
+    }
+
     if (movementType == MoneyTransaction.MovementType.INCOME) {
       return categoryType == Category.Type.INCOME;
     }
@@ -573,10 +620,22 @@ public class TransactionService {
     }
 
     if (movementType == MoneyTransaction.MovementType.EXPENSE) {
+      return categoryType == Category.Type.FIXED_EXPENSE
+              || categoryType == Category.Type.VARIABLE_EXPENSE
+              || categoryType == Category.Type.DEBT;
+    }
+
+    if (movementType == MoneyTransaction.MovementType.TRANSFER) {
+      return categoryType == Category.Type.SAVING
+              || categoryType == Category.Type.INVESTMENT
+              || categoryType == Category.Type.VARIABLE_EXPENSE;
+    }
+
+    if (movementType == MoneyTransaction.MovementType.ADJUSTMENT) {
       return categoryType != Category.Type.INCOME;
     }
 
-    return true;
+    return false;
   }
 
   private void ensureProfile(UUID profileId, UUID userId) {
@@ -631,5 +690,18 @@ public class TransactionService {
 
   private boolean isAutoMode(String targetMode) {
     return "AUTO_BY_IMPORT_RULES".equals(targetMode);
+  }
+
+  public record TransactionMetadata(
+          String source,
+          String sourceOperationId,
+          String sourceHash,
+          MoneyTransaction.PaymentChannel paymentChannel,
+          String counterparty,
+          MoneyTransaction.ClassificationStatus classificationStatus,
+          String classificationReason,
+          UUID importBatchId,
+          UUID internalTransferGroupId
+  ) {
   }
 }

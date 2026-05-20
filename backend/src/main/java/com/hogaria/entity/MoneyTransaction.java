@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Locale;
 import java.util.UUID;
 import lombok.*;
 
@@ -13,7 +14,11 @@ import lombok.*;
         indexes = {
                 @Index(name = "idx_money_transaction_profile_budget_date", columnList = "profile_id, budget_date"),
                 @Index(name = "idx_money_transaction_profile_real_date", columnList = "profile_id, real_date"),
-                @Index(name = "idx_money_transaction_profile_account_real_amount", columnList = "profile_id, account_id, real_date, amount")
+                @Index(name = "idx_money_transaction_profile_account_real_amount", columnList = "profile_id, account_id, real_date, amount"),
+                @Index(name = "idx_money_tx_profile_origin_real_date", columnList = "profile_id, origin, real_date"),
+                @Index(name = "idx_money_tx_profile_status_budget_date", columnList = "profile_id, status, budget_date"),
+                @Index(name = "idx_money_tx_profile_classification", columnList = "profile_id, classification_status, budget_date"),
+                @Index(name = "idx_money_tx_profile_source_operation", columnList = "profile_id, source, source_operation_id")
         }
 )
 @Getter
@@ -33,7 +38,12 @@ public class MoneyTransaction {
     @Column(name = "account_id", nullable = false)
     private UUID accountId;
 
-    @Column(name = "category_id", nullable = false)
+    /**
+     * Puede ser null cuando el movimiento todavía necesita revisión.
+     * Esto habilita importaciones honestas: "no sé qué categoría es" no debe convertirse
+     * artificialmente en "Gastos generales".
+     */
+    @Column(name = "category_id")
     private UUID categoryId;
 
     @Enumerated(EnumType.STRING)
@@ -65,6 +75,36 @@ public class MoneyTransaction {
     @Column(nullable = false, length = 40)
     private Status status = Status.CONFIRMED;
 
+    @Column(name = "source", length = 40)
+    private String source;
+
+    @Column(name = "source_operation_id", length = 120)
+    private String sourceOperationId;
+
+    @Column(name = "source_hash", length = 64)
+    private String sourceHash;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "payment_channel", length = 40)
+    private PaymentChannel paymentChannel;
+
+    @Column(name = "counterparty", length = 255)
+    private String counterparty;
+
+    @Builder.Default
+    @Enumerated(EnumType.STRING)
+    @Column(name = "classification_status", nullable = false, length = 40)
+    private ClassificationStatus classificationStatus = ClassificationStatus.CLASSIFIED;
+
+    @Column(name = "classification_reason", length = 255)
+    private String classificationReason;
+
+    @Column(name = "import_batch_id")
+    private UUID importBatchId;
+
+    @Column(name = "internal_transfer_group_id")
+    private UUID internalTransferGroupId;
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 
@@ -92,6 +132,28 @@ public class MoneyTransaction {
         IGNORED
     }
 
+    public enum PaymentChannel {
+        UNKNOWN,
+        CASH,
+        BANK_TRANSFER,
+        DEBIN,
+        CUENTA_DNI,
+        DEBIT_CARD,
+        CREDIT_CARD,
+        MERCADO_PAGO,
+        MERCADO_CREDITO,
+        INTERNAL_TRANSFER,
+        OTHER
+    }
+
+    public enum ClassificationStatus {
+        CLASSIFIED,
+        NEEDS_CATEGORY,
+        REVIEW,
+        TECHNICAL,
+        IGNORED_BY_RULE
+    }
+
     @PrePersist
     public void pp() {
         var now = LocalDateTime.now();
@@ -112,17 +174,45 @@ public class MoneyTransaction {
             status = Status.CONFIRMED;
         }
 
-        if (currency != null) {
-            currency = currency.toUpperCase();
+        if (paymentChannel == null) {
+            paymentChannel = PaymentChannel.UNKNOWN;
         }
+
+        normalizeCurrency();
+        normalizeSource();
+        normalizeClassificationStatus();
     }
 
     @PreUpdate
     public void pu() {
         updatedAt = LocalDateTime.now();
 
+        normalizeCurrency();
+        normalizeSource();
+        normalizeClassificationStatus();
+    }
+
+    private void normalizeCurrency() {
         if (currency != null) {
-            currency = currency.toUpperCase();
+            currency = currency.toUpperCase(Locale.ROOT);
+        }
+    }
+
+    private void normalizeSource() {
+        if (source != null) {
+            source = source.trim().toUpperCase(Locale.ROOT);
+        }
+    }
+
+    private void normalizeClassificationStatus() {
+        if (classificationStatus == null) {
+            classificationStatus = categoryId == null
+                    ? ClassificationStatus.NEEDS_CATEGORY
+                    : ClassificationStatus.CLASSIFIED;
+        }
+
+        if (categoryId == null && classificationStatus == ClassificationStatus.CLASSIFIED) {
+            classificationStatus = ClassificationStatus.NEEDS_CATEGORY;
         }
     }
 }

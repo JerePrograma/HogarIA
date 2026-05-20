@@ -285,13 +285,20 @@ public class BudgetService {
         List<MoneyTransaction> confirmedTransactions =
                 transactionRepository.findByProfileIdAndBudgetDateBetween(profileId, from, to)
                         .stream()
-                        .filter(transaction -> transaction.getStatus() == MoneyTransaction.Status.CONFIRMED)
+                        .filter(this::isConfirmedBudgetCandidate)
                         .toList();
 
         HashSet<UUID> categoryIds = new HashSet<>();
 
-        budgetItems.forEach(item -> categoryIds.add(item.getCategoryId()));
-        confirmedTransactions.forEach(transaction -> categoryIds.add(transaction.getCategoryId()));
+        budgetItems.stream()
+                .map(BudgetCategoryItem::getCategoryId)
+                .filter(Objects::nonNull)
+                .forEach(categoryIds::add);
+
+        confirmedTransactions.stream()
+                .map(MoneyTransaction::getCategoryId)
+                .filter(Objects::nonNull)
+                .forEach(categoryIds::add);
 
         var categoriesById = categoryRepository.findAllById(categoryIds)
                 .stream()
@@ -300,7 +307,7 @@ public class BudgetService {
         var realAmountByCategoryId = confirmedTransactions.stream()
                 .filter(transaction -> {
                     Category category = categoriesById.get(transaction.getCategoryId());
-                    return category != null && isBudgetable(category.getType());
+                    return isBudgetable(category);
                 })
                 .collect(Collectors.groupingBy(
                         MoneyTransaction::getCategoryId,
@@ -314,7 +321,7 @@ public class BudgetService {
         var budgetItemByCategoryId = budgetItems.stream()
                 .filter(item -> {
                     Category category = categoriesById.get(item.getCategoryId());
-                    return category != null && isBudgetable(category.getType());
+                    return isBudgetable(category);
                 })
                 .collect(Collectors.toMap(
                         BudgetCategoryItem::getCategoryId,
@@ -506,5 +513,36 @@ public class BudgetService {
                 item.getCreatedAt(),
                 item.getUpdatedAt()
         );
+    }
+
+    private boolean isConfirmedBudgetCandidate(MoneyTransaction transaction) {
+        if (transaction.getStatus() != MoneyTransaction.Status.CONFIRMED) {
+            return false;
+        }
+
+        if (transaction.getCategoryId() == null) {
+            return false;
+        }
+
+        if (transaction.getClassificationStatus() == MoneyTransaction.ClassificationStatus.NEEDS_CATEGORY
+                || transaction.getClassificationStatus() == MoneyTransaction.ClassificationStatus.IGNORED_BY_RULE) {
+            return false;
+        }
+
+        if (transaction.getMovementType() == MoneyTransaction.MovementType.TRANSFER) {
+            return false;
+        }
+
+        return transaction.getMovementType() == MoneyTransaction.MovementType.EXPENSE
+                || transaction.getMovementType() == MoneyTransaction.MovementType.SAVING
+                || transaction.getMovementType() == MoneyTransaction.MovementType.ADJUSTMENT;
+    }
+
+    private boolean isBudgetable(Category category) {
+        return category != null
+                && Boolean.TRUE.equals(category.getActive())
+                && Boolean.TRUE.equals(category.getBudgetable())
+                && !Boolean.TRUE.equals(category.getTechnical())
+                && isBudgetable(category.getType());
     }
 }
