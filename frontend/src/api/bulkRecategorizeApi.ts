@@ -24,6 +24,7 @@ export interface BulkRecategorizePreviewPayload {
   minAmount?: number | null;
   maxAmount?: number | null;
   onlyImported?: boolean | null;
+  transactionIds?: string[] | null;
 }
 
 export interface BulkRecategorizeCandidate {

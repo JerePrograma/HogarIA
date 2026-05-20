@@ -14,6 +14,7 @@ import { EmptyState } from '../../components/ui/EmptyState';
 import { ErrorState } from '../../components/ui/ErrorState';
 import { StatusBadge } from '../../components/ui/StatusBadge';
 import { formatMoney } from '../../domain/formatters';
+import { queryKeys } from '../../domain/queryKeys';
 
 type MovementType = NonNullable<BulkRecategorizePreviewPayload['movementType']>;
 
@@ -105,8 +106,8 @@ export function TransactionRecategorizationPage() {
     from: search.get('from'),
     to: search.get('to'),
     fromCategoryId: null,
-    onlyWithoutCategory: null,
-    targetMode: 'MANUAL',
+    onlyWithoutCategory: search.get('onlyWithoutCategory') === 'true' ? true : null,
+    targetMode: (search.get('targetMode') as 'MANUAL' | 'AUTO_BY_IMPORT_RULES') ?? 'MANUAL',
     toCategoryId: search.get('toCategoryId') ?? '',
     movementType:
       (search.get('movementType') as BulkRecategorizePreviewPayload['movementType']) ?? null,
@@ -114,7 +115,8 @@ export function TransactionRecategorizationPage() {
     exactAmount: null,
     minAmount: null,
     maxAmount: null,
-    onlyImported: null,
+    onlyImported: search.get('onlyImported') === 'true' ? true : null,
+    transactionIds: (search.get('transactionIds')?.split(',').filter(Boolean) ?? null),
   });
 
   const [missingCategoryName, setMissingCategoryName] = useState(
@@ -127,13 +129,13 @@ export function TransactionRecategorizationPage() {
   });
 
   const accountsQuery = useQuery({
-    queryKey: ['accounts', profileId],
+    queryKey: queryKeys.accounts(profileId),
     queryFn: () => listAccounts(profileId),
     enabled: Boolean(profileId),
   });
 
   const categoriesQuery = useQuery({
-    queryKey: ['categories', profileId],
+    queryKey: queryKeys.categories(profileId, true),
     queryFn: () => listCategories(profileId, true),
     enabled: Boolean(profileId),
   });
@@ -171,7 +173,7 @@ export function TransactionRecategorizationPage() {
     mutationFn: () =>
       createCategory(profileId, {
         name: missingCategoryName.trim(),
-        type: 'VARIABLE_EXPENSE',
+        type: (previewMutation.data?.candidates.find((c) => c.targetCategoryName === missingCategoryName.trim() && c.targetCategoryType)?.targetCategoryType as any),
         scope: 'PERSONAL',
       }),
     onSuccess: async (created) => {
@@ -180,7 +182,7 @@ export function TransactionRecategorizationPage() {
         toCategoryId: created.id,
       }));
 
-      await qc.invalidateQueries({ queryKey: ['categories', profileId] });
+      await qc.invalidateQueries({ queryKey: queryKeys.categories(profileId, true) });
     },
   });
 
@@ -230,11 +232,10 @@ export function TransactionRecategorizationPage() {
       }),
     onSuccess: async () => {
       await Promise.all([
-        qc.invalidateQueries({ queryKey: ['tx', profileId] }),
-        qc.invalidateQueries({ queryKey: ['transactions', profileId] }),
-        qc.invalidateQueries({ queryKey: ['categories', profileId] }),
-        qc.invalidateQueries({ queryKey: ['dashboard', profileId] }),
-        qc.invalidateQueries({ queryKey: ['budget-comp', profileId] }),
+        qc.invalidateQueries({ queryKey: queryKeys.transactions(profileId) }),
+        qc.invalidateQueries({ queryKey: queryKeys.categories(profileId, true) }),
+        qc.invalidateQueries({ queryKey: queryKeys.dashboard(profileId) }),
+        qc.invalidateQueries({ queryKey: queryKeys.budgetComparison(profileId) }),
       ]);
     },
   });
@@ -250,7 +251,7 @@ export function TransactionRecategorizationPage() {
       form.exactAmount != null ||
       form.minAmount != null ||
       form.maxAmount != null ||
-      form.onlyImported != null,
+      form.onlyImported != null || (form.transactionIds?.length ?? 0) > 0,
   );
 
   const activeCandidateFilterCount = [
@@ -258,8 +259,9 @@ export function TransactionRecategorizationPage() {
     candidateFilters.status !== ALL,
   ].filter(Boolean).length;
 
+  const inferredCategoryType = previewMutation.data?.candidates.find((c) => c.targetCategoryName === missingCategoryName.trim() && c.targetCategoryType)?.targetCategoryType;
   const canCreateMissingCategory =
-    Boolean(missingCategoryName.trim()) && !createCategoryMutation.isPending;
+    Boolean(missingCategoryName.trim()) && Boolean(inferredCategoryType) && !createCategoryMutation.isPending;
 
   const canPreview =
     (isAutoTargetMode || Boolean(form.toCategoryId)) &&
@@ -299,7 +301,8 @@ export function TransactionRecategorizationPage() {
       exactAmount: null,
       minAmount: null,
       maxAmount: null,
-      onlyImported: null,
+      onlyImported: search.get('onlyImported') === 'true' ? true : null,
+    transactionIds: (search.get('transactionIds')?.split(',').filter(Boolean) ?? null),
     });
   };
 

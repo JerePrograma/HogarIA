@@ -15,7 +15,9 @@ public class TransactionImportDtos {
                                             LocalDate realDate, LocalDate budgetDate, String rawDescription, String normalizedDescription,
                                             BigDecimal rawSignedAmount, BigDecimal amount, String currency, MoneyTransaction.MovementType movementType,
                                             UUID suggestedCategoryId, String suggestedCategoryName, Confidence confidence, RowStatus status,
-                                            String skipReason, String rawPayload) {}
+                                            String skipReason, String rawPayload,
+                                            UUID matchedTransactionId, UUID matchedAccountId, UUID matchedCurrentCategoryId,
+                                            String matchedCurrentCategoryName, String matchType, String matchReason) {}
 
   public record TransactionImportPreviewResponse(UUID batchId, TransactionImportSource source, UUID accountId, int totalRows, int importableRows,
                                                  int duplicateRows, int skippedRows, int unresolvedRows, List<TransactionImportPreviewRow> rows,

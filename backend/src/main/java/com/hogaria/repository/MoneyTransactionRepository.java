@@ -71,4 +71,6 @@ public interface MoneyTransactionRepository extends JpaRepository<MoneyTransacti
             java.math.BigDecimal amount,
             UUID accountId
     );
+
+    List<MoneyTransaction> findByProfileIdAndIdIn(UUID profileId, List<UUID> ids);
 }

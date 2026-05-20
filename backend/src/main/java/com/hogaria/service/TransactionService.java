@@ -416,6 +416,10 @@ public class TransactionService {
           LocalDate from,
           LocalDate to
   ) {
+    if (request.transactionIds() != null && !request.transactionIds().isEmpty()) {
+      return repository.findByProfileIdAndIdIn(profileId, request.transactionIds());
+    }
+
     if (request.accountId() != null && request.fromCategoryId() != null && !Boolean.TRUE.equals(request.onlyWithoutCategory())) {
       return repository.findByProfileIdAndAccountIdAndCategoryIdAndRealDateBetween(
               profileId,
