@@ -90,5 +90,8 @@ export const importStatusTones: Record<string, Tone> = {
   WARNING: "watch",
   ERROR: "critical",
   DUPLICATE: "neutral",
+  DUPLICATE_EXACT: "neutral",
+  POSSIBLE_INTERNAL_TRANSFER: "neutral",
+  INTERNAL_TRANSFER_MATCHED: "neutral",
   NEEDS_CATEGORY: "watch",
 };

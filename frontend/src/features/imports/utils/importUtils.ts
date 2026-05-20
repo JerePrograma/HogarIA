@@ -22,6 +22,9 @@ export const importRowStatusLabels: Record<TransactionImportRowStatus, string> =
     READY: "Lista",
     NEEDS_CATEGORY: "Requiere categoría",
     DUPLICATE: "Duplicada",
+    DUPLICATE_EXACT: "Duplicado exacto",
+    POSSIBLE_INTERNAL_TRANSFER: "Posible transferencia interna",
+    INTERNAL_TRANSFER_MATCHED: "Transferencia interna",
     SKIPPED: "Omitida",
     ERROR: "Error",
   };
@@ -40,7 +43,7 @@ export function getImportRowIssueMessage(
   row: TransactionImportRow,
   createMissingFallbackCategory: boolean,
 ) {
-  if (row.status === "DUPLICATE") {
+  if (row.status === "DUPLICATE" || row.status === "DUPLICATE_EXACT") {
     return row.suggestedCategoryName
       ? `Movimiento ya existente. Categoría sugerida para revisar: ${row.suggestedCategoryName}.`
       : "Movimiento ya existente. Se omitirá al confirmar.";
@@ -61,6 +64,9 @@ export function getImportRowIssueMessage(
     !createMissingFallbackCategory
   ) {
     return "Necesita una categoría para poder importarse.";
+  }
+  if (row.status === "POSSIBLE_INTERNAL_TRANSFER" || row.status === "INTERNAL_TRANSFER_MATCHED") {
+    return row.skipReason || "Posible transferencia interna: mismo monto, fecha cercana y cuenta distinta. Se omite para no inflar ingresos/gastos.";
   }
 
   if (row.status === "SKIPPED" && row.skipReason) {

@@ -9,7 +9,7 @@ import java.util.*;
 public class TransactionImportDtos {
   public enum TransactionImportSource { BANCO_PROVINCIA, MERCADO_PAGO }
   public enum Confidence { HIGH, MEDIUM, LOW, NONE }
-  public enum RowStatus { READY, NEEDS_CATEGORY, DUPLICATE, SKIPPED, ERROR }
+  public enum RowStatus { READY, NEEDS_CATEGORY, DUPLICATE, DUPLICATE_EXACT, POSSIBLE_INTERNAL_TRANSFER, INTERNAL_TRANSFER_MATCHED, SKIPPED, ERROR }
 
   public record TransactionImportPreviewRow(Integer rowNumber, TransactionImportSource source, String sourceOperationId, String sourceHash,
                                             LocalDate realDate, LocalDate budgetDate, String rawDescription, String normalizedDescription,

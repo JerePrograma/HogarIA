@@ -252,6 +252,10 @@ public class TransactionService {
 
       UUID candidateTargetCategoryId = targetCategory != null ? targetCategory.getId() : null;
       String candidateTargetCategoryName = targetCategory != null ? targetCategory.getName() : null;
+      Category.Type candidateTargetCategoryType = targetCategory != null ? targetCategory.getType() : null;
+      MoneyTransaction.MovementType candidateTargetMovementType = null;
+      String suggestionReason = null;
+      String confidence = null;
       if (isAutoMode(targetMode)) {
         var suggestion = suggestionService.suggest(
                 profileId,
@@ -263,6 +267,10 @@ public class TransactionService {
 
         candidateTargetCategoryId = suggestion.suggestedCategoryId();
         candidateTargetCategoryName = suggestion.suggestedCategoryName();
+        candidateTargetCategoryType = suggestion.suggestedCategoryType();
+        candidateTargetMovementType = suggestion.suggestedMovementType();
+        suggestionReason = suggestion.reason();
+        confidence = suggestion.confidence() == null ? null : suggestion.confidence().name();
 
         if (suggestion.warning() != null && !suggestion.warning().isBlank()) {
           warning = suggestion.warning();
@@ -293,6 +301,10 @@ public class TransactionService {
               transaction,
               candidateTargetCategoryId,
               candidateTargetCategoryName,
+              candidateTargetCategoryType,
+              candidateTargetMovementType,
+              suggestionReason,
+              confidence,
               previewStatus,
               warning
       ));
@@ -375,6 +387,9 @@ public class TransactionService {
         }
 
         transaction.setCategoryId(targetCategory.getId());
+        if (transaction.getClassificationStatus() == MoneyTransaction.ClassificationStatus.NEEDS_CATEGORY) {
+          transaction.setClassificationStatus(MoneyTransaction.ClassificationStatus.CLASSIFIED);
+        }
         repository.save(transaction);
 
         updated++;
@@ -497,6 +512,10 @@ public class TransactionService {
           MoneyTransaction transaction,
           UUID targetCategoryId,
           String targetCategoryName,
+          Category.Type targetCategoryType,
+          MoneyTransaction.MovementType targetMovementType,
+          String suggestionReason,
+          String confidence,
           String previewStatus,
           String warning
   ) {
@@ -510,6 +529,10 @@ public class TransactionService {
             currentCategoryName,
             targetCategoryId,
             targetCategoryName,
+            targetCategoryType,
+            targetMovementType,
+            suggestionReason,
+            confidence,
             transaction.getMovementType(),
             transaction.getRealDate(),
             transaction.getBudgetDate(),

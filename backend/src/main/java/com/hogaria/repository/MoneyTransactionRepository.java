@@ -56,4 +56,19 @@ public interface MoneyTransactionRepository extends JpaRepository<MoneyTransacti
             String source,
             String sourceOperationId
     );
+
+    List<MoneyTransaction> findByProfileIdAndRealDateBetweenAndAmount(
+            UUID profileId,
+            LocalDate from,
+            LocalDate to,
+            java.math.BigDecimal amount
+    );
+
+    List<MoneyTransaction> findByProfileIdAndRealDateBetweenAndAmountAndAccountIdNot(
+            UUID profileId,
+            LocalDate from,
+            LocalDate to,
+            java.math.BigDecimal amount,
+            UUID accountId
+    );
 }

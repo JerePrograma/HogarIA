@@ -33,6 +33,10 @@ export interface BulkRecategorizeCandidate {
   currentCategoryName?: string | null;
   targetCategoryId: string | null;
   targetCategoryName?: string | null;
+  targetCategoryType?: string | null;
+  targetMovementType?: MovementType | null;
+  suggestionReason?: string | null;
+  confidence?: string | null;
   movementType: MovementType;
   realDate: string;
   budgetDate: string;
