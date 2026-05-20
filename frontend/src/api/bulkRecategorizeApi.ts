@@ -1,6 +1,14 @@
 import { http } from './http';
+import type { MovementType, TransactionOrigin, TransactionStatus } from '../domain/types';
 
-export type BulkRecategorizeMovementType = 'INCOME' | 'EXPENSE' | 'SAVING' | 'TRANSFER' | 'ADJUSTMENT';
+export type BulkRecategorizeTargetMode = 'MANUAL' | 'AUTO_BY_IMPORT_RULES';
+
+export type BulkRecategorizePreviewStatus =
+  | 'READY'
+  | 'SKIPPED'
+  | 'AMBIGUOUS'
+  | 'NEEDS_CATEGORY'
+  | 'ERROR';
 
 export interface BulkRecategorizePreviewPayload {
   accountId?: string | null;
@@ -8,9 +16,9 @@ export interface BulkRecategorizePreviewPayload {
   to?: string | null;
   fromCategoryId?: string | null;
   onlyWithoutCategory?: boolean | null;
-  targetMode?: 'MANUAL' | 'AUTO_BY_IMPORT_RULES';
+  targetMode?: BulkRecategorizeTargetMode;
   toCategoryId?: string | null;
-  movementType?: BulkRecategorizeMovementType | null;
+  movementType?: MovementType | null;
   descriptionContains?: string | null;
   exactAmount?: number | null;
   minAmount?: number | null;
@@ -25,20 +33,20 @@ export interface BulkRecategorizeCandidate {
   currentCategoryName?: string | null;
   targetCategoryId: string | null;
   targetCategoryName?: string | null;
-  movementType: BulkRecategorizeMovementType;
+  movementType: MovementType;
   realDate: string;
   budgetDate: string;
   amount: number;
-  description: string;
-  origin: string;
-  status: string;
-  previewStatus: 'READY' | 'SKIPPED' | 'AMBIGUOUS' | 'NEEDS_CATEGORY';
-  warning: string;
+  description: string | null;
+  origin: TransactionOrigin;
+  status: TransactionStatus;
+  previewStatus: BulkRecategorizePreviewStatus;
+  warning: string | null;
 }
 
 export interface BulkRecategorizePreviewResult {
   profileId: string;
-  targetCategoryId: string;
+  targetCategoryId: string | null;
   totalMatched: number;
   updatableCount: number;
   ambiguousCount: number;
@@ -49,10 +57,13 @@ export interface BulkRecategorizePreviewResult {
 }
 
 export interface BulkRecategorizeApplyPayload {
-  targetMode?: 'MANUAL' | 'AUTO_BY_IMPORT_RULES';
+  targetMode?: BulkRecategorizeTargetMode;
   toCategoryId?: string | null;
   transactionIds?: string[];
-  updates?: Array<{ transactionId: string; targetCategoryId: string }>;
+  updates?: Array<{
+    transactionId: string;
+    targetCategoryId: string;
+  }>;
 }
 
 export interface BulkRecategorizeApplyResult {
@@ -64,12 +75,26 @@ export interface BulkRecategorizeApplyResult {
   errors: string[];
 }
 
-export async function previewBulkRecategorize(profileId: string, payload: BulkRecategorizePreviewPayload): Promise<BulkRecategorizePreviewResult> {
-  const { data } = await http.post(`/profiles/${profileId}/transactions/bulk-recategorize/preview`, payload);
+export async function previewBulkRecategorize(
+  profileId: string,
+  payload: BulkRecategorizePreviewPayload,
+): Promise<BulkRecategorizePreviewResult> {
+  const { data } = await http.post(
+    `/profiles/${profileId}/transactions/bulk-recategorize/preview`,
+    payload,
+  );
+
   return data;
 }
 
-export async function applyBulkRecategorize(profileId: string, payload: BulkRecategorizeApplyPayload): Promise<BulkRecategorizeApplyResult> {
-  const { data } = await http.post(`/profiles/${profileId}/transactions/bulk-recategorize/apply`, payload);
+export async function applyBulkRecategorize(
+  profileId: string,
+  payload: BulkRecategorizeApplyPayload,
+): Promise<BulkRecategorizeApplyResult> {
+  const { data } = await http.post(
+    `/profiles/${profileId}/transactions/bulk-recategorize/apply`,
+    payload,
+  );
+
   return data;
 }

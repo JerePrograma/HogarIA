@@ -1,27 +1,25 @@
-import { useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
-import { getApiErrorMessage } from '../../api/http';
-import { commitBudgetExcelImport, previewBudgetExcelImport } from '../../api/importsApi';
-import { AppLayout } from '../../components/layout/AppLayout';
-import { EmptyState } from '../../components/ui/EmptyState';
-import { MetricCard } from '../../components/ui/MetricCard';
-import { StatusBadge } from '../../components/ui/StatusBadge';
+import { useState } from "react";
+import { useParams, Link } from "react-router-dom";
 import {
-  importRowStatusLabels,
-  importTargetEntityLabels,
-  labelOrValue,
-  profileTypeLabels,
-} from '../../domain/financeLabels';
+  previewBudgetExcelImport,
+  commitBudgetExcelImport,
+} from "../../api/budgetImportsApi";
+import { AppLayout } from "../../components/layout/AppLayout";
+import { EmptyState } from "../../components/ui/EmptyState";
+import { MetricCard } from "../../components/ui/MetricCard";
+import { StatusBadge } from "../../components/ui/StatusBadge";
 import {
-  formatMoney,
-  formatMonth,
   formatNumber,
   normalizeOptionalText,
-} from '../../domain/formatters';
-import type {
+  formatMonth,
+  formatMoney,
+} from "../../domain/formatters";
+import {
   BudgetExcelImportCommitRequest,
   BudgetExcelImportPreviewResponse,
-} from '../../domain/types';
+} from "../../domain/types";
+import { importRowStatusLabels } from "../../imports/importUtils";
+import { getApiErrorMessage } from "../budgets/budgetErrors";
 
 const defaultOptions: BudgetExcelImportCommitRequest = {
   createCategories: true,
@@ -34,91 +32,102 @@ const defaultOptions: BudgetExcelImportCommitRequest = {
   updateExisting: true,
   ignoreInvalidRows: true,
   year: new Date().getFullYear(),
-  currency: 'ARS',
-  profileType: 'PERSONAL',
+  currency: "ARS",
+  profileType: "PERSONAL",
 };
 
 type ImportOptionKey =
-  | 'createCategories'
-  | 'createAccounts'
-  | 'createBudgets'
-  | 'createTransactions'
-  | 'createGoals'
-  | 'createHabits'
-  | 'createInflation'
-  | 'updateExisting'
-  | 'ignoreInvalidRows';
+  | "createCategories"
+  | "createAccounts"
+  | "createBudgets"
+  | "createTransactions"
+  | "createGoals"
+  | "createHabits"
+  | "createInflation"
+  | "updateExisting"
+  | "ignoreInvalidRows";
 
-const importOptions: Array<{ key: ImportOptionKey; label: string; description: string }> = [
+const importOptions: Array<{
+  key: ImportOptionKey;
+  label: string;
+  description: string;
+}> = [
   {
-    key: 'createCategories',
-    label: 'Crear categorías',
-    description: 'Genera categorías detectadas en el Excel.',
+    key: "createCategories",
+    label: "Crear categorías",
+    description: "Genera categorías detectadas en el Excel.",
   },
   {
-    key: 'createAccounts',
-    label: 'Crear cuentas',
-    description: 'Genera cuentas faltantes para movimientos.',
+    key: "createAccounts",
+    label: "Crear cuentas",
+    description: "Genera cuentas faltantes para movimientos.",
   },
   {
-    key: 'createBudgets',
-    label: 'Crear presupuestos',
-    description: 'Carga estructura presupuestaria mensual.',
+    key: "createBudgets",
+    label: "Crear presupuestos",
+    description: "Carga estructura presupuestaria mensual.",
   },
   {
-    key: 'createTransactions',
-    label: 'Crear movimientos',
-    description: 'Importa ingresos, gastos y ajustes.',
+    key: "createTransactions",
+    label: "Crear movimientos",
+    description: "Importa ingresos, gastos y ajustes.",
   },
   {
-    key: 'createGoals',
-    label: 'Crear objetivos',
-    description: 'Carga metas financieras detectadas.',
+    key: "createGoals",
+    label: "Crear objetivos",
+    description: "Carga metas financieras detectadas.",
   },
   {
-    key: 'createHabits',
-    label: 'Crear hábitos',
-    description: 'Carga rutinas financieras sugeridas.',
+    key: "createHabits",
+    label: "Crear hábitos",
+    description: "Carga rutinas financieras sugeridas.",
   },
   {
-    key: 'createInflation',
-    label: 'Crear inflación',
-    description: 'Importa índices o proyecciones.',
+    key: "createInflation",
+    label: "Crear inflación",
+    description: "Importa índices o proyecciones.",
   },
   {
-    key: 'updateExisting',
-    label: 'Actualizar existentes',
-    description: 'Actualiza registros si ya existen.',
+    key: "updateExisting",
+    label: "Actualizar existentes",
+    description: "Actualiza registros si ya existen.",
   },
   {
-    key: 'ignoreInvalidRows',
-    label: 'Ignorar filas inválidas',
-    description: 'Permite continuar aunque haya filas rechazadas.',
+    key: "ignoreInvalidRows",
+    label: "Ignorar filas inválidas",
+    description: "Permite continuar aunque haya filas rechazadas.",
   },
 ];
 
-const rowStatusTone = (status: string): 'ok' | 'watch' | 'critical' | 'neutral' => {
+const rowStatusTone = (
+  status: string,
+): "ok" | "watch" | "critical" | "neutral" => {
   const normalized = status.toUpperCase();
 
-  if (['VALID', 'OK', 'READY'].includes(normalized)) return 'ok';
-  if (['WARNING', 'DUPLICATED', 'SKIPPED'].includes(normalized)) return 'watch';
-  if (['INVALID', 'ERROR', 'FAILED'].includes(normalized)) return 'critical';
+  if (["VALID", "OK", "READY"].includes(normalized)) return "ok";
+  if (["WARNING", "DUPLICATED", "SKIPPED"].includes(normalized)) return "watch";
+  if (["INVALID", "ERROR", "FAILED"].includes(normalized)) return "critical";
 
-  return 'neutral';
+  return "neutral";
 };
 
 export function BudgetExcelImportPage() {
-  const { profileId = '' } = useParams();
+  const { profileId = "" } = useParams();
 
   const [file, setFile] = useState<File | null>(null);
-  const [preview, setPreview] = useState<BudgetExcelImportPreviewResponse | null>(null);
+  const [preview, setPreview] =
+    useState<BudgetExcelImportPreviewResponse | null>(null);
   const [options, setOptions] = useState(defaultOptions);
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState('');
+  const [message, setMessage] = useState("");
 
   const previewRows = preview?.rows ?? [];
-  const validRows = previewRows.filter((row) => row.status?.toUpperCase() === 'VALID').length;
-  const invalidRows = previewRows.filter((row) => row.status?.toUpperCase() === 'INVALID').length;
+  const validRows = previewRows.filter(
+    (row) => row.status?.toUpperCase() === "VALID",
+  ).length;
+  const invalidRows = previewRows.filter(
+    (row) => row.status?.toUpperCase() === "INVALID",
+  ).length;
   const shownRows = previewRows.slice(0, 200);
 
   const updateBooleanOption = (key: ImportOptionKey, value: boolean) => {
@@ -129,7 +138,7 @@ export function BudgetExcelImportPage() {
     if (!file) return;
 
     setLoading(true);
-    setMessage('');
+    setMessage("");
 
     try {
       setPreview(await previewBudgetExcelImport(profileId, file));
@@ -145,10 +154,14 @@ export function BudgetExcelImportPage() {
     if (!preview) return;
 
     setLoading(true);
-    setMessage('');
+    setMessage("");
 
     try {
-      const result = await commitBudgetExcelImport(profileId, preview.batchId, options);
+      const result = await commitBudgetExcelImport(
+        profileId,
+        preview.batchId,
+        options,
+      );
       setMessage(`Importación finalizada: ${result.status}.`);
     } catch (error) {
       setMessage(getApiErrorMessage(error));
@@ -165,24 +178,28 @@ export function BudgetExcelImportPage() {
             <p className="eyebrow">Carga masiva</p>
             <h1>Carga guiada de Excel</h1>
             <p className="muted">
-              Analizá el archivo, revisá filas detectadas y confirmá solo cuando el preview sea razonable.
+              Analizá el archivo, revisá filas detectadas y confirmá solo cuando
+              el preview sea razonable.
             </p>
           </div>
 
-          <Link className="boton-secundario" to={`/profiles/${profileId}/dashboard`}>
+          <Link
+            className="boton-secundario"
+            to={`/profiles/${profileId}/dashboard`}
+          >
             Ir al panel mensual
           </Link>
         </section>
 
         <section className="grid">
           {[
-            'Seleccionar archivo',
-            'Analizar Excel',
-            'Revisar hojas detectadas',
-            'Elegir opciones',
-            'Validar filas',
-            'Confirmar importación',
-            'Revisar resultado',
+            "Seleccionar archivo",
+            "Analizar Excel",
+            "Revisar hojas detectadas",
+            "Elegir opciones",
+            "Validar filas",
+            "Confirmar importación",
+            "Revisar resultado",
           ].map((step, index) => (
             <article key={step} className="guide-step">
               <span className="badge-count">{index + 1}</span>
@@ -197,7 +214,8 @@ export function BudgetExcelImportPage() {
               <p className="eyebrow">Archivo</p>
               <h2>Seleccionar y analizar</h2>
               <p className="secondary-text">
-                Solo se aceptan archivos `.xlsx`. El análisis no escribe datos todavía.
+                Solo se aceptan archivos `.xlsx`. El análisis no escribe datos
+                todavía.
               </p>
             </div>
           </div>
@@ -219,7 +237,7 @@ export function BudgetExcelImportPage() {
               onClick={analyze}
               disabled={!file || loading}
             >
-              {loading ? 'Procesando...' : 'Analizar Excel'}
+              {loading ? "Procesando..." : "Analizar Excel"}
             </button>
           </div>
 
@@ -251,14 +269,14 @@ export function BudgetExcelImportPage() {
                 title="Filas inválidas"
                 value={formatNumber(invalidRows)}
                 helper="Requieren revisión."
-                tone={invalidRows > 0 ? 'danger' : 'success'}
+                tone={invalidRows > 0 ? "danger" : "success"}
               />
 
               <MetricCard
                 title="Hojas faltantes"
                 value={formatNumber(preview.missingSheets.length)}
-                helper={preview.missingSheets.join(', ') || 'Ninguna'}
-                tone={preview.missingSheets.length > 0 ? 'warning' : 'success'}
+                helper={preview.missingSheets.join(", ") || "Ninguna"}
+                tone={preview.missingSheets.length > 0 ? "warning" : "success"}
               />
             </section>
 
@@ -273,12 +291,16 @@ export function BudgetExcelImportPage() {
               <div className="grid">
                 <div className="surface-inset">
                   <p className="label-ui">Detectadas</p>
-                  <p className="mb-0">{preview.detectedSheets.join(', ') || '-'}</p>
+                  <p className="mb-0">
+                    {preview.detectedSheets.join(", ") || "-"}
+                  </p>
                 </div>
 
                 <div className="surface-inset">
                   <p className="label-ui">Faltantes</p>
-                  <p className="mb-0">{preview.missingSheets.join(', ') || 'Ninguna'}</p>
+                  <p className="mb-0">
+                    {preview.missingSheets.join(", ") || "Ninguna"}
+                  </p>
                 </div>
               </div>
             </section>
@@ -301,7 +323,9 @@ export function BudgetExcelImportPage() {
                       <input
                         type="checkbox"
                         checked={Boolean(options[option.key])}
-                        onChange={(event) => updateBooleanOption(option.key, event.target.checked)}
+                        onChange={(event) =>
+                          updateBooleanOption(option.key, event.target.checked)
+                        }
                       />
                       <strong>{option.label}</strong>
                     </span>
@@ -321,7 +345,10 @@ export function BudgetExcelImportPage() {
                     max={2100}
                     value={options.year}
                     onChange={(event) =>
-                      setOptions({ ...options, year: Number(event.target.value) })
+                      setOptions({
+                        ...options,
+                        year: Number(event.target.value),
+                      })
                     }
                   />
                 </label>
@@ -332,7 +359,10 @@ export function BudgetExcelImportPage() {
                     className="input-ui"
                     value={options.currency}
                     onChange={(event) =>
-                      setOptions({ ...options, currency: event.target.value.toUpperCase() })
+                      setOptions({
+                        ...options,
+                        currency: event.target.value.toUpperCase(),
+                      })
                     }
                   />
                 </label>
@@ -346,13 +376,17 @@ export function BudgetExcelImportPage() {
                       setOptions({
                         ...options,
                         profileType: event.target
-                          .value as BudgetExcelImportCommitRequest['profileType'],
+                          .value as BudgetExcelImportCommitRequest["profileType"],
                       })
                     }
                   >
-                    <option value="PERSONAL">{profileTypeLabels.PERSONAL}</option>
+                    <option value="PERSONAL">
+                      {profileTypeLabels.PERSONAL}
+                    </option>
                     <option value="FAMILY">{profileTypeLabels.FAMILY}</option>
-                    <option value="BUSINESS">{profileTypeLabels.BUSINESS}</option>
+                    <option value="BUSINESS">
+                      {profileTypeLabels.BUSINESS}
+                    </option>
                   </select>
                 </label>
               </div>
@@ -364,7 +398,7 @@ export function BudgetExcelImportPage() {
                   onClick={commit}
                   disabled={loading}
                 >
-                  {loading ? 'Importando...' : 'Confirmar importación'}
+                  {loading ? "Importando..." : "Confirmar importación"}
                 </button>
               </div>
             </section>
@@ -400,17 +434,29 @@ export function BudgetExcelImportPage() {
                     {shownRows.map((row) => (
                       <tr key={row.id}>
                         <td>{normalizeOptionalText(row.sheetName)}</td>
-                        <td>{row.rowNumber ? formatNumber(row.rowNumber) : '-'}</td>
+                        <td>
+                          {row.rowNumber ? formatNumber(row.rowNumber) : "-"}
+                        </td>
                         <td>
                           <strong>{normalizeOptionalText(row.concept)}</strong>
                         </td>
                         <td>{formatMonth(row.month ?? undefined)}</td>
-                        <td className="amount-cell">{formatMoney(row.amount)}</td>
-                        <td>{labelOrValue(importTargetEntityLabels, row.targetEntity ?? 'UNKNOWN')}</td>
+                        <td className="amount-cell">
+                          {formatMoney(row.amount)}
+                        </td>
+                        <td>
+                          {labelOrValue(
+                            importTargetEntityLabels,
+                            row.targetEntity ?? "UNKNOWN",
+                          )}
+                        </td>
                         <td>
                           <StatusBadge
                             tone={rowStatusTone(row.status)}
-                            label={labelOrValue(importRowStatusLabels, row.status)}
+                            label={labelOrValue(
+                              importRowStatusLabels,
+                              row.status,
+                            )}
                           />
                         </td>
                       </tr>
@@ -428,7 +474,13 @@ export function BudgetExcelImportPage() {
         )}
 
         {message ? (
-          <p className={message.toLowerCase().includes('error') ? 'mensaje-error' : 'mensaje-exito'}>
+          <p
+            className={
+              message.toLowerCase().includes("error")
+                ? "mensaje-error"
+                : "mensaje-exito"
+            }
+          >
             {message}
           </p>
         ) : null}

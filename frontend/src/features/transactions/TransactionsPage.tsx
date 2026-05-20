@@ -1,34 +1,37 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
-import { listAccounts } from '../../api/accountsApi';
-import { listCategories } from '../../api/categoriesApi';
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
+import { Link, useParams } from "react-router-dom";
+import { listAccounts } from "../../api/accountsApi";
+import { listCategories } from "../../api/categoriesApi";
 import {
   createTransaction,
   deleteTransaction,
   listTransactions,
   updateTransaction,
-} from '../../api/transactionsApi';
-import { AppLayout } from '../../components/layout/AppLayout';
-import { EmptyState } from '../../components/ui/EmptyState';
-import { ErrorState } from '../../components/ui/ErrorState';
-import { MetricCard } from '../../components/ui/MetricCard';
-import { MonthSelector } from '../../components/ui/MonthSelector';
-import { StatusBadge } from '../../components/ui/StatusBadge';
+} from "../../api/transactionsApi";
+import { AppLayout } from "../../components/layout/AppLayout";
+import { EmptyState } from "../../components/ui/EmptyState";
+import { ErrorState } from "../../components/ui/ErrorState";
+import { MetricCard } from "../../components/ui/MetricCard";
+import { MonthSelector } from "../../components/ui/MonthSelector";
+import { StatusBadge } from "../../components/ui/StatusBadge";
 import {
   labelOrValue,
   movementTypeLabels,
   transactionStatusLabels,
-} from '../../domain/financeLabels';
-import { movementTypeOptions, transactionStatusOptions } from '../../domain/financeOptions';
-import { formatMoney } from '../../domain/formatters';
+} from "../../domain/financeLabels";
+import {
+  movementTypeOptions,
+  transactionStatusOptions,
+} from "../../domain/financeOptions";
+import { formatMoney } from "../../domain/formatters";
 import type {
   Account,
   Category,
   MoneyTransaction,
   MovementType,
   TransactionStatus,
-} from '../../domain/types';
+} from "../../domain/types";
 
 interface TransactionForm {
   accountId: string;
@@ -42,7 +45,7 @@ interface TransactionForm {
   status: TransactionStatus;
 }
 
-type AllOption = 'ALL';
+type AllOption = "ALL";
 
 interface TransactionFilters {
   search: string;
@@ -52,12 +55,12 @@ interface TransactionFilters {
   status: TransactionStatus | AllOption;
 }
 
-const ALL: AllOption = 'ALL';
+const ALL: AllOption = "ALL";
 
-const currencyOptions = ['ARS', 'USD'];
+const currencyOptions = ["ARS", "USD"];
 
 function getDefaultDate(year: number, month: number) {
-  return `${year}-${String(month).padStart(2, '0')}-01`;
+  return `${year}-${String(month).padStart(2, "0")}-01`;
 }
 
 function getPeriodDate(year: number, month: number) {
@@ -74,34 +77,36 @@ function shiftPeriod(year: number, month: number, delta: number) {
 }
 
 function formatPeriodLabel(year: number, month: number) {
-  return new Intl.DateTimeFormat('es-AR', {
-    month: 'long',
-    year: 'numeric',
+  return new Intl.DateTimeFormat("es-AR", {
+    month: "long",
+    year: "numeric",
   }).format(getPeriodDate(year, month));
 }
 
 function formatDate(value: string) {
-  if (!value) return '-';
+  if (!value) return "-";
 
-  return new Intl.DateTimeFormat('es-AR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
+  return new Intl.DateTimeFormat("es-AR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
   }).format(new Date(`${value}T00:00:00`));
 }
 
-function getStatusTone(status: TransactionStatus): 'ok' | 'watch' | 'critical' {
-  if (status === 'CONFIRMED') return 'ok';
-  if (status === 'PENDING') return 'watch';
-  return 'critical';
+function getStatusTone(status: TransactionStatus): "ok" | "watch" | "critical" {
+  if (status === "CONFIRMED") return "ok";
+  if (status === "PENDING") return "watch";
+  return "critical";
 }
 
-function getMovementTone(type: MovementType): 'ok' | 'watch' | 'risk' | 'critical' | 'neutral' {
-  if (type === 'INCOME') return 'ok';
-  if (type === 'SAVING') return 'ok';
-  if (type === 'TRANSFER') return 'neutral';
-  if (type === 'ADJUSTMENT') return 'watch';
-  return 'critical';
+function getMovementTone(
+  type: MovementType,
+): "ok" | "watch" | "risk" | "critical" | "neutral" {
+  if (type === "INCOME") return "ok";
+  if (type === "SAVING") return "ok";
+  if (type === "TRANSFER") return "neutral";
+  if (type === "ADJUSTMENT") return "watch";
+  return "critical";
 }
 
 function toTransactionUpdatePayload(transaction: MoneyTransaction) {
@@ -113,8 +118,8 @@ function toTransactionUpdatePayload(transaction: MoneyTransaction) {
     budgetDate: transaction.budgetDate,
     amount: transaction.amount,
     currency: transaction.currency,
-    description: transaction.description ?? '',
-    status: transaction.status === 'CONFIRMED' ? 'PENDING' : 'CONFIRMED',
+    description: transaction.description ?? "",
+    status: transaction.status === "CONFIRMED" ? "PENDING" : "CONFIRMED",
   };
 }
 
@@ -134,7 +139,7 @@ function FilterChip({
   return (
     <button
       type="button"
-      className={`tx-filter-chip ${active ? 'active' : ''}`}
+      className={`tx-filter-chip ${active ? "active" : ""}`}
       onClick={onClick}
     >
       {children}
@@ -143,7 +148,7 @@ function FilterChip({
 }
 
 export function TransactionsPage() {
-  const { profileId = '' } = useParams();
+  const { profileId = "" } = useParams();
   const queryClient = useQueryClient();
 
   const today = new Date();
@@ -154,19 +159,19 @@ export function TransactionsPage() {
   const [month, setMonth] = useState(initialMonth);
 
   const [form, setForm] = useState<TransactionForm>({
-    accountId: '',
-    categoryId: '',
-    movementType: 'EXPENSE',
+    accountId: "",
+    categoryId: "",
+    movementType: "EXPENSE",
     realDate: getDefaultDate(initialYear, initialMonth),
     budgetDate: getDefaultDate(initialYear, initialMonth),
     amount: 0,
-    currency: 'ARS',
-    description: '',
-    status: 'CONFIRMED',
+    currency: "ARS",
+    description: "",
+    status: "CONFIRMED",
   });
 
   const [filters, setFilters] = useState<TransactionFilters>({
-    search: '',
+    search: "",
     accountId: ALL,
     categoryId: ALL,
     movementType: ALL,
@@ -174,19 +179,19 @@ export function TransactionsPage() {
   });
 
   const accountsQuery = useQuery<Account[]>({
-    queryKey: ['accounts', profileId],
+    queryKey: ["accounts", profileId],
     queryFn: () => listAccounts(profileId),
     enabled: Boolean(profileId),
   });
 
   const categoriesQuery = useQuery<Category[]>({
-    queryKey: ['categories', profileId],
+    queryKey: ["categories", profileId],
     queryFn: () => listCategories(profileId, true),
     enabled: Boolean(profileId),
   });
 
   const transactionsQuery = useQuery<MoneyTransaction[]>({
-    queryKey: ['tx', profileId, year, month],
+    queryKey: ["tx", profileId, year, month],
     queryFn: () => listTransactions(profileId, year, month),
     enabled: Boolean(profileId),
   });
@@ -211,31 +216,31 @@ export function TransactionsPage() {
         (acc, transaction) => {
           const amount = Number(transaction.amount ?? 0);
 
-          if (transaction.status === 'IGNORED') {
+          if (transaction.status === "IGNORED") {
             acc.ignored += amount;
             acc.ignoredCount += 1;
             return acc;
           }
 
-          if (transaction.status === 'PENDING') {
+          if (transaction.status === "PENDING") {
             acc.pendingCount += 1;
           }
 
-          if (transaction.status === 'CONFIRMED') {
+          if (transaction.status === "CONFIRMED") {
             acc.confirmedCount += 1;
           }
 
-          if (transaction.movementType === 'INCOME') {
+          if (transaction.movementType === "INCOME") {
             acc.income += amount;
             return acc;
           }
 
-          if (transaction.movementType === 'SAVING') {
+          if (transaction.movementType === "SAVING") {
             acc.saving += amount;
             return acc;
           }
 
-          if (transaction.movementType === 'EXPENSE') {
+          if (transaction.movementType === "EXPENSE") {
             acc.expenses += amount;
             return acc;
           }
@@ -262,26 +267,31 @@ export function TransactionsPage() {
 
     return transactions
       .filter((transaction) => {
-        const accountName = accountsById.get(transaction.accountId)?.name ?? '';
-        const categoryName = categoriesById.get(transaction.categoryId)?.name ?? '';
+        const accountName = accountsById.get(transaction.accountId)?.name ?? "";
+        const categoryName =
+          categoriesById.get(transaction.categoryId)?.name ?? "";
 
         const matchesSearch =
           !search ||
-          normalizeSearch(transaction.description ?? '').includes(search) ||
+          normalizeSearch(transaction.description ?? "").includes(search) ||
           normalizeSearch(accountName).includes(search) ||
           normalizeSearch(categoryName).includes(search) ||
           normalizeSearch(transaction.currency).includes(search);
 
         const matchesAccount =
-          filters.accountId === ALL || transaction.accountId === filters.accountId;
+          filters.accountId === ALL ||
+          transaction.accountId === filters.accountId;
 
         const matchesCategory =
-          filters.categoryId === ALL || transaction.categoryId === filters.categoryId;
+          filters.categoryId === ALL ||
+          transaction.categoryId === filters.categoryId;
 
         const matchesMovement =
-          filters.movementType === ALL || transaction.movementType === filters.movementType;
+          filters.movementType === ALL ||
+          transaction.movementType === filters.movementType;
 
-        const matchesStatus = filters.status === ALL || transaction.status === filters.status;
+        const matchesStatus =
+          filters.status === ALL || transaction.status === filters.status;
 
         return (
           matchesSearch &&
@@ -295,20 +305,23 @@ export function TransactionsPage() {
         const byDate = b.realDate.localeCompare(a.realDate);
         if (byDate !== 0) return byDate;
 
-        return (b.createdAt ?? '').localeCompare(a.createdAt ?? '');
+        return (b.createdAt ?? "").localeCompare(a.createdAt ?? "");
       });
   }, [accountsById, categoriesById, filters, transactions]);
 
   const filteredTotal = useMemo(
     () =>
       filteredTransactions.reduce((acc, transaction) => {
-        if (transaction.status === 'IGNORED') return acc;
+        if (transaction.status === "IGNORED") return acc;
 
-        if (transaction.movementType === 'INCOME') {
+        if (transaction.movementType === "INCOME") {
           return acc + Number(transaction.amount ?? 0);
         }
 
-        if (transaction.movementType === 'EXPENSE' || transaction.movementType === 'SAVING') {
+        if (
+          transaction.movementType === "EXPENSE" ||
+          transaction.movementType === "SAVING"
+        ) {
           return acc - Number(transaction.amount ?? 0);
         }
 
@@ -323,34 +336,49 @@ export function TransactionsPage() {
         ...form,
         profileId,
         amount: Number(form.amount),
-        origin: 'MANUAL',
+        origin: "MANUAL",
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['tx', profileId, year, month] });
-      queryClient.invalidateQueries({ queryKey: ['budget-comp', profileId, year, month] });
+      queryClient.invalidateQueries({
+        queryKey: ["tx", profileId, year, month],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["budget-comp", profileId, year, month],
+      });
 
       setForm((current) => ({
         ...current,
         amount: 0,
-        description: '',
+        description: "",
       }));
     },
   });
 
   const updateTransactionMutation = useMutation({
     mutationFn: (transaction: MoneyTransaction) =>
-      updateTransaction(transaction.id, toTransactionUpdatePayload(transaction)),
+      updateTransaction(
+        transaction.id,
+        toTransactionUpdatePayload(transaction),
+      ),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['tx', profileId, year, month] });
-      queryClient.invalidateQueries({ queryKey: ['budget-comp', profileId, year, month] });
+      queryClient.invalidateQueries({
+        queryKey: ["tx", profileId, year, month],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["budget-comp", profileId, year, month],
+      });
     },
   });
 
   const deleteTransactionMutation = useMutation({
     mutationFn: (id: string) => deleteTransaction(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['tx', profileId, year, month] });
-      queryClient.invalidateQueries({ queryKey: ['budget-comp', profileId, year, month] });
+      queryClient.invalidateQueries({
+        queryKey: ["tx", profileId, year, month],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["budget-comp", profileId, year, month],
+      });
     },
   });
 
@@ -379,7 +407,7 @@ export function TransactionsPage() {
 
   const resetFilters = () => {
     setFilters({
-      search: '',
+      search: "",
       accountId: ALL,
       categoryId: ALL,
       movementType: ALL,
@@ -425,19 +453,26 @@ export function TransactionsPage() {
             <p className="eyebrow">Gestión diaria</p>
             <h1>Movimientos</h1>
             <p className="muted">
-              Registrá ingresos, gastos, ahorros y ajustes. Esta información alimenta el
-              presupuesto, el dashboard y la comparación mensual.
+              Registrá ingresos, gastos, ahorros y ajustes. Esta información
+              alimenta el presupuesto, el dashboard y la comparación mensual.
             </p>
 
             <div className="transactions-period-summary">
               <span className="badge badge-info">{periodLabel}</span>
               <span className="badge badge-muted">
-                {transactions.length} movimiento{transactions.length === 1 ? '' : 's'}
+                {transactions.length} movimiento
+                {transactions.length === 1 ? "" : "s"}
               </span>
-              <span className="badge badge-ok">{totals.confirmedCount} confirmado(s)</span>
-              <span className="badge badge-warning">{totals.pendingCount} pendiente(s)</span>
+              <span className="badge badge-ok">
+                {totals.confirmedCount} confirmado(s)
+              </span>
+              <span className="badge badge-warning">
+                {totals.pendingCount} pendiente(s)
+              </span>
               {totals.ignoredCount > 0 ? (
-                <span className="badge badge-muted">{totals.ignoredCount} ignorado(s)</span>
+                <span className="badge badge-muted">
+                  {totals.ignoredCount} ignorado(s)
+                </span>
               ) : null}
             </div>
           </div>
@@ -495,7 +530,9 @@ export function TransactionsPage() {
                 year={year}
                 month={month}
                 onYearChange={(nextYear) => handlePeriodChange(nextYear, month)}
-                onMonthChange={(nextMonth) => handlePeriodChange(year, nextMonth)}
+                onMonthChange={(nextMonth) =>
+                  handlePeriodChange(year, nextMonth)
+                }
               />
             </div>
           </div>
@@ -527,15 +564,20 @@ export function TransactionsPage() {
             title="Balance operativo"
             value={formatMoney(balance)}
             helper="Ingresos menos gastos y ahorro."
-            tone={balance >= 0 ? 'success' : 'danger'}
+            tone={balance >= 0 ? "success" : "danger"}
           />
         </section>
 
         {!accountsQuery.isLoading && !hasAccounts ? (
           <section className="mensaje-warning transactions-setup-warning">
             <strong>No hay cuentas cargadas.</strong>
-            <span>Necesitás al menos una cuenta para registrar movimientos.</span>
-            <Link className="boton-secundario" to={`/profiles/${profileId}/accounts`}>
+            <span>
+              Necesitás al menos una cuenta para registrar movimientos.
+            </span>
+            <Link
+              className="boton-secundario"
+              to={`/profiles/${profileId}/accounts`}
+            >
               Crear cuenta
             </Link>
           </section>
@@ -544,21 +586,30 @@ export function TransactionsPage() {
         {!categoriesQuery.isLoading && !hasCategories ? (
           <section className="mensaje-warning transactions-setup-warning">
             <strong>No hay categorías cargadas.</strong>
-            <span>Necesitás al menos una categoría para clasificar movimientos.</span>
-            <Link className="boton-secundario" to={`/profiles/${profileId}/categories`}>
+            <span>
+              Necesitás al menos una categoría para clasificar movimientos.
+            </span>
+            <Link
+              className="boton-secundario"
+              to={`/profiles/${profileId}/categories`}
+            >
               Crear categoría
             </Link>
           </section>
         ) : null}
 
         <section className="transactions-main-grid">
-          <form className="panel transactions-form-panel" onSubmit={handleSubmit}>
+          <form
+            className="panel transactions-form-panel"
+            onSubmit={handleSubmit}
+          >
             <div className="section-title">
               <div>
                 <p className="eyebrow">Alta rápida</p>
                 <h2>Cargar movimiento</h2>
                 <p className="muted">
-                  Mantené cuenta, categoría y tipo para cargar varios movimientos seguidos.
+                  Mantené cuenta, categoría y tipo para cargar varios
+                  movimientos seguidos.
                 </p>
               </div>
             </div>
@@ -586,7 +637,9 @@ export function TransactionsPage() {
                 <select
                   className="input-ui"
                   value={form.accountId}
-                  onChange={(event) => setForm({ ...form, accountId: event.target.value })}
+                  onChange={(event) =>
+                    setForm({ ...form, accountId: event.target.value })
+                  }
                 >
                   <option value="">Seleccionar cuenta</option>
                   {accounts.map((account) => (
@@ -602,7 +655,9 @@ export function TransactionsPage() {
                 <select
                   className="input-ui"
                   value={form.categoryId}
-                  onChange={(event) => setForm({ ...form, categoryId: event.target.value })}
+                  onChange={(event) =>
+                    setForm({ ...form, categoryId: event.target.value })
+                  }
                 >
                   <option value="">Seleccionar categoría</option>
                   {categories.map((category) => (
@@ -619,7 +674,10 @@ export function TransactionsPage() {
                   className="input-ui"
                   value={form.status}
                   onChange={(event) =>
-                    setForm({ ...form, status: event.target.value as TransactionStatus })
+                    setForm({
+                      ...form,
+                      status: event.target.value as TransactionStatus,
+                    })
                   }
                 >
                   {transactionStatusOptions.map((option) => (
@@ -635,7 +693,9 @@ export function TransactionsPage() {
                 <select
                   className="input-ui"
                   value={form.currency}
-                  onChange={(event) => setForm({ ...form, currency: event.target.value })}
+                  onChange={(event) =>
+                    setForm({ ...form, currency: event.target.value })
+                  }
                 >
                   {currencyOptions.map((currency) => (
                     <option key={currency} value={currency}>
@@ -651,7 +711,9 @@ export function TransactionsPage() {
                   className="input-ui"
                   type="date"
                   value={form.realDate}
-                  onChange={(event) => setForm({ ...form, realDate: event.target.value })}
+                  onChange={(event) =>
+                    setForm({ ...form, realDate: event.target.value })
+                  }
                 />
               </label>
 
@@ -661,7 +723,9 @@ export function TransactionsPage() {
                   className="input-ui"
                   type="date"
                   value={form.budgetDate}
-                  onChange={(event) => setForm({ ...form, budgetDate: event.target.value })}
+                  onChange={(event) =>
+                    setForm({ ...form, budgetDate: event.target.value })
+                  }
                 />
               </label>
 
@@ -672,7 +736,7 @@ export function TransactionsPage() {
                   type="number"
                   min={0}
                   step="0.01"
-                  value={form.amount === 0 ? '' : form.amount}
+                  value={form.amount === 0 ? "" : form.amount}
                   placeholder="0,00"
                   onChange={(event) =>
                     setForm({
@@ -689,23 +753,35 @@ export function TransactionsPage() {
                   className="input-ui"
                   value={form.description}
                   placeholder="Ej: supermercado, sueldo, alquiler"
-                  onChange={(event) => setForm({ ...form, description: event.target.value })}
+                  onChange={(event) =>
+                    setForm({ ...form, description: event.target.value })
+                  }
                 />
               </label>
             </div>
 
             <div className="transactions-form-preview">
               <span className="label-ui">Vista previa</span>
-              <strong>{form.amount > 0 ? formatMoney(form.amount, form.currency) : '$ 0,00'}</strong>
+              <strong>
+                {form.amount > 0
+                  ? formatMoney(form.amount, form.currency)
+                  : "$ 0,00"}
+              </strong>
               <p className="muted">
-                {labelOrValue(movementTypeLabels, form.movementType)} ·{' '}
+                {labelOrValue(movementTypeLabels, form.movementType)} ·{" "}
                 {labelOrValue(transactionStatusLabels, form.status)}
               </p>
             </div>
 
             <div className="form-actions">
-              <button type="submit" className="boton-principal" disabled={!canSave}>
-                {createTransactionMutation.isPending ? 'Guardando...' : 'Guardar movimiento'}
+              <button
+                type="submit"
+                className="boton-principal"
+                disabled={!canSave}
+              >
+                {createTransactionMutation.isPending
+                  ? "Guardando..."
+                  : "Guardar movimiento"}
               </button>
 
               {!canSave ? (
@@ -744,8 +820,8 @@ export function TransactionsPage() {
             </div>
 
             <p className="muted">
-              El balance principal usa todo el período. El resultado filtrado responde a la
-              búsqueda y filtros activos.
+              El balance principal usa todo el período. El resultado filtrado
+              responde a la búsqueda y filtros activos.
             </p>
           </aside>
         </section>
@@ -757,13 +833,18 @@ export function TransactionsPage() {
               <h2>Movimientos del período</h2>
               <p className="muted">
                 {filteredTransactions.length} visible
-                {filteredTransactions.length === 1 ? '' : 's'} de {transactions.length} total
-                {transactions.length === 1 ? '' : 'es'}.
+                {filteredTransactions.length === 1 ? "" : "s"} de{" "}
+                {transactions.length} total
+                {transactions.length === 1 ? "" : "es"}.
               </p>
             </div>
 
             {activeFilterCount > 0 ? (
-              <button type="button" className="boton-fantasma" onClick={resetFilters}>
+              <button
+                type="button"
+                className="boton-fantasma"
+                onClick={resetFilters}
+              >
                 Limpiar filtros ({activeFilterCount})
               </button>
             ) : null}
@@ -836,7 +917,9 @@ export function TransactionsPage() {
                   onChange={(event) =>
                     setFilters({
                       ...filters,
-                      movementType: event.target.value as MovementType | AllOption,
+                      movementType: event.target.value as
+                        | MovementType
+                        | AllOption,
                     })
                   }
                 >
@@ -857,7 +940,9 @@ export function TransactionsPage() {
                   onChange={(event) =>
                     setFilters({
                       ...filters,
-                      status: event.target.value as TransactionStatus | AllOption,
+                      status: event.target.value as
+                        | TransactionStatus
+                        | AllOption,
                     })
                   }
                 >
@@ -921,15 +1006,17 @@ export function TransactionsPage() {
                   <tbody>
                     {filteredTransactions.map((transaction) => {
                       const accountName =
-                        accountsById.get(transaction.accountId)?.name ?? 'Cuenta no encontrada';
+                        accountsById.get(transaction.accountId)?.name ??
+                        "Cuenta no encontrada";
 
                       const categoryName =
                         categoriesById.get(transaction.categoryId)?.name ??
-                        'Categoría no encontrada';
+                        "Categoría no encontrada";
 
                       const isUpdating =
                         updateTransactionMutation.isPending &&
-                        updateTransactionMutation.variables?.id === transaction.id;
+                        updateTransactionMutation.variables?.id ===
+                          transaction.id;
 
                       const isDeleting =
                         deleteTransactionMutation.isPending &&
@@ -948,11 +1035,14 @@ export function TransactionsPage() {
                           <td>
                             <StatusBadge
                               tone={getMovementTone(transaction.movementType)}
-                              label={labelOrValue(movementTypeLabels, transaction.movementType)}
+                              label={labelOrValue(
+                                movementTypeLabels,
+                                transaction.movementType,
+                              )}
                             />
 
                             <p className="compact-muted">
-                              {transaction.description || 'Sin descripción'}
+                              {transaction.description || "Sin descripción"}
                             </p>
                           </td>
 
@@ -961,13 +1051,19 @@ export function TransactionsPage() {
                           <td>{categoryName}</td>
 
                           <td className="amount-cell">
-                            {formatMoney(transaction.amount, transaction.currency)}
+                            {formatMoney(
+                              transaction.amount,
+                              transaction.currency,
+                            )}
                           </td>
 
                           <td>
                             <StatusBadge
                               tone={getStatusTone(transaction.status)}
-                              label={labelOrValue(transactionStatusLabels, transaction.status)}
+                              label={labelOrValue(
+                                transactionStatusLabels,
+                                transaction.status,
+                              )}
                             />
                           </td>
 
@@ -977,13 +1073,15 @@ export function TransactionsPage() {
                                 type="button"
                                 className="boton-secundario"
                                 disabled={updateTransactionMutation.isPending}
-                                onClick={() => updateTransactionMutation.mutate(transaction)}
+                                onClick={() =>
+                                  updateTransactionMutation.mutate(transaction)
+                                }
                               >
                                 {isUpdating
-                                  ? 'Actualizando...'
-                                  : transaction.status === 'CONFIRMED'
-                                    ? 'Pasar a pendiente'
-                                    : 'Confirmar'}
+                                  ? "Actualizando..."
+                                  : transaction.status === "CONFIRMED"
+                                    ? "Pasar a pendiente"
+                                    : "Confirmar"}
                               </button>
 
                               <button
@@ -991,11 +1089,15 @@ export function TransactionsPage() {
                                 className="boton-danger"
                                 disabled={deleteTransactionMutation.isPending}
                                 onClick={() =>
-                                  window.confirm('¿Eliminar este movimiento?') &&
-                                  deleteTransactionMutation.mutate(transaction.id)
+                                  window.confirm(
+                                    "¿Eliminar este movimiento?",
+                                  ) &&
+                                  deleteTransactionMutation.mutate(
+                                    transaction.id,
+                                  )
                                 }
                               >
-                                {isDeleting ? 'Eliminando...' : 'Eliminar'}
+                                {isDeleting ? "Eliminando..." : "Eliminar"}
                               </button>
                             </div>
                           </td>
@@ -1009,36 +1111,52 @@ export function TransactionsPage() {
               <div className="transactions-mobile-list">
                 {filteredTransactions.map((transaction) => {
                   const accountName =
-                    accountsById.get(transaction.accountId)?.name ?? 'Cuenta no encontrada';
+                    accountsById.get(transaction.accountId)?.name ??
+                    "Cuenta no encontrada";
 
                   const categoryName =
-                    categoriesById.get(transaction.categoryId)?.name ?? 'Categoría no encontrada';
+                    categoriesById.get(transaction.categoryId)?.name ??
+                    "Categoría no encontrada";
 
                   return (
-                    <article key={transaction.id} className="transactions-mobile-card">
+                    <article
+                      key={transaction.id}
+                      className="transactions-mobile-card"
+                    >
                       <header>
                         <div>
-                          <strong>{transaction.description || 'Sin descripción'}</strong>
+                          <strong>
+                            {transaction.description || "Sin descripción"}
+                          </strong>
                           <p className="muted">
-                            {formatDate(transaction.realDate)} · Presupuesto:{' '}
+                            {formatDate(transaction.realDate)} · Presupuesto:{" "}
                             {formatDate(transaction.budgetDate)}
                           </p>
                         </div>
 
                         <span className="transactions-mobile-amount">
-                          {formatMoney(transaction.amount, transaction.currency)}
+                          {formatMoney(
+                            transaction.amount,
+                            transaction.currency,
+                          )}
                         </span>
                       </header>
 
                       <div className="transactions-mobile-badges">
                         <StatusBadge
                           tone={getMovementTone(transaction.movementType)}
-                          label={labelOrValue(movementTypeLabels, transaction.movementType)}
+                          label={labelOrValue(
+                            movementTypeLabels,
+                            transaction.movementType,
+                          )}
                         />
 
                         <StatusBadge
                           tone={getStatusTone(transaction.status)}
-                          label={labelOrValue(transactionStatusLabels, transaction.status)}
+                          label={labelOrValue(
+                            transactionStatusLabels,
+                            transaction.status,
+                          )}
                         />
                       </div>
 
@@ -1059,9 +1177,13 @@ export function TransactionsPage() {
                           type="button"
                           className="boton-secundario"
                           disabled={updateTransactionMutation.isPending}
-                          onClick={() => updateTransactionMutation.mutate(transaction)}
+                          onClick={() =>
+                            updateTransactionMutation.mutate(transaction)
+                          }
                         >
-                          {transaction.status === 'CONFIRMED' ? 'Pasar a pendiente' : 'Confirmar'}
+                          {transaction.status === "CONFIRMED"
+                            ? "Pasar a pendiente"
+                            : "Confirmar"}
                         </button>
 
                         <button
@@ -1069,7 +1191,7 @@ export function TransactionsPage() {
                           className="boton-danger"
                           disabled={deleteTransactionMutation.isPending}
                           onClick={() =>
-                            window.confirm('¿Eliminar este movimiento?') &&
+                            window.confirm("¿Eliminar este movimiento?") &&
                             deleteTransactionMutation.mutate(transaction.id)
                           }
                         >

@@ -1,4 +1,4 @@
-import type { Account } from '../../../domain/types';
+import type { Account } from '../../domain/types';
 import type { TransactionImportSource } from './types';
 
 const SOURCES: Array<{

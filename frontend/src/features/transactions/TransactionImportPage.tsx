@@ -11,18 +11,18 @@ import { getApiErrorMessage } from '../../api/http';
 import { AppLayout } from '../../components/layout/AppLayout';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { ErrorState } from '../../components/ui/ErrorState';
-import { ImportCommitPanel } from './imports/ImportCommitPanel';
-import { ImportPreviewSummary } from './imports/ImportPreviewSummary';
-import { ImportResultPanel } from './imports/ImportResultPanel';
-import { ImportRowsTable } from './imports/ImportRowsTable';
-import { ImportSourceForm } from './imports/ImportSourceForm';
+import { ImportCommitPanel } from '../imports/ImportCommitPanel';
+import { ImportPreviewSummary } from '../imports/ImportPreviewSummary';
+import { ImportResultPanel } from '../imports/ImportResultPanel';
+import { ImportRowsTable } from '../imports/ImportRowsTable';
+import { ImportSourceForm } from '../imports/ImportSourceForm';
 import type {
   TransactionImportCommitPayload,
   TransactionImportCommitResult,
   TransactionImportPreview,
   TransactionImportRow,
   TransactionImportSource,
-} from './imports/types';
+} from '../imports/types';
 
 type RowStatus = TransactionImportRow['status'];
 type RowStatusFilter = RowStatus | 'ALL';

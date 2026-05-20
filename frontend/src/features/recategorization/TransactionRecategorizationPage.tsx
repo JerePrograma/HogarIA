@@ -1,19 +1,19 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
-import { listAccounts } from '../../../api/accountsApi';
+import { listAccounts } from '../../api/accountsApi';
 import {
   applyBulkRecategorize,
   previewBulkRecategorize,
   type BulkRecategorizePreviewPayload,
-} from '../../../api/bulkRecategorizeApi';
-import { createCategory, listCategories } from '../../../api/categoriesApi';
-import { getApiErrorMessage } from '../../../api/http';
-import { AppLayout } from '../../../components/layout/AppLayout';
-import { EmptyState } from '../../../components/ui/EmptyState';
-import { ErrorState } from '../../../components/ui/ErrorState';
-import { StatusBadge } from '../../../components/ui/StatusBadge';
-import { formatMoney } from '../../../domain/formatters';
+} from '../../api/bulkRecategorizeApi';
+import { createCategory, listCategories } from '../../api/categoriesApi';
+import { getApiErrorMessage } from '../../api/http';
+import { AppLayout } from '../../components/layout/AppLayout';
+import { EmptyState } from '../../components/ui/EmptyState';
+import { ErrorState } from '../../components/ui/ErrorState';
+import { StatusBadge } from '../../components/ui/StatusBadge';
+import { formatMoney } from '../../domain/formatters';
 
 type MovementType = NonNullable<BulkRecategorizePreviewPayload['movementType']>;
 

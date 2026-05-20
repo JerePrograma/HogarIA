@@ -28,7 +28,73 @@ export type MovementType =
   | 'ADJUSTMENT';
 
 export type TransactionOrigin = 'MANUAL' | 'IMPORT' | 'RECURRENT' | 'SYSTEM';
+
 export type TransactionStatus = 'CONFIRMED' | 'PENDING' | 'IGNORED';
+
+export type PaymentChannel =
+  | 'UNKNOWN'
+  | 'CASH'
+  | 'BANK_TRANSFER'
+  | 'DEBIN'
+  | 'CUENTA_DNI'
+  | 'DEBIT_CARD'
+  | 'CREDIT_CARD'
+  | 'MERCADO_PAGO'
+  | 'MERCADO_CREDITO'
+  | 'INTERNAL_TRANSFER'
+  | 'OTHER';
+
+export type TransactionClassificationStatus =
+  | 'CLASSIFIED'
+  | 'NEEDS_CATEGORY'
+  | 'REVIEW'
+  | 'TECHNICAL'
+  | 'IGNORED_BY_RULE';
+
+export interface Category {
+  id: string;
+  profileId: string | null;
+  parentId: string | null;
+  name: string;
+  categoryKey: string | null;
+  type: CategoryType;
+  scope: CategoryScope;
+  defaultMovementType: MovementType | null;
+  budgetable: boolean;
+  technical: boolean;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MoneyTransaction {
+  id: string;
+  profileId: string;
+  accountId: string;
+  categoryId: string | null;
+  movementType: MovementType;
+  realDate: string;
+  budgetDate: string;
+  amount: number;
+  currency: string;
+  description?: string | null;
+  origin: TransactionOrigin;
+  status: TransactionStatus;
+
+  source?: string | null;
+  sourceOperationId?: string | null;
+  sourceHash?: string | null;
+  paymentChannel?: PaymentChannel | null;
+  counterparty?: string | null;
+  classificationStatus?: TransactionClassificationStatus | null;
+  classificationReason?: string | null;
+  importBatchId?: string | null;
+  internalTransferGroupId?: string | null;
+
+  createdAt: string;
+  updatedAt: string;
+}
+
 export type BudgetComparisonStatus = 'OK' | 'WARNING' | 'EXCEEDED';
 export type FinancialHealth = 'EXCELLENT' | 'HEALTHY' | 'WARNING' | 'CRITICAL';
 export type FinancialRiskLevel = 'OK' | 'WATCH' | 'RISK' | 'CRITICAL';
@@ -76,24 +142,6 @@ export interface Category {
   createdAt: string;
   updatedAt: string;
 }
-
-export interface MoneyTransaction {
-  id: string;
-  profileId: string;
-  accountId: string;
-  categoryId: string;
-  movementType: MovementType;
-  realDate: string;
-  budgetDate: string;
-  amount: number;
-  currency: string;
-  description?: string;
-  origin: TransactionOrigin;
-  status: TransactionStatus;
-  createdAt: string;
-  updatedAt: string;
-}
-
 export interface BudgetYear {
   id: string;
   profileId: string;
