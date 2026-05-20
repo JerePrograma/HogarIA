@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
+import { queryKeys } from "../../domain/queryKeys";
 import { listAccounts } from "../../api/accountsApi";
 import { listCategories } from "../../api/categoriesApi";
 import {
@@ -114,13 +115,13 @@ export function TransactionImportPage() {
   });
 
   const accountsQuery = useQuery({
-    queryKey: ["accounts", profileId],
+    queryKey: queryKeys.accounts(profileId),
     queryFn: () => listAccounts(profileId),
     enabled: Boolean(profileId),
   });
 
   const categoriesQuery = useQuery({
-    queryKey: ["categories", profileId],
+    queryKey: queryKeys.categories(profileId, true),
     queryFn: () => listCategories(profileId, true),
     enabled: Boolean(profileId),
   });
@@ -170,11 +171,10 @@ export function TransactionImportPage() {
     },
     onSuccess: async () => {
       await Promise.all([
-        qc.invalidateQueries({ queryKey: ["transactions", profileId] }),
-        qc.invalidateQueries({ queryKey: ["tx", profileId] }),
-        qc.invalidateQueries({ queryKey: ["categories", profileId] }),
-        qc.invalidateQueries({ queryKey: ["dashboard", profileId] }),
-        qc.invalidateQueries({ queryKey: ["budget-comp", profileId] }),
+        qc.invalidateQueries({ queryKey: queryKeys.transactions(profileId) }),
+        qc.invalidateQueries({ queryKey: queryKeys.categories(profileId, true) }),
+        qc.invalidateQueries({ queryKey: queryKeys.dashboard(profileId) }),
+        qc.invalidateQueries({ queryKey: queryKeys.budgetComparison(profileId) }),
       ]);
     },
   });
@@ -532,7 +532,7 @@ export function TransactionImportPage() {
                 {!importableRows ? (
                   <EmptyState
                     title="No hay filas importables"
-                    message="Corregí categorías, tipos o volvé a subir el archivo con datos válidos."
+                    message="No hay filas nuevas para importar. Se detectaron duplicados, transferencias internas u operaciones omitidas por seguridad. Podés revisar recategorización de movimientos existentes."
                   />
                 ) : null}
 
@@ -571,20 +571,17 @@ export function TransactionImportPage() {
                           `?accountId=${accountId}` +
                           `${from ? `&from=${from}` : ""}` +
                           `${to ? `&to=${to}` : ""}` +
-                          `&descriptionContains=${encodeURIComponent(group.key)}` +
+                          `${first.movementType ? `&movementType=${first.movementType}` : ""}` +
+                          `&targetMode=AUTO_BY_IMPORT_RULES` +
+                          `&onlyImported=true` +
+                          `${group.key.includes("Falta de categoría") ? `&onlyWithoutCategory=true` : ""}` +
                           `${
                             first.suggestedCategoryId
                               ? `&toCategoryId=${first.suggestedCategoryId}`
                               : ""
                           }` +
-                          `${
-                            first.suggestedCategoryName &&
-                            !first.suggestedCategoryId
-                              ? `&suggestedCategoryName=${encodeURIComponent(
-                                  first.suggestedCategoryName,
-                                )}`
-                              : ""
-                          }`;
+                          `${first.suggestedCategoryName ? `&suggestedCategoryName=${encodeURIComponent(first.suggestedCategoryName)}` : ""}` +
+                          `${(() => { const ids=[...new Set(group.list.map((r)=>r.matchedTransactionId).filter(Boolean))]; return ids.length?`&transactionIds=${ids.join(",")}`:""; })()}`;
 
                         return (
                           <article

@@ -145,7 +145,7 @@ class TransactionImportServiceTest {
   }
 
   private TransactionImportPreviewRow previewRow(int n, RowStatus status, String desc, BigDecimal amount, UUID catId, String catName, MoneyTransaction.MovementType mt) {
-    return new TransactionImportPreviewRow(n, TransactionImportSource.MERCADO_PAGO, null, null, LocalDate.now(), LocalDate.now(), desc, desc, amount, amount, "ARS", mt, catId, catName, Confidence.HIGH, status, "", "{}");
+    return new TransactionImportPreviewRow(n, TransactionImportSource.MERCADO_PAGO, null, null, LocalDate.now(), LocalDate.now(), desc, desc, amount, amount, "ARS", mt, catId, catName, Confidence.HIGH, status, "", "{}", null, null, null, null, null, null);
   }
 
   private Object classify(BigDecimal amount, String detail) throws Exception {

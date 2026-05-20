@@ -18,6 +18,12 @@ export interface TransactionImportRow {
   skipReason?: string | null;
   status: TransactionImportRowStatus;
   warning?: string;
+  matchedTransactionId?: string | null;
+  matchedAccountId?: string | null;
+  matchedCurrentCategoryId?: string | null;
+  matchedCurrentCategoryName?: string | null;
+  matchType?: string | null;
+  matchReason?: string | null;
 }
 
 export interface TransactionImportPreview {

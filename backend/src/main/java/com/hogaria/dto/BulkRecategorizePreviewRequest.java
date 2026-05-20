@@ -3,6 +3,7 @@ package com.hogaria.dto;
 import com.hogaria.entity.MoneyTransaction;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 
 public record BulkRecategorizePreviewRequest(
@@ -18,6 +19,7 @@ public record BulkRecategorizePreviewRequest(
         BigDecimal exactAmount,
         BigDecimal minAmount,
         BigDecimal maxAmount,
-        Boolean onlyImported
+        Boolean onlyImported,
+        List<UUID> transactionIds
 ) {
 }

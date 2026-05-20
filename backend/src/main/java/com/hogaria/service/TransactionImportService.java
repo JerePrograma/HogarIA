@@ -629,7 +629,8 @@ public class TransactionImportService {
                         categorySuggestion.confidence(),
                         categorySuggestion.status(),
                         "",
-                        String.format("{\"saldo\":\"%s\"}", escapeJson(saldoText))
+                        String.format("{\"saldo\":\"%s\"}", escapeJson(saldoText)),
+                        null, null, null, null, null, null
                 )
         );
       }
@@ -1038,7 +1039,8 @@ public class TransactionImportService {
             categorySuggestion.confidence(),
             rowStatus,
             warning,
-            rawPayload
+            rawPayload,
+            null, null, null, null, null, null
     );
   }
 
@@ -1234,6 +1236,9 @@ public class TransactionImportService {
       case POSSIBLE_INTERNAL_TRANSFER -> RowStatus.POSSIBLE_INTERNAL_TRANSFER;
       default -> RowStatus.DUPLICATE;
     };
+    var matchedTransaction = match.matchedTransactionId() == null
+            ? null
+            : txRepository.findById(match.matchedTransactionId()).orElse(null);
     return new TransactionImportPreviewRow(
             row.rowNumber(),
             row.source(),
@@ -1252,7 +1257,15 @@ public class TransactionImportService {
             row.confidence(),
             resolvedStatus,
             match.reason(),
-            row.rawPayload()
+            row.rawPayload(),
+            match.matchedTransactionId(),
+            matchedTransaction == null ? null : matchedTransaction.getAccountId(),
+            matchedTransaction == null ? null : matchedTransaction.getCategoryId(),
+            matchedTransaction == null || matchedTransaction.getCategoryId() == null
+                    ? null
+                    : categoryRepository.findById(matchedTransaction.getCategoryId()).map(Category::getName).orElse(null),
+            match.type().name(),
+            match.reason()
     );
   }
 
