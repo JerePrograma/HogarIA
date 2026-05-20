@@ -1,8 +1,15 @@
-import type { Account, Category, MovementType, TransactionStatus } from '../../../domain/types';
-import { movementTypeOptions, transactionStatusOptions } from '../../../domain/financeOptions';
-import { movementTypeLabels, transactionStatusLabels, labelOrValue } from '../../../domain/financeLabels';
-import { getCompatibleCategories } from '../../../domain/transactionRules';
-import { formatMoney } from '../../../domain/formatters';
+import { getCompatibleCategories } from "../../domain/financeLabels";
+import {
+  movementTypeOptions,
+  transactionStatusOptions,
+} from "../../domain/financeOptions";
+import { formatMoney } from "../../domain/formatters";
+import {
+  MovementType,
+  TransactionStatus,
+  Account,
+  Category,
+} from "../../domain/types";
 
 export interface TransactionForm {
   accountId: string;
@@ -26,7 +33,7 @@ interface Props {
   onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
 }
 
-const currencyOptions = ['ARS', 'USD'];
+const currencyOptions = ["ARS", "USD"];
 
 export function TransactionQuickForm({
   form,
@@ -37,9 +44,13 @@ export function TransactionQuickForm({
   onChange,
   onSubmit,
 }: Props) {
-  const compatibleCategories = getCompatibleCategories(categories, form.movementType, {
-    includeTechnical: false,
-  });
+  const compatibleCategories = getCompatibleCategories(
+    categories,
+    form.movementType,
+    {
+      includeTechnical: false,
+    },
+  );
 
   return (
     <form className="panel transactions-form-panel" onSubmit={onSubmit}>
@@ -48,7 +59,8 @@ export function TransactionQuickForm({
           <p className="eyebrow">Alta rápida</p>
           <h2>Cargar movimiento</h2>
           <p className="muted">
-            Mantené cuenta, categoría y tipo para cargar varios movimientos seguidos.
+            Mantené cuenta, categoría y tipo para cargar varios movimientos
+            seguidos.
           </p>
         </div>
       </div>
@@ -58,11 +70,11 @@ export function TransactionQuickForm({
           <button
             key={option.value}
             type="button"
-            className={`tx-filter-chip ${form.movementType === option.value ? 'active' : ''}`}
+            className={`tx-filter-chip ${form.movementType === option.value ? "active" : ""}`}
             onClick={() =>
               onChange({
                 movementType: option.value as MovementType,
-                categoryId: '',
+                categoryId: "",
               })
             }
           >
@@ -109,7 +121,9 @@ export function TransactionQuickForm({
           <select
             className="input-ui"
             value={form.status}
-            onChange={(event) => onChange({ status: event.target.value as TransactionStatus })}
+            onChange={(event) =>
+              onChange({ status: event.target.value as TransactionStatus })
+            }
           >
             {transactionStatusOptions.map((option) => (
               <option key={option.value} value={option.value}>
@@ -161,9 +175,11 @@ export function TransactionQuickForm({
             type="number"
             min={0}
             step="0.01"
-            value={form.amount === 0 ? '' : form.amount}
+            value={form.amount === 0 ? "" : form.amount}
             placeholder="0,00"
-            onChange={(event) => onChange({ amount: Number(event.target.value) })}
+            onChange={(event) =>
+              onChange({ amount: Number(event.target.value) })
+            }
           />
         </label>
 
@@ -180,16 +196,18 @@ export function TransactionQuickForm({
 
       <div className="transactions-form-preview">
         <span className="label-ui">Vista previa</span>
-        <strong>{form.amount > 0 ? formatMoney(form.amount, form.currency) : '$ 0,00'}</strong>
+        <strong>
+          {form.amount > 0 ? formatMoney(form.amount, form.currency) : "$ 0,00"}
+        </strong>
         <p className="muted">
-          {labelOrValue(movementTypeLabels, form.movementType)} ·{' '}
+          {labelOrValue(movementTypeLabels, form.movementType)} ·{" "}
           {labelOrValue(transactionStatusLabels, form.status)}
         </p>
       </div>
 
       <div className="form-actions">
         <button type="submit" className="boton-principal" disabled={!canSave}>
-          {pending ? 'Guardando...' : 'Guardar movimiento'}
+          {pending ? "Guardando..." : "Guardar movimiento"}
         </button>
 
         {!canSave ? (

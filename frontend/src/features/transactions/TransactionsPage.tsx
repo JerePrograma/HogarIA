@@ -16,11 +16,6 @@ import { MetricCard } from "../../components/ui/MetricCard";
 import { MonthSelector } from "../../components/ui/MonthSelector";
 import { StatusBadge } from "../../components/ui/StatusBadge";
 import {
-  labelOrValue,
-  movementTypeLabels,
-  transactionStatusLabels,
-} from "../../domain/financeLabels";
-import {
   movementTypeOptions,
   transactionStatusOptions,
 } from "../../domain/financeOptions";
@@ -444,6 +439,13 @@ export function TransactionsPage() {
 
     createTransactionMutation.mutate();
   };
+
+  function labelOrValue(
+    movementTypeLabels: any,
+    movementType: string,
+  ): import("react").ReactNode {
+    throw new Error("Function not implemented.");
+  }
 
   return (
     <AppLayout>
@@ -1022,6 +1024,13 @@ export function TransactionsPage() {
                         deleteTransactionMutation.isPending &&
                         deleteTransactionMutation.variables === transaction.id;
 
+                      function labelOrValue(
+                        movementTypeLabels: any,
+                        movementType: string,
+                      ): string {
+                        throw new Error("Function not implemented.");
+                      }
+
                       return (
                         <tr key={transaction.id}>
                           <td>
@@ -1117,6 +1126,13 @@ export function TransactionsPage() {
                   const categoryName =
                     categoriesById.get(transaction.categoryId)?.name ??
                     "Categoría no encontrada";
+
+                  function labelOrValue(
+                    movementTypeLabels: any,
+                    movementType: string,
+                  ): string {
+                    throw new Error("Function not implemented.");
+                  }
 
                   return (
                     <article
