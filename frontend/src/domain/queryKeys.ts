@@ -93,6 +93,9 @@ export const queryKeys = {
   monthlyPlanQuickCapture: (profileId: string) =>
     ["planning", profileId, "quick-capture"] as const,
 
+  monthlyPlanQuickText: (profileId: string) =>
+    ["planning", profileId, "quick-text"] as const,
+
   monthlyPlanReconciliation: (profileId: string, year: number, month: number) =>
     ["planning-reconciliation", profileId, year, month] as const,
 

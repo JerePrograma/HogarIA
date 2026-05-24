@@ -1,0 +1,1 @@
+export function QuickPlanTextArea({value,onChange}:{value:string;onChange:(v:string)=>void}){return <textarea className='input' rows={12} value={value} onChange={e=>onChange(e.target.value)} placeholder='Pegá tus compromisos, uno por línea'/>}

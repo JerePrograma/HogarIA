@@ -14,6 +14,7 @@ export function PlanningLayout() {
     ['Mensual', planningRoutes.monthly(profileId)],
     ['Ítems', planningRoutes.items(profileId)],
     ['Importar', planningRoutes.import(profileId)],
+    ['Texto rápido', planningRoutes.quickText(profileId)],
     ['Alertas', planningRoutes.alerts(profileId)],
     ['Convertir', planningRoutes.convert(profileId)],
     ['Conciliar', planningRoutes.reconciliation(profileId)],

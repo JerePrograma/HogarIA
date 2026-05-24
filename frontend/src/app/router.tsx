@@ -23,6 +23,7 @@ import {
   PlanningOverviewPage,
 } from "../features/planning/PlanningPages";
 import { MonthlyPlanReconciliationPage } from "../features/planning/MonthlyPlanReconciliationPage";
+import { QuickPlanTextImportPage } from "../features/planning/quick-text/QuickPlanTextImportPage";
 import { ProfilesPage } from "../features/profiles/ProfilesPage";
 import { TransactionImportPage } from "../features/transactions/TransactionImportPage";
 import { TransactionRecategorizationPage } from "../features/recategorization/TransactionRecategorizationPage";
@@ -206,6 +207,7 @@ export function AppRouter() {
           element={<MonthlyPlanItemEditPage />}
         />
         <Route path="monthly/import" element={<MonthlyPlanImportPage />} />
+        <Route path="monthly/quick-text" element={<QuickPlanTextImportPage />} />
         <Route path="monthly/alerts" element={<MonthlyPlanAlertsPage />} />
         <Route path="monthly/convert" element={<MonthlyPlanConvertPage />} />
         <Route
