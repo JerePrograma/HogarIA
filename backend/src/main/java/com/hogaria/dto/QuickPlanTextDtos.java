@@ -1,6 +1,5 @@
 package com.hogaria.dto;
 
-import com.hogaria.dto.MonthlyPlanDtos.MonthlyPlanItemCreateRequest;
 import com.hogaria.dto.MonthlyPlanDtos.MonthlyPlanItemResponse;
 import com.hogaria.entity.MonthlyPlanItem;
 import jakarta.validation.constraints.*;
@@ -13,16 +12,27 @@ public class QuickPlanTextDtos {
 
   public record QuickPlanTextPreviewRequest(
       @NotBlank String rawText,
-      @Min(2000) @Max(2100) Integer periodYear,
-      @Min(1) @Max(12) Integer periodMonth,
+      @NotNull @Min(2000) @Max(2100) Integer periodYear,
+      @NotNull @Min(1) @Max(12) Integer periodMonth,
       AmountScale defaultAmountScale,
       @DecimalMin("0") @DecimalMax("1") BigDecimal approximateMargin,
       @Pattern(regexp = "^[A-Za-z]{3}$") String currency) {}
 
+  public record NormalizedCandidate(
+      Integer lineNumber,
+      String title,
+      MonthlyPlanItem.Type type,
+      MonthlyPlanItem.Priority priority,
+      BigDecimal amount,
+      BigDecimal minAmount,
+      BigDecimal maxAmount,
+      UUID categoryId,
+      UUID accountId) {}
+
   public record QuickPlanTextCandidate(
       Integer lineNumber,
       String rawLine,
-      MonthlyPlanItemCreateRequest item,
+      NormalizedCandidate candidate,
       UUID suggestedCategoryId,
       String suggestedCategoryName,
       List<String> warnings,
@@ -30,9 +40,13 @@ public class QuickPlanTextDtos {
 
   public record QuickPlanTextPreviewResponse(List<QuickPlanTextCandidate> candidates, List<String> warnings) {}
 
-  public record QuickPlanTextCommitRequest(List<MonthlyPlanItemCreateRequest> items) {}
+  public record QuickPlanTextCommitRequest(
+      @NotNull @Min(2000) @Max(2100) Integer periodYear,
+      @NotNull @Min(1) @Max(12) Integer periodMonth,
+      @NotNull List<NormalizedCandidate> candidates,
+      boolean skipDuplicates) {}
 
-  public record QuickPlanTextCommitResponse(List<MonthlyPlanItemResponse> created, List<String> warnings) {}
+  public record QuickPlanTextCommitResponse(List<MonthlyPlanItemResponse> created, List<String> warnings, int skippedDuplicates) {}
 
   public record ClassificationResult(MonthlyPlanItem.Type type, MonthlyPlanItem.Priority priority, String categoryHint) {}
 }
