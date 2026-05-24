@@ -24,6 +24,7 @@ import {
 } from "../features/planning/PlanningPages";
 import { MonthlyPlanReconciliationPage } from "../features/planning/MonthlyPlanReconciliationPage";
 import { QuickPlanTextImportPage } from "../features/planning/quick-text/QuickPlanTextImportPage";
+import { BancoProvinciaLoanImportPage } from "../features/planning/banco-provincia/BancoProvinciaLoanImportPage";
 import { ProfilesPage } from "../features/profiles/ProfilesPage";
 import { TransactionImportPage } from "../features/transactions/TransactionImportPage";
 import { TransactionRecategorizationPage } from "../features/recategorization/TransactionRecategorizationPage";
@@ -208,6 +209,7 @@ export function AppRouter() {
         />
         <Route path="monthly/import" element={<MonthlyPlanImportPage />} />
         <Route path="monthly/quick-text" element={<QuickPlanTextImportPage />} />
+        <Route path="monthly/external-debts/banco-provincia" element={<BancoProvinciaLoanImportPage />} />
         <Route path="monthly/alerts" element={<MonthlyPlanAlertsPage />} />
         <Route path="monthly/convert" element={<MonthlyPlanConvertPage />} />
         <Route
