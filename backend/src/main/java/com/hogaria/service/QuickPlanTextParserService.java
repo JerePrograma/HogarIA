@@ -12,12 +12,12 @@ public class QuickPlanTextParserService {
   public record ParsedLine(String title, BigDecimal amount, BigDecimal minAmount, BigDecimal maxAmount, boolean approximate) {}
 
   public ParsedLine parseLine(String line, AmountScale scale, BigDecimal margin) {
-    Matcher m = Pattern.compile("(\\d+[\\d.,]*)").matcher(line);
+    Matcher m = Pattern.compile("(?i)(\\$?\\s*\\d[\\d.,]*\\s*(?:mil|k|m)?)").matcher(line);
     if (!m.find()) return new ParsedLine(cleanTitle(line), null, null, null, false);
-    BigDecimal amount = parseNumber(m.group(1));
+    BigDecimal amount = parseAmountToken(m.group(1));
     if (amount == null) return new ParsedLine(cleanTitle(line), null, null, null, false);
     if ((scale == null || scale == AmountScale.THOUSANDS) && amount.scale() <= 0 && amount.compareTo(new BigDecimal("10000")) < 0) amount = amount.multiply(new BigDecimal("1000"));
-    boolean approx = line.toLowerCase(Locale.ROOT).matches(".*(aprox|como|~).*?");
+    boolean approx = line.toLowerCase(Locale.ROOT).matches(".*(aprox|como|~|si o si|urgente).*?");
     String title = cleanTitle(line.replace(m.group(1), ""));
     if (approx) {
       BigDecimal pct = margin == null ? new BigDecimal("0.20") : margin;
@@ -27,13 +27,26 @@ public class QuickPlanTextParserService {
     return new ParsedLine(title, amount.setScale(2, RoundingMode.HALF_UP), null, null, false);
   }
 
-  private BigDecimal parseNumber(String token) {
-    String n = token.replace(".", "").replace(",", "");
-    if (!n.matches("\\d+")) return null;
-    return new BigDecimal(n);
+  private BigDecimal parseAmountToken(String raw) {
+    String token = raw.toLowerCase(Locale.ROOT).replace("$", "").replaceAll("\\s+", "");
+    BigDecimal mult = BigDecimal.ONE;
+    if (token.endsWith("mil") || token.endsWith("k")) { mult = new BigDecimal("1000"); token = token.replaceAll("(mil|k)$", ""); }
+    else if (token.endsWith("m")) { mult = new BigDecimal("1000000"); token = token.substring(0, token.length()-1); }
+    if (token.contains(",") && token.contains(".")) {
+      if (token.lastIndexOf(',') > token.lastIndexOf('.')) token = token.replace(".", "").replace(',', '.');
+      else token = token.replace(",", "");
+    } else if (token.contains(",")) {
+      token = token.matches(".*\\d,\\d{1,2}$") ? token.replace(',', '.') : token.replace(",", "");
+    } else if (token.contains(".")) {
+      token = token.matches(".*\\d\\.\\d{1,2}$") ? token : token.replace(".", "");
+    }
+    try { return new BigDecimal(token).multiply(mult); } catch (Exception e) { return null; }
   }
 
   private String cleanTitle(String t) {
-    return t.replaceAll("\\s+", " ").replaceAll("^[*\\-\\s]+|[*\\-\\s]+$", "").trim();
+    return t.replaceAll("(?i)\\b(aprox|como|si o si|urgente|mil|k|m)\\b", " ")
+        .replace("~", " ")
+        .replaceAll("\\d+[\\d.,]*", " ")
+        .replaceAll("\\s+", " ").replaceAll("^[*\\-\\s]+|[*\\-\\s]+$", "").trim();
   }
 }
