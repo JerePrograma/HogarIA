@@ -21,6 +21,7 @@ import {
   MonthlyPlanItemsPage,
   MonthlyPlanningHomePage,
   PlanningOverviewPage,
+  BudgetPlanningSuggestionsPage,
 } from "../features/planning/PlanningPages";
 import { MonthlyPlanReconciliationPage } from "../features/planning/MonthlyPlanReconciliationPage";
 import { QuickPlanTextImportPage } from "../features/planning/quick-text/QuickPlanTextImportPage";
@@ -199,6 +200,7 @@ export function AppRouter() {
         <Route index element={<PlanningOverviewPage />} />
         <Route path="monthly" element={<MonthlyPlanningHomePage />} />
         <Route path="monthly/items" element={<MonthlyPlanItemsPage />} />
+        <Route path="monthly/suggestions" element={<BudgetPlanningSuggestionsPage />} />
         <Route
           path="monthly/items/new"
           element={<MonthlyPlanItemCreatePage />}

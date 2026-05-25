@@ -433,6 +433,179 @@
   }
 }
 
+/* ============================================================
+   Budget planning suggestions
+   ============================================================ */
+
+.suggestions-page {
+  gap: 1rem;
+}
+
+.suggestions-control-panel,
+.suggestions-commit-panel,
+.suggestion-table-panel,
+.suggestion-summary-panel {
+  min-width: 0;
+}
+
+.suggestion-mode-selector,
+.suggestion-commit-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.suggestions-controls-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  gap: 0.85rem;
+  align-items: end;
+  margin: 1rem 0;
+}
+
+.suggestion-check {
+  display: inline-flex;
+  min-height: 2.75rem;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--app-border-subtle);
+  border-radius: 0.875rem;
+  color: var(--app-text-soft);
+  background: var(--app-surface-inset);
+  font-size: 0.875rem;
+  font-weight: 750;
+}
+
+.suggestion-summary-panel {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.suggestion-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 170px), 1fr));
+  gap: 0.75rem;
+}
+
+.suggestion-summary-item {
+  display: grid;
+  gap: 0.25rem;
+  padding: 0.85rem;
+  border: 1px solid var(--app-border-subtle);
+  border-radius: 1rem;
+  background: var(--app-surface-raised);
+}
+
+.suggestion-summary-item span {
+  color: var(--app-text-muted);
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.suggestion-summary-item strong {
+  color: var(--app-text);
+  font-size: 1.35rem;
+  font-weight: 950;
+  line-height: 1.1;
+}
+
+.suggestion-summary-item p {
+  margin: 0;
+  color: var(--app-text-muted);
+  font-size: 0.8rem;
+}
+
+.suggestion-summary-panel .mensaje-exito,
+.suggestion-summary-panel .mensaje-warning,
+.suggestion-summary-panel .mensaje-error {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.suggestion-table-desktop {
+  display: block;
+  overflow-x: auto;
+}
+
+.suggestion-table-desktop table {
+  min-width: 1080px;
+}
+
+.suggestion-table-desktop td {
+  vertical-align: top;
+}
+
+.suggestion-table-desktop td > strong,
+.suggestion-table-desktop td > span {
+  display: block;
+}
+
+.suggestion-amount-input {
+  min-width: 9rem;
+}
+
+.suggestion-title-input {
+  min-width: 14rem;
+}
+
+.suggestion-mobile-list {
+  display: none;
+}
+
+.suggestion-mobile-card {
+  display: grid;
+  gap: 0.85rem;
+  padding: 1rem;
+  border: 1px solid var(--app-border-subtle);
+  border-radius: 1rem;
+  background: var(--app-surface-raised);
+}
+
+.suggestion-mobile-card header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.suggestion-mobile-card header div {
+  display: grid;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.suggestion-mobile-card header strong {
+  overflow-wrap: anywhere;
+  color: var(--app-text);
+  font-weight: 950;
+}
+
+.suggestion-mobile-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
+  gap: 0.75rem;
+}
+
+@media (max-width: 860px) {
+  .suggestion-table-desktop {
+    display: none;
+  }
+
+  .suggestion-mobile-list {
+    display: grid;
+    gap: 0.85rem;
+  }
+
+  .suggestions-commit-panel .page-actions,
+  .suggestions-control-panel .page-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+}
+
 @layer components {
   /* ============================================================
      Generic surfaces

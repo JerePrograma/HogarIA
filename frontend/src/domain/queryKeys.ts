@@ -90,6 +90,11 @@ export const queryKeys = {
   monthlyPlanSuggestions: (profileId: string) =>
     ["planning", profileId, "suggestions"] as const,
 
+  budgetPlanningSuggestions: (profileId: string, year?: number, month?: number) =>
+    year != null && month != null
+      ? (["budget-planning-suggestions", profileId, year, month] as const)
+      : (["budget-planning-suggestions", profileId] as const),
+
   monthlyPlanQuickCapture: (profileId: string) =>
     ["planning", profileId, "quick-capture"] as const,
 

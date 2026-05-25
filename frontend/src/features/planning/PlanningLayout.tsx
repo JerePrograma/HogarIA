@@ -13,6 +13,7 @@ export function PlanningLayout() {
     ['Workspace', planningRoutes.root(profileId)],
     ['Mensual', planningRoutes.monthly(profileId)],
     ['Ítems', planningRoutes.items(profileId)],
+    ['Sugerencias', planningRoutes.suggestions(profileId)],
     ['Importar', planningRoutes.import(profileId)],
     ['Texto rápido', planningRoutes.quickText(profileId)],
     ['Alertas', planningRoutes.alerts(profileId)],

@@ -702,3 +702,125 @@ export interface ConfirmPlanTransactionMatchPayload {
   matchType?: TransactionMatchType;
   confidence?: SuggestedMatchConfidence;
 }
+
+// ============================================================
+// Budget + monthly planning suggestions
+// ============================================================
+
+export type BudgetPlanningSuggestionMode =
+  | "CURRENT_MONTH_ONLY"
+  | "LAST_3_MONTHS_AVERAGE"
+  | "LAST_6_MONTHS_AVERAGE";
+
+export type BudgetPlanningSuggestionTarget = "BUDGET" | "MONTHLY_PLAN" | "BOTH";
+
+export interface BudgetPlanningSuggestionPreviewRequest {
+  year: number;
+  month: number;
+  mode: BudgetPlanningSuggestionMode;
+  includeImportedOnly: boolean;
+  includeManual: boolean;
+  includeReview?: boolean;
+  target: BudgetPlanningSuggestionTarget;
+  nextMonth: boolean;
+  selectedTransactionIds?: string[];
+  roundingMultiple?: number;
+}
+
+export interface BudgetSuggestion {
+  categoryId: string;
+  categoryName: string;
+  categoryType: CategoryType | null;
+  realAmount: number;
+  suggestedBudgetAmount: number;
+  transactionCount: number;
+  confidence: SuggestionConfidence;
+  reason: string;
+  outlier: boolean;
+  applyByDefault: boolean;
+  sourceTransactionIds: string[];
+}
+
+export interface MonthlyPlanSuggestion {
+  title: string;
+  description?: string | null;
+  expectedDate?: string | null;
+  periodYear: number;
+  periodMonth: number;
+  amount?: number | null;
+  minAmount?: number | null;
+  maxAmount?: number | null;
+  categoryId?: string | null;
+  categoryName?: string | null;
+  accountId?: string | null;
+  accountName?: string | null;
+  type: MonthlyPlanItemType;
+  priority: MonthlyPlanPriority;
+  source: MonthlyPlanSource;
+  confidence: SuggestionConfidence;
+  reason: string;
+  duplicate: boolean;
+  applyByDefault: boolean;
+  sourceTransactionIds: string[];
+}
+
+export interface BudgetPlanningSuggestionTotals {
+  totalBudgetRealAmount: number;
+  totalSuggestedBudgetAmount: number;
+  budgetSuggestionCount: number;
+  totalMonthlyPlanAmount: number;
+  monthlyPlanSuggestionCount: number;
+  outlierCount: number;
+}
+
+export interface BudgetPlanningSuggestionPreviewResponse {
+  budgetSuggestions: BudgetSuggestion[];
+  monthlyPlanSuggestions: MonthlyPlanSuggestion[];
+  warnings: string[];
+  totals: BudgetPlanningSuggestionTotals;
+}
+
+export interface ApplyBudgetSuggestion {
+  categoryId: string;
+  suggestedBudgetAmount: number;
+  apply: boolean;
+  outlier?: boolean;
+  reason?: string | null;
+}
+
+export interface ApplyMonthlyPlanSuggestion {
+  title: string;
+  description?: string | null;
+  expectedDate?: string | null;
+  periodYear: number;
+  periodMonth: number;
+  amount?: number | null;
+  minAmount?: number | null;
+  maxAmount?: number | null;
+  categoryId?: string | null;
+  accountId?: string | null;
+  type: MonthlyPlanItemType;
+  priority?: MonthlyPlanPriority;
+  source?: MonthlyPlanSource;
+  apply: boolean;
+  duplicate?: boolean;
+  sourceTransactionIds?: string[];
+}
+
+export interface BudgetPlanningSuggestionCommitRequest {
+  year: number;
+  month: number;
+  applyBudgetSuggestions: ApplyBudgetSuggestion[];
+  applyMonthlyPlanSuggestions: ApplyMonthlyPlanSuggestion[];
+  skipDuplicates: boolean;
+  overwriteExistingBudgetItems: boolean;
+}
+
+export interface BudgetPlanningSuggestionCommitResponse {
+  createdBudgetItems: number;
+  updatedBudgetItems: number;
+  createdMonthlyPlanItems: number;
+  skippedDuplicates: number;
+  warnings: string[];
+  errors: string[];
+}
