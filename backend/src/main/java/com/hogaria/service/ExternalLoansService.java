@@ -114,7 +114,7 @@ public class ExternalLoansService {
     client.getCashControl(profileId, userId);
     List<CjPrestamosLoanActiveRemoteResponse> loans = client.getActiveLoans(profileId, userId);
 
-    int loansSynced = 0, paymentsSynced = 0, movementsCreated = 0, skippedDuplicates = 0;
+    int loansSynced = 0, paymentsSynced = 0, movementsCreated = 0, skippedDuplicates = 0, detectedExistingWithoutMapping = 0;
     int disbursement = 0, paymentPrincipalRecovery = 0, paymentInterestIncome = 0;
     List<String> errors = new ArrayList<>();
     List<String> detectedLoans = new ArrayList<>();
@@ -135,6 +135,7 @@ public class ExternalLoansService {
           plannedMovements.add("DISBURSEMENT loan " + loanId + " amount=" + loan.montoInicial());
         } else {
           skippedDuplicates++;
+          detectedExistingWithoutMapping += dryRun ? 1 : 0;
         }
       } catch (Exception ex) { errors.add("loan " + loanId + ": " + ex.getMessage()); }
 
@@ -176,7 +177,7 @@ public class ExternalLoansService {
     }
     log.info("external-loans operation={} profileId={} userId={} remoteBaseUrl={} apiPrefix={} durationMs={} status={} createdMovements={} skippedDuplicates={} errors={} loans={} payments={}",
         operation, profileId, userId, sanitizeUrl(properties.baseUrl()), properties.resolvedApiPrefix(), System.currentTimeMillis()-startedAt, errors.isEmpty() ? "OK" : "PARTIAL", movementsCreated, skippedDuplicates, errors.size(), detectedLoans.size(), detectedPayments.size());
-    return new ExternalLoanManualSyncResponse(dryRun, loansSynced, paymentsSynced, movementsCreated, skippedDuplicates, errors, detectedLoans, detectedPayments, plannedMovements,
+    return new ExternalLoanManualSyncResponse(dryRun, loansSynced, paymentsSynced, movementsCreated, skippedDuplicates, detectedExistingWithoutMapping, detectedExistingWithoutMapping > 0, errors, detectedLoans, detectedPayments, plannedMovements,
         java.util.Map.of("DISBURSEMENT", disbursement, "PAYMENT_PRINCIPAL_RECOVERY", paymentPrincipalRecovery, "PAYMENT_INTEREST_INCOME", paymentInterestIncome));
   }
 

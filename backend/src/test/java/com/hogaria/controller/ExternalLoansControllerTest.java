@@ -12,6 +12,7 @@ import com.hogaria.integration.cjprestamos.dto.ExternalLoansSummaryResponse;
 import com.hogaria.security.CurrentUserResolver;
 import com.hogaria.service.ExternalLoanSyncConfigService;
 import com.hogaria.service.ExternalLoansService;
+import com.hogaria.service.ExternalLoanBackfillService;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -25,12 +26,13 @@ class ExternalLoansControllerTest {
   @Mock ExternalLoansService service;
   @Mock ExternalLoanSyncConfigService syncConfigService;
   @Mock CurrentUserResolver currentUserResolver;
+  @Mock ExternalLoanBackfillService backfillService;
 
   private ExternalLoansController controller;
 
   @BeforeEach
   void setUp() {
-    controller = new ExternalLoansController(service, syncConfigService, currentUserResolver);
+    controller = new ExternalLoansController(service, syncConfigService, currentUserResolver, backfillService);
   }
 
   @Test
@@ -59,7 +61,7 @@ class ExternalLoansControllerTest {
   void dryRunDelegatesToService() {
     UUID profileId = UUID.randomUUID(); UUID userId = UUID.randomUUID();
     String header = userId.toString();
-    var response = new ExternalLoanManualSyncResponse(true, 0, 0, 0, 0, List.of(), List.of(), List.of(), List.of(), java.util.Map.of());
+    var response = new ExternalLoanManualSyncResponse(true, 0, 0, 0, 0, 0, false, List.of(), List.of(), List.of(), List.of(), java.util.Map.of());
     when(currentUserResolver.parse(header)).thenReturn(userId);
     when(service.dryRunSync(userId, profileId)).thenReturn(response);
 
