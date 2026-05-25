@@ -9,6 +9,8 @@ public record ExternalLoanManualSyncResponse(
     int paymentsSynced,
     int movementsCreated,
     int skippedDuplicates,
+    int detectedExistingWithoutMapping,
+    boolean backfillRecommended,
     List<String> errors,
     List<String> detectedLoans,
     List<String> detectedPayments,
