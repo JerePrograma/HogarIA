@@ -263,6 +263,11 @@ export interface DashboardOperationalSummary {
   dueNext7DaysCount: number;
   financialRiskLevel: FinancialRiskLevel;
   alerts: string[];
+  consumptionExpense: number;
+  recoverableOutflow: number;
+  principalRecovery: number;
+  operationalBalanceExcludingRecoverables: number;
+  netCashFlowIncludingRecoverables: number;
 }
 
 export interface MonthlyCashFlowSummary {
@@ -286,6 +291,9 @@ export interface MonthlyCashFlowSummary {
   neutralAdjustments: number;
   unknownOutflow: number;
   alerts: string[];
+  principalRecovery: number;
+  operationalBalanceExcludingRecoverables: number;
+  netCashFlowIncludingRecoverables: number;
 }
 
 export interface DashboardSummary {

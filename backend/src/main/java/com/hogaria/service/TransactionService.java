@@ -214,12 +214,18 @@ public class TransactionService {
     var errors = new ArrayList<String>();
 
     var targetMode = normalizeTargetMode(request.targetMode());
-    if (isManualMode(targetMode) && request.toCategoryId() == null) {
-      errors.add("Falta toCategoryId.");
+    boolean hasNonCategoryTarget = request.targetMovementType() != null
+            || request.targetStatus() != null
+            || request.targetClassificationStatus() != null
+            || (request.targetClassificationReason() != null && !request.targetClassificationReason().isBlank());
+    if (isManualMode(targetMode) && request.toCategoryId() == null && !hasNonCategoryTarget) {
+      errors.add("Falta una acción destino: categoría, tipo, estado o clasificación.");
       return emptyBulkPreview(profileId, null, errors);
     }
 
-    Category targetCategory = isManualMode(targetMode) ? getCategoryForProfile(profileId, request.toCategoryId()) : null;
+    Category targetCategory = isManualMode(targetMode) && request.toCategoryId() != null
+            ? getCategoryForProfile(profileId, request.toCategoryId())
+            : null;
 
     LocalDate from = request.from() != null ? request.from() : LocalDate.of(1900, 1, 1);
     LocalDate to = request.to() != null ? request.to() : LocalDate.of(2999, 12, 31);
@@ -253,7 +259,7 @@ public class TransactionService {
       UUID candidateTargetCategoryId = targetCategory != null ? targetCategory.getId() : null;
       String candidateTargetCategoryName = targetCategory != null ? targetCategory.getName() : null;
       Category.Type candidateTargetCategoryType = targetCategory != null ? targetCategory.getType() : null;
-      MoneyTransaction.MovementType candidateTargetMovementType = null;
+      MoneyTransaction.MovementType candidateTargetMovementType = request.targetMovementType();
       String suggestionReason = null;
       String confidence = null;
       if (isAutoMode(targetMode)) {
@@ -277,15 +283,30 @@ public class TransactionService {
         }
       }
 
-      if (candidateTargetCategoryId == null) {
+      var movementTypeAfterUpdate = candidateTargetMovementType != null
+              ? candidateTargetMovementType
+              : transaction.getMovementType();
+      boolean hasAnyTargetChange = candidateTargetCategoryId != null
+              || request.targetMovementType() != null
+              || request.targetStatus() != null
+              || request.targetClassificationStatus() != null
+              || (request.targetClassificationReason() != null && !request.targetClassificationReason().isBlank());
+
+      if (candidateTargetCategoryId == null && !hasAnyTargetChange) {
         previewStatus = "NEEDS_CATEGORY";
-        warning = "No se pudo resolver categoría destino automáticamente.";
+        warning = "No se pudo resolver una acción destino automáticamente.";
         skippedCount++;
-      } else if (Objects.equals(transaction.getCategoryId(), candidateTargetCategoryId)) {
+      } else if (candidateTargetCategoryId != null
+              && Objects.equals(transaction.getCategoryId(), candidateTargetCategoryId)
+              && request.targetMovementType() == null
+              && request.targetStatus() == null
+              && request.targetClassificationStatus() == null
+              && (request.targetClassificationReason() == null || request.targetClassificationReason().isBlank())) {
         previewStatus = "SKIPPED";
         warning = "Ya tiene esa categoría.";
         skippedCount++;
-      } else if (!isMovementCategoryCompatible(transaction.getMovementType(), getCategoryForProfile(profileId, candidateTargetCategoryId).getType())) {
+      } else if (candidateTargetCategoryId != null
+              && !isMovementCategoryCompatible(movementTypeAfterUpdate, getCategoryForProfile(profileId, candidateTargetCategoryId).getType())) {
         previewStatus = "SKIPPED";
         warning = "La categoría destino no es compatible con el tipo de movimiento.";
         skippedCount++;
@@ -347,9 +368,16 @@ public class TransactionService {
 
     List<BulkRecategorizeApplyItem> items = new ArrayList<>();
     if (isManualMode(targetMode)) {
-      var targetCategory = getCategoryForProfile(profileId, request.toCategoryId());
-      for (var transactionId : request.transactionIds()) {
-        items.add(new BulkRecategorizeApplyItem(transactionId, targetCategory.getId()));
+      var targetCategory = request.toCategoryId() == null ? null : getCategoryForProfile(profileId, request.toCategoryId());
+      for (var transactionId : request.transactionIds() == null ? List.<UUID>of() : request.transactionIds()) {
+        items.add(new BulkRecategorizeApplyItem(
+                transactionId,
+                targetCategory == null ? null : targetCategory.getId(),
+                request.targetMovementType(),
+                request.targetStatus(),
+                request.targetClassificationStatus(),
+                request.targetClassificationReason()
+        ));
       }
     } else {
       if (request.updates() != null) {
@@ -359,12 +387,11 @@ public class TransactionService {
 
     for (var item : items) {
       try {
-        if (item.targetCategoryId() == null || item.transactionId() == null) {
+        if (item.transactionId() == null) {
           failed++;
           errors.add("Fila inválida de actualización.");
           continue;
         }
-        var targetCategory = getCategoryForProfile(profileId, item.targetCategoryId());
         var transaction = repository.findByIdAndProfileId(item.transactionId(), profileId)
                 .orElse(null);
 
@@ -374,21 +401,55 @@ public class TransactionService {
           continue;
         }
 
-        if (Objects.equals(transaction.getCategoryId(), targetCategory.getId())) {
+        Category targetCategory = item.targetCategoryId() == null
+                ? null
+                : getCategoryForProfile(profileId, item.targetCategoryId());
+        var movementTypeAfterUpdate = item.targetMovementType() != null
+                ? item.targetMovementType()
+                : transaction.getMovementType();
+
+        boolean sameCategory = targetCategory == null || Objects.equals(transaction.getCategoryId(), targetCategory.getId());
+        boolean sameMovement = item.targetMovementType() == null || transaction.getMovementType() == item.targetMovementType();
+        boolean sameStatus = item.targetStatus() == null || transaction.getStatus() == item.targetStatus();
+        boolean sameClassificationStatus = item.targetClassificationStatus() == null
+                || transaction.getClassificationStatus() == item.targetClassificationStatus();
+        boolean sameClassificationReason = item.targetClassificationReason() == null
+                || item.targetClassificationReason().isBlank()
+                || Objects.equals(transaction.getClassificationReason(), item.targetClassificationReason());
+
+        if (sameCategory && sameMovement && sameStatus && sameClassificationStatus && sameClassificationReason) {
           skipped++;
-          warnings.add("Movimiento omitido porque ya tiene la categoría destino: " + item.transactionId());
+          warnings.add("Movimiento omitido porque ya tiene los valores destino: " + item.transactionId());
           continue;
         }
 
-        if (!isMovementCategoryCompatible(transaction.getMovementType(), targetCategory.getType())) {
+        if (targetCategory != null && !isMovementCategoryCompatible(movementTypeAfterUpdate, targetCategory.getType())) {
           failed++;
           errors.add("Movimiento incompatible con la categoría destino: " + item.transactionId());
           continue;
         }
 
-        transaction.setCategoryId(targetCategory.getId());
+        if (targetCategory != null) {
+          transaction.setCategoryId(targetCategory.getId());
+        }
+        if (item.targetMovementType() != null) {
+          transaction.setMovementType(item.targetMovementType());
+        }
+        if (item.targetStatus() != null) {
+          transaction.setStatus(item.targetStatus());
+        }
+        if (item.targetClassificationStatus() != null) {
+          transaction.setClassificationStatus(item.targetClassificationStatus());
+        }
+        if (item.targetClassificationReason() != null && !item.targetClassificationReason().isBlank()) {
+          transaction.setClassificationReason(item.targetClassificationReason());
+        }
         if (transaction.getClassificationStatus() == MoneyTransaction.ClassificationStatus.NEEDS_CATEGORY) {
           transaction.setClassificationStatus(MoneyTransaction.ClassificationStatus.CLASSIFIED);
+        }
+        if (transaction.getStatus() == MoneyTransaction.Status.IGNORED
+                && item.targetClassificationStatus() == null) {
+          transaction.setClassificationStatus(MoneyTransaction.ClassificationStatus.IGNORED_BY_RULE);
         }
         repository.save(transaction);
 
@@ -468,6 +529,12 @@ public class TransactionService {
       return false;
     }
 
+    if (request.reviewFilter() != null
+            && !request.reviewFilter().isBlank()
+            && !matchesReviewFilter(transaction, request.reviewFilter())) {
+      return false;
+    }
+
     if (request.exactAmount() != null
             && transaction.getAmount().compareTo(request.exactAmount()) != 0) {
       return false;
@@ -488,6 +555,32 @@ public class TransactionService {
       var expectedDescription = normalizeText(request.descriptionContains());
 
       return transactionDescription.contains(expectedDescription);
+    }
+
+    return true;
+  }
+
+  private boolean matchesReviewFilter(MoneyTransaction transaction, String reviewFilter) {
+    var filter = normalizeText(reviewFilter);
+    var description = normalizeText(transaction.getDescription());
+    var reason = normalizeText(transaction.getClassificationReason());
+    var source = normalizeText(transaction.getSource());
+
+    if ("CJ_DISBURSEMENT_EXPENSE".equals(filter)) {
+      return "CJPRESTAMOS".equals(source)
+              && "CJPRESTAMOS_DISBURSEMENT".equals(reason)
+              && transaction.getMovementType() == MoneyTransaction.MovementType.EXPENSE;
+    }
+
+    if ("POSSIBLE_INTERNAL_TRANSFER".equals(filter)) {
+      return reason.contains("INTERNAL_TRANSFER")
+              || reason.contains("POSSIBLE_INTERNAL_TRANSFER")
+              || isPotentialInternalTransferText(description);
+    }
+
+    if ("POSSIBLE_CROSS_SOURCE_DUPLICATE".equals(filter)) {
+      return reason.contains("POSSIBLE_CROSS_SOURCE_DUPLICATE")
+              || isDebitCardDuplicateText(description);
     }
 
     return true;
@@ -544,6 +637,10 @@ public class TransactionService {
             transaction.getDescription(),
             transaction.getOrigin(),
             transaction.getStatus(),
+            transaction.getSource(),
+            transaction.getPaymentChannel(),
+            transaction.getClassificationStatus(),
+            transaction.getClassificationReason(),
             previewStatus,
             warning
     );
@@ -684,6 +781,15 @@ public class TransactionService {
             transaction.getDescription(),
             transaction.getOrigin(),
             transaction.getStatus(),
+            transaction.getSource(),
+            transaction.getSourceOperationId(),
+            transaction.getSourceHash(),
+            transaction.getPaymentChannel(),
+            transaction.getCounterparty(),
+            transaction.getClassificationStatus(),
+            transaction.getClassificationReason(),
+            transaction.getImportBatchId(),
+            transaction.getInternalTransferGroupId(),
             transaction.getCreatedAt(),
             transaction.getUpdatedAt()
     );
@@ -705,6 +811,26 @@ public class TransactionService {
             .toUpperCase()
             .replaceAll("\\s+", " ")
             .trim();
+  }
+
+  private boolean isPotentialInternalTransferText(String normalizedText) {
+    return normalizedText.contains("DEBIN")
+            || normalizedText.contains("PAGO DEBIN")
+            || normalizedText.contains("BANK TRANSFER")
+            || normalizedText.contains("TRANSFERENCIA BANCARIA")
+            || normalizedText.contains("CUENTA BANCARIA DIGITAL")
+            || normalizedText.contains("CUENTA DNI")
+            || normalizedText.contains("TRASPASO")
+            || normalizedText.contains("FONDEO")
+            || normalizedText.contains("DEBITO INMEDIATO")
+            || normalizedText.contains("MERCADO PAGO");
+  }
+
+  private boolean isDebitCardDuplicateText(String normalizedText) {
+    return normalizedText.contains("TARJETA DEBITO")
+            || normalizedText.contains("TARJETA DEBITO VISA")
+            || normalizedText.contains("PAGO CON TARJETA DEBITO")
+            || normalizedText.contains("PAGO CON T.D.");
   }
 
   private String normalizeTargetMode(String targetMode) {

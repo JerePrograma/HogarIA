@@ -1,6 +1,6 @@
 export type TransactionImportSource = 'BANCO_PROVINCIA' | 'MERCADO_PAGO';
 export type TransactionImportMovementType = 'INCOME' | 'EXPENSE' | 'SAVING' | 'TRANSFER' | 'ADJUSTMENT';
-export type TransactionImportRowStatus = 'READY' | 'NEEDS_CATEGORY' | 'DUPLICATE' | 'DUPLICATE_EXACT' | 'POSSIBLE_INTERNAL_TRANSFER' | 'INTERNAL_TRANSFER_MATCHED' | 'SKIPPED' | 'ERROR';
+export type TransactionImportRowStatus = 'READY' | 'NEEDS_CATEGORY' | 'DUPLICATE' | 'DUPLICATE_EXACT' | 'POSSIBLE_INTERNAL_TRANSFER' | 'INTERNAL_TRANSFER_MATCHED' | 'POSSIBLE_CROSS_SOURCE_DUPLICATE' | 'SKIPPED' | 'ERROR';
 export type TransactionImportConfidence = 'HIGH' | 'MEDIUM' | 'LOW' | 'NONE';
 
 export interface TransactionImportRow {

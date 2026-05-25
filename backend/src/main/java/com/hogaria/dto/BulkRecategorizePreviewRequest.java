@@ -20,6 +20,11 @@ public record BulkRecategorizePreviewRequest(
         BigDecimal minAmount,
         BigDecimal maxAmount,
         Boolean onlyImported,
+        String reviewFilter,
+        MoneyTransaction.MovementType targetMovementType,
+        MoneyTransaction.Status targetStatus,
+        MoneyTransaction.ClassificationStatus targetClassificationStatus,
+        String targetClassificationReason,
         List<UUID> transactionIds
 ) {
 }

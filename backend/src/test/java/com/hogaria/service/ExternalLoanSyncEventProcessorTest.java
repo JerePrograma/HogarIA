@@ -7,6 +7,8 @@ import com.hogaria.entity.ExternalLoanSyncConfig;
 import com.hogaria.entity.MoneyTransaction;
 import com.hogaria.repository.MoneyTransactionRepository;
 import java.math.BigDecimal;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.LocalDate;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -25,7 +27,7 @@ class ExternalLoanSyncEventProcessorTest {
 
   @BeforeEach void setUp() { processor = new ExternalLoanSyncEventProcessor(transactionRepository, idempotencyService); }
 
-  @Test void disbursementCreatesExpenseConfirmedSystem() {
+  @Test void disbursementCreatesRecoverableAdjustmentConfirmedSystem() {
     UUID userId = UUID.randomUUID(); UUID profileId = UUID.randomUUID();
     var cfg = ExternalLoanSyncConfig.builder().accountId(UUID.randomUUID()).loanDisbursementCategoryId(UUID.randomUUID()).build();
     when(idempotencyService.isAlreadyProcessed(any(), any(), any(), any(), any(), any())).thenReturn(false);
@@ -34,9 +36,17 @@ class ExternalLoanSyncEventProcessorTest {
     assertTrue(processor.processDisbursement(userId, profileId, cfg, "1", "Ana", LocalDate.now(), new BigDecimal("100")));
     ArgumentCaptor<MoneyTransaction> captor = ArgumentCaptor.forClass(MoneyTransaction.class);
     verify(transactionRepository).save(captor.capture());
-    assertEquals(MoneyTransaction.MovementType.EXPENSE, captor.getValue().getMovementType());
+    assertEquals(MoneyTransaction.MovementType.ADJUSTMENT, captor.getValue().getMovementType());
+    assertEquals("CJPRESTAMOS_DISBURSEMENT", captor.getValue().getClassificationReason());
     assertEquals(MoneyTransaction.Origin.SYSTEM, captor.getValue().getOrigin());
     assertEquals(MoneyTransaction.Status.CONFIRMED, captor.getValue().getStatus());
+  }
+
+  @Test void backfillMigrationMovesHistoricalDisbursementExpensesToAdjustment() throws Exception {
+    String migration = Files.readString(Path.of("src/main/resources/db/migration/V13__recoverable_outflows_and_cross_source_review.sql"));
+    assertTrue(migration.contains("classification_reason = 'CJPRESTAMOS_DISBURSEMENT'"));
+    assertTrue(migration.contains("movement_type = 'EXPENSE'"));
+    assertTrue(migration.contains("SET movement_type = 'ADJUSTMENT'"));
   }
 
   @Test void paymentPrincipalCreatesAdjustment() {

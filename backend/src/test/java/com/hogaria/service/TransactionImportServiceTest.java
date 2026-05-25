@@ -72,7 +72,7 @@ class TransactionImportServiceTest {
     UUID newCatId = UUID.randomUUID();
     when(categoryRepository.save(any())).thenReturn(Category.builder().id(newCatId).profileId(profileId).name("Transporte").type(Category.Type.VARIABLE_EXPENSE).active(true).build());
     when(categoryRepository.findById(newCatId)).thenReturn(Optional.of(Category.builder().id(newCatId).type(Category.Type.VARIABLE_EXPENSE).active(true).build()));
-    when(txService.create(any(TransactionCreateRequest.class), eq(userId))).thenReturn(new com.hogaria.dto.TransactionResponse(UUID.randomUUID(), profileId, accountId, newCatId, MoneyTransaction.MovementType.EXPENSE, LocalDate.now(), LocalDate.now(), new BigDecimal("200"), "ARS", "SUBE", MoneyTransaction.Origin.IMPORT, MoneyTransaction.Status.CONFIRMED, null, null));
+    when(txService.create(any(TransactionCreateRequest.class), eq(userId), any(TransactionService.TransactionMetadata.class))).thenReturn(response(newCatId, MoneyTransaction.MovementType.EXPENSE, "SUBE", new BigDecimal("200")));
 
     var response = service.commit(userId, profileId, batchId, new TransactionImportCommitRequest(List.of(new TransactionImportCommitRow(1, null, accountId, MoneyTransaction.MovementType.EXPENSE, new BigDecimal("200"), RowStatus.NEEDS_CATEGORY, "SUBE")), true, true));
     assertEquals(1, response.createdCount());
@@ -104,7 +104,7 @@ class TransactionImportServiceTest {
       try { return toEntity(r); } catch (Exception e) { throw new RuntimeException(e); }
     }).toList());
     when(categoryRepository.findById(any())).thenReturn(Optional.of(Category.builder().id(UUID.randomUUID()).type(Category.Type.VARIABLE_EXPENSE).active(true).build()));
-    when(txService.create(any(TransactionCreateRequest.class), eq(userId))).thenReturn(new com.hogaria.dto.TransactionResponse(UUID.randomUUID(), profileId, accountId, UUID.randomUUID(), MoneyTransaction.MovementType.EXPENSE, LocalDate.now(), LocalDate.now(), new BigDecimal("100"), "ARS", "ok", MoneyTransaction.Origin.IMPORT, MoneyTransaction.Status.CONFIRMED, null, null));
+    when(txService.create(any(TransactionCreateRequest.class), eq(userId), any(TransactionService.TransactionMetadata.class))).thenReturn(response(UUID.randomUUID(), MoneyTransaction.MovementType.EXPENSE, "ok", new BigDecimal("100")));
 
     var commitRows = List.of(
             new TransactionImportCommitRow(1, rows.get(0).suggestedCategoryId(), accountId, MoneyTransaction.MovementType.EXPENSE, new BigDecimal("100"), RowStatus.READY, "ok"),
@@ -133,19 +133,115 @@ class TransactionImportServiceTest {
     UUID newCategoryId = UUID.randomUUID();
     when(categoryRepository.save(any(Category.class))).thenReturn(Category.builder().id(newCategoryId).profileId(profileId).name("Ingresos varios").type(Category.Type.INCOME).active(true).build());
     when(categoryRepository.findById(newCategoryId)).thenReturn(Optional.of(Category.builder().id(newCategoryId).type(Category.Type.INCOME).active(true).build()));
-    when(txService.create(any(TransactionCreateRequest.class), eq(userId))).thenReturn(new com.hogaria.dto.TransactionResponse(UUID.randomUUID(), profileId, accountId, newCategoryId, MoneyTransaction.MovementType.INCOME, LocalDate.now(), LocalDate.now(), new BigDecimal("200"), "ARS", "SUELDO", MoneyTransaction.Origin.IMPORT, MoneyTransaction.Status.CONFIRMED, null, null));
+    when(txService.create(any(TransactionCreateRequest.class), eq(userId), any(TransactionService.TransactionMetadata.class))).thenReturn(response(newCategoryId, MoneyTransaction.MovementType.INCOME, "SUELDO", new BigDecimal("200")));
 
     var response = service.commit(userId, profileId, batchId, new TransactionImportCommitRequest(List.of(new TransactionImportCommitRow(1, null, accountId, MoneyTransaction.MovementType.INCOME, new BigDecimal("200"), RowStatus.NEEDS_CATEGORY, "SUELDO")), true, true));
     assertEquals(1, response.createdCount());
     verify(categoryRepository, times(1)).save(any(Category.class));
   }
 
+  @Test
+  void bancoDebinAndMercadoPagoPagoDebinSameAmountNearDateIsInternalTransfer() throws Exception {
+    var date = LocalDate.of(2026, 5, 7);
+    var amount = new BigDecimal("400000.00");
+    var mpAccountId = UUID.randomUUID();
+    var mpTxId = UUID.randomUUID();
+    var mpFunding = MoneyTransaction.builder()
+            .id(mpTxId)
+            .profileId(profileId)
+            .accountId(mpAccountId)
+            .source("MERCADO_PAGO")
+            .description("Pago Debin | Bank Transfer")
+            .movementType(MoneyTransaction.MovementType.TRANSFER)
+            .paymentChannel(MoneyTransaction.PaymentChannel.MERCADO_PAGO)
+            .realDate(date.minusDays(1))
+            .amount(amount)
+            .build();
+    when(txRepository.findByProfileIdAndRealDateBetweenAndAmount(profileId, date.minusDays(2), date.plusDays(2), amount))
+            .thenReturn(List.of(mpFunding));
+    when(txRepository.findById(mpTxId)).thenReturn(Optional.of(mpFunding));
+
+    var row = previewRow(1, TransactionImportSource.BANCO_PROVINCIA, RowStatus.READY, "DEBITO DEBIN", amount, UUID.randomUUID(), "Cuenta DNI / DEBIN", MoneyTransaction.MovementType.EXPENSE, date);
+
+    var rows = applyDuplicateStatus(row);
+
+    assertEquals(RowStatus.INTERNAL_TRANSFER_MATCHED, rows.get(0).status());
+    assertEquals(MoneyTransaction.MovementType.TRANSFER, rows.get(0).movementType());
+    assertEquals("INTERNAL_TRANSFER_MATCHED", rows.get(0).matchType());
+  }
+
+  @Test
+  void mercadoPagoDebitCardAndBancoDebitCardSameAmountNearDateIsCrossSourceDuplicate() throws Exception {
+    var date = LocalDate.of(2026, 5, 14);
+    var amount = new BigDecimal("56654.12");
+    var bpTxId = UUID.randomUUID();
+    var bpPurchase = MoneyTransaction.builder()
+            .id(bpTxId)
+            .profileId(profileId)
+            .accountId(accountId)
+            .source("BANCO_PROVINCIA")
+            .description("PAGO CON TARJETA DEBITO")
+            .movementType(MoneyTransaction.MovementType.EXPENSE)
+            .realDate(date.plusDays(1))
+            .amount(amount)
+            .build();
+    when(txRepository.findByProfileIdAndRealDateBetweenAndAmount(profileId, date.minusDays(2), date.plusDays(2), amount))
+            .thenReturn(List.of(bpPurchase));
+    when(txRepository.findById(bpTxId)).thenReturn(Optional.of(bpPurchase));
+
+    var row = previewRow(1, TransactionImportSource.MERCADO_PAGO, RowStatus.READY, "Compra final | Tarjeta de débito Visa", amount, UUID.randomUUID(), "Compras con tarjeta", MoneyTransaction.MovementType.EXPENSE, date);
+
+    var rows = applyDuplicateStatus(row);
+
+    assertEquals(RowStatus.POSSIBLE_CROSS_SOURCE_DUPLICATE, rows.get(0).status());
+    assertEquals("POSSIBLE_CROSS_SOURCE_DUPLICATE", rows.get(0).matchType());
+  }
+
   private ExcelImportRow toEntity(TransactionImportPreviewRow row) throws Exception {
     return ExcelImportRow.builder().batchId(UUID.randomUUID()).rowNumber(row.rowNumber()).rawJson(new ObjectMapper().findAndRegisterModules().writeValueAsString(row)).build();
   }
 
+  @SuppressWarnings("unchecked")
+  private List<TransactionImportPreviewRow> applyDuplicateStatus(TransactionImportPreviewRow row) throws Exception {
+    Method method = TransactionImportService.class.getDeclaredMethod("applyDuplicateStatus", UUID.class, UUID.class, List.class);
+    method.setAccessible(true);
+    return (List<TransactionImportPreviewRow>) method.invoke(service, profileId, accountId, List.of(row));
+  }
+
+  private com.hogaria.dto.TransactionResponse response(UUID categoryId, MoneyTransaction.MovementType movementType, String description, BigDecimal amount) {
+    return new com.hogaria.dto.TransactionResponse(
+            UUID.randomUUID(),
+            profileId,
+            accountId,
+            categoryId,
+            movementType,
+            LocalDate.now(),
+            LocalDate.now(),
+            amount,
+            "ARS",
+            description,
+            MoneyTransaction.Origin.IMPORT,
+            MoneyTransaction.Status.CONFIRMED,
+            null,
+            null,
+            null,
+            null,
+            null,
+            MoneyTransaction.ClassificationStatus.CLASSIFIED,
+            null,
+            null,
+            null,
+            null,
+            null
+    );
+  }
+
   private TransactionImportPreviewRow previewRow(int n, RowStatus status, String desc, BigDecimal amount, UUID catId, String catName, MoneyTransaction.MovementType mt) {
-    return new TransactionImportPreviewRow(n, TransactionImportSource.MERCADO_PAGO, null, null, LocalDate.now(), LocalDate.now(), desc, desc, amount, amount, "ARS", mt, catId, catName, Confidence.HIGH, status, "", "{}", null, null, null, null, null, null);
+    return previewRow(n, TransactionImportSource.MERCADO_PAGO, status, desc, amount, catId, catName, mt, LocalDate.now());
+  }
+
+  private TransactionImportPreviewRow previewRow(int n, TransactionImportSource source, RowStatus status, String desc, BigDecimal amount, UUID catId, String catName, MoneyTransaction.MovementType mt, LocalDate date) {
+    return new TransactionImportPreviewRow(n, source, null, null, date, date, desc, desc, amount, amount, "ARS", mt, catId, catName, Confidence.HIGH, status, "", "{}", null, null, null, null, null, null);
   }
 
   private Object classify(BigDecimal amount, String detail) throws Exception {

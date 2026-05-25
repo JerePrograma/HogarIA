@@ -53,30 +53,37 @@ export function OperationalSummaryCards({ summary }: Props) {
         />
 
         <MetricCard
-          title="Saldo confirmado"
-          value={formatMoney(summary.confirmedBalance)}
-          helper="Balance real registrado hasta ahora."
-          tone={summary.confirmedBalance >= 0 ? 'success' : 'danger'}
+          title="Balance consumo"
+          value={formatMoney(summary.operationalBalanceExcludingRecoverables ?? summary.confirmedBalance)}
+          helper="Ingresos y reintegros menos consumo y ahorro, sin capital prestado recuperable."
+          tone={(summary.operationalBalanceExcludingRecoverables ?? summary.confirmedBalance) >= 0 ? 'success' : 'danger'}
         />
 
         <MetricCard
-          title="Pendiente de cobro"
-          value={formatMoney(summary.pendingIncome)}
-          helper="Ingresos planificados todavía no confirmados."
-          tone="info"
+          title="Gasto consumo"
+          value={formatMoney(summary.consumptionExpense ?? summary.confirmedExpenses)}
+          helper="Consumo del mes, separado de recuperables e inversión."
+          tone={(summary.consumptionExpense ?? summary.confirmedExpenses) > 0 ? 'warning' : 'neutral'}
         />
 
         <MetricCard
-          title="Pendiente de pago"
-          value={formatMoney(summary.pendingExpense)}
-          helper="Egresos pendientes de registrar o pagar."
-          tone={summary.pendingExpense > 0 ? 'warning' : 'neutral'}
+          title="Capital recuperable"
+          value={formatMoney(summary.recoverableOutflow ?? 0)}
+          helper="Capital prestado o salidas recuperables fuera del consumo."
+          tone={(summary.recoverableOutflow ?? 0) > 0 ? 'info' : 'neutral'}
         />
 
         <MetricCard
-          title="Recuperos esperados"
-          value={`${formatMoney(summary.expectedRecoveriesMin)} – ${formatMoney(summary.expectedRecoveriesMax)}`}
-          helper="Reintegros, recuperos o retornos esperados."
+          title="Flujo caja neto"
+          value={formatMoney(summary.netCashFlowIncludingRecoverables ?? summary.confirmedBalance)}
+          helper="Incluye salidas recuperables y recuperos de capital."
+          tone={(summary.netCashFlowIncludingRecoverables ?? summary.confirmedBalance) >= 0 ? 'success' : 'danger'}
+        />
+
+        <MetricCard
+          title="Recupero capital"
+          value={formatMoney(summary.principalRecovery ?? 0)}
+          helper="Capital recuperado separado de ingresos operativos."
           tone="info"
         />
 

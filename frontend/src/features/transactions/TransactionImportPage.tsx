@@ -48,6 +48,7 @@ const rowStatusLabels: Record<string, string> = {
   DUPLICATE_EXACT: "Duplicados exactos",
   POSSIBLE_INTERNAL_TRANSFER: "Posibles transferencias internas",
   INTERNAL_TRANSFER_MATCHED: "Transferencias internas",
+  POSSIBLE_CROSS_SOURCE_DUPLICATE: "Posibles duplicados cross-source",
   ERROR: "Con error",
   SKIPPED: "Omitidas",
 };
@@ -196,6 +197,7 @@ export function TransactionImportPage() {
           DUPLICATE_EXACT: 0,
           POSSIBLE_INTERNAL_TRANSFER: 0,
           INTERNAL_TRANSFER_MATCHED: 0,
+          POSSIBLE_CROSS_SOURCE_DUPLICATE: 0,
           ERROR: 0,
           SKIPPED: 0,
         } as Record<RowStatus | "total", number>,
@@ -226,7 +228,7 @@ export function TransactionImportPage() {
 
   const invalidRows = rowCounters.ERROR ?? 0;
   const ignoredRows = rowCounters.SKIPPED ?? 0;
-  const duplicateRows = (rowCounters.DUPLICATE ?? 0) + (rowCounters.DUPLICATE_EXACT ?? 0) + (rowCounters.POSSIBLE_INTERNAL_TRANSFER ?? 0) + (rowCounters.INTERNAL_TRANSFER_MATCHED ?? 0) || preview?.duplicateRows || 0;
+  const duplicateRows = (rowCounters.DUPLICATE ?? 0) + (rowCounters.DUPLICATE_EXACT ?? 0) + (rowCounters.POSSIBLE_INTERNAL_TRANSFER ?? 0) + (rowCounters.INTERNAL_TRANSFER_MATCHED ?? 0) + (rowCounters.POSSIBLE_CROSS_SOURCE_DUPLICATE ?? 0) || preview?.duplicateRows || 0;
   const needsCategoryRows = rowCounters.NEEDS_CATEGORY ?? 0;
 
   const duplicateSuggestionGroups = useMemo(() => {

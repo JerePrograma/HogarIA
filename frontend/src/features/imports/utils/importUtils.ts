@@ -25,6 +25,7 @@ export const importRowStatusLabels: Record<TransactionImportRowStatus, string> =
     DUPLICATE_EXACT: "Duplicado exacto",
     POSSIBLE_INTERNAL_TRANSFER: "Posible transferencia interna",
     INTERNAL_TRANSFER_MATCHED: "Transferencia interna",
+    POSSIBLE_CROSS_SOURCE_DUPLICATE: "Posible duplicado cross-source",
     SKIPPED: "Omitida",
     ERROR: "Error",
   };
@@ -67,6 +68,10 @@ export function getImportRowIssueMessage(
   }
   if (row.status === "POSSIBLE_INTERNAL_TRANSFER" || row.status === "INTERNAL_TRANSFER_MATCHED") {
     return row.skipReason || "Posible transferencia interna: mismo monto, fecha cercana y cuenta distinta. Se omite para no inflar ingresos/gastos.";
+  }
+
+  if (row.status === "POSSIBLE_CROSS_SOURCE_DUPLICATE") {
+    return row.skipReason || "Posible duplicado entre Banco Provincia y Mercado Pago. Revisar antes de contar ambos como consumo.";
   }
 
   if (row.status === "SKIPPED" && row.skipReason) {

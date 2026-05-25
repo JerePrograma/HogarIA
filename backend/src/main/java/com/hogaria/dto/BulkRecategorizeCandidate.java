@@ -23,6 +23,10 @@ public record BulkRecategorizeCandidate(
         String description,
         MoneyTransaction.Origin origin,
         MoneyTransaction.Status status,
+        String source,
+        MoneyTransaction.PaymentChannel paymentChannel,
+        MoneyTransaction.ClassificationStatus classificationStatus,
+        String classificationReason,
         String previewStatus,
         String warning
 ) {

@@ -75,10 +75,19 @@ public class TransactionImportService {
   private static final String CAT_VIAJES = "Viajes";
   private static final String CAT_CREDITOS = "Créditos y financiación";
   private static final String CAT_GASTOS_GENERALES = "Gastos generales";
+  private static final String CAT_CJ_CAPITAL_PRESTADO = "CJ - Capital prestado";
   private static final String CAT_CJ_CAPITAL_RECUPERADO = "CJ - Capital recuperado";
   private static final String CAT_FONDEO_MERCADO_PAGO = "Fondeo MercadoPago / transferencias internas";
   private static final String CAT_AJUSTES_MERCADO_PAGO = "Ajustes MercadoPago";
-  private enum ImportMatchType { NONE, EXACT_DUPLICATE, SOURCE_DUPLICATE, STRONG_SAME_ACCOUNT_DUPLICATE, POSSIBLE_INTERNAL_TRANSFER }
+  private enum ImportMatchType {
+    NONE,
+    EXACT_DUPLICATE,
+    SOURCE_DUPLICATE,
+    STRONG_SAME_ACCOUNT_DUPLICATE,
+    POSSIBLE_INTERNAL_TRANSFER,
+    INTERNAL_TRANSFER_MATCHED,
+    POSSIBLE_CROSS_SOURCE_DUPLICATE
+  }
   private record ImportMatch(ImportMatchType type, UUID matchedTransactionId, String reason) {}
 
   private static final List<CategoryRule> CATEGORY_RULES = List.of(
@@ -403,7 +412,9 @@ public class TransactionImportService {
       return skippedResult();
     }
     if (commitRow.status() == RowStatus.DUPLICATE || commitRow.status() == RowStatus.DUPLICATE_EXACT
-            || previewRow.status() == RowStatus.DUPLICATE || previewRow.status() == RowStatus.DUPLICATE_EXACT) {
+            || commitRow.status() == RowStatus.POSSIBLE_CROSS_SOURCE_DUPLICATE
+            || previewRow.status() == RowStatus.DUPLICATE || previewRow.status() == RowStatus.DUPLICATE_EXACT
+            || previewRow.status() == RowStatus.POSSIBLE_CROSS_SOURCE_DUPLICATE) {
       if (request.skipDuplicates()) {
         return duplicateResult();
       }
@@ -505,10 +516,8 @@ public class TransactionImportService {
                       previewRow.sourceHash(),
                       inferPaymentChannel(previewRow.source(), description),
                       null,
-                      categoryId == null
-                              ? MoneyTransaction.ClassificationStatus.NEEDS_CATEGORY
-                              : MoneyTransaction.ClassificationStatus.CLASSIFIED,
-                      previewRow.skipReason(),
+                      inferClassificationStatus(previewRow, categoryId),
+                      inferClassificationReason(previewRow),
                       batchId,
                       null
               )
@@ -603,10 +612,22 @@ public class TransactionImportService {
           continue;
         }
 
-        var movementType = inferMovementType(signedAmount);
         var normalizedDescription = normalizeDescription(description);
+        var inferredMovementType = inferMovementType(signedAmount);
+        var movementType = isBancoProvinciaInternalFunding(normalizedDescription)
+                ? MoneyTransaction.MovementType.TRANSFER
+                : inferredMovementType;
         var budgetDate = resolveBudgetDate(date, year, month);
         var categorySuggestion = suggestCategory(profileId, categories, normalizedDescription, movementType);
+        if (categorySuggestion.movementType() != null) {
+          movementType = categorySuggestion.movementType();
+        }
+        var rowWarning = firstNonBlank(
+                categorySuggestion.warning(),
+                movementType == MoneyTransaction.MovementType.TRANSFER && inferredMovementType == MoneyTransaction.MovementType.EXPENSE
+                        ? "Movimiento técnico de fondeo/transferencia interna. No se importa como gasto de consumo por defecto."
+                        : ""
+        );
 
         outputRowNumber++;
 
@@ -628,7 +649,7 @@ public class TransactionImportService {
                         categorySuggestion.categoryName(),
                         categorySuggestion.confidence(),
                         categorySuggestion.status(),
-                        "",
+                        rowWarning,
                         String.format("{\"saldo\":\"%s\"}", escapeJson(saldoText)),
                         null, null, null, null, null, null
                 )
@@ -1234,7 +1255,13 @@ public class TransactionImportService {
     RowStatus resolvedStatus = switch (match.type()) {
       case EXACT_DUPLICATE -> RowStatus.DUPLICATE_EXACT;
       case POSSIBLE_INTERNAL_TRANSFER -> RowStatus.POSSIBLE_INTERNAL_TRANSFER;
+      case INTERNAL_TRANSFER_MATCHED -> RowStatus.INTERNAL_TRANSFER_MATCHED;
+      case POSSIBLE_CROSS_SOURCE_DUPLICATE -> RowStatus.POSSIBLE_CROSS_SOURCE_DUPLICATE;
       default -> RowStatus.DUPLICATE;
+    };
+    var resolvedMovementType = switch (match.type()) {
+      case POSSIBLE_INTERNAL_TRANSFER, INTERNAL_TRANSFER_MATCHED -> MoneyTransaction.MovementType.TRANSFER;
+      default -> row.movementType();
     };
     var matchedTransaction = match.matchedTransactionId() == null
             ? null
@@ -1251,7 +1278,7 @@ public class TransactionImportService {
             row.rawSignedAmount(),
             row.amount(),
             row.currency(),
-            row.movementType(),
+            resolvedMovementType,
             row.suggestedCategoryId(),
             row.suggestedCategoryName(),
             row.confidence(),
@@ -1307,7 +1334,7 @@ public class TransactionImportService {
       case READY -> ImportRowStatus.READY;
       case SKIPPED -> ImportRowStatus.SKIPPED;
       case ERROR -> ImportRowStatus.ERROR;
-      case NEEDS_CATEGORY, DUPLICATE, DUPLICATE_EXACT, POSSIBLE_INTERNAL_TRANSFER, INTERNAL_TRANSFER_MATCHED -> ImportRowStatus.WARNING;
+      case NEEDS_CATEGORY, DUPLICATE, DUPLICATE_EXACT, POSSIBLE_INTERNAL_TRANSFER, INTERNAL_TRANSFER_MATCHED, POSSIBLE_CROSS_SOURCE_DUPLICATE -> ImportRowStatus.WARNING;
     };
   }
 
@@ -1339,7 +1366,8 @@ public class TransactionImportService {
 
     for (var row : rows) {
       if (row.status() == RowStatus.DUPLICATE || row.status() == RowStatus.DUPLICATE_EXACT
-              || row.status() == RowStatus.POSSIBLE_INTERNAL_TRANSFER || row.status() == RowStatus.INTERNAL_TRANSFER_MATCHED) {
+              || row.status() == RowStatus.POSSIBLE_INTERNAL_TRANSFER || row.status() == RowStatus.INTERNAL_TRANSFER_MATCHED
+              || row.status() == RowStatus.POSSIBLE_CROSS_SOURCE_DUPLICATE) {
         duplicates++;
       } else if (row.status() == RowStatus.SKIPPED) {
         skipped++;
@@ -1394,6 +1422,42 @@ public class TransactionImportService {
     var categoryType = inferCategoryType(categoryName, movementType);
 
     return getOrCreateCategory(profileId, categoryName, categoryType).getId();
+  }
+
+  private MoneyTransaction.ClassificationStatus inferClassificationStatus(
+          TransactionImportPreviewRow row,
+          UUID categoryId
+  ) {
+    if (categoryId == null) {
+      return MoneyTransaction.ClassificationStatus.NEEDS_CATEGORY;
+    }
+    if (row.status() == RowStatus.POSSIBLE_CROSS_SOURCE_DUPLICATE) {
+      return MoneyTransaction.ClassificationStatus.REVIEW;
+    }
+    if (row.status() == RowStatus.POSSIBLE_INTERNAL_TRANSFER
+            || row.status() == RowStatus.INTERNAL_TRANSFER_MATCHED
+            || row.movementType() == MoneyTransaction.MovementType.TRANSFER
+            || isPotentialInternalTransferText(firstNonBlank(row.normalizedDescription(), row.rawDescription()))) {
+      return MoneyTransaction.ClassificationStatus.TECHNICAL;
+    }
+    if (row.status() == RowStatus.SKIPPED) {
+      return MoneyTransaction.ClassificationStatus.IGNORED_BY_RULE;
+    }
+    return MoneyTransaction.ClassificationStatus.CLASSIFIED;
+  }
+
+  private String inferClassificationReason(TransactionImportPreviewRow row) {
+    if (row.status() == RowStatus.POSSIBLE_CROSS_SOURCE_DUPLICATE) {
+      return "POSSIBLE_CROSS_SOURCE_DUPLICATE";
+    }
+    if (row.status() == RowStatus.INTERNAL_TRANSFER_MATCHED) {
+      return "INTERNAL_TRANSFER_MATCHED";
+    }
+    if (row.status() == RowStatus.POSSIBLE_INTERNAL_TRANSFER) {
+      return "POSSIBLE_INTERNAL_TRANSFER";
+    }
+    var reason = firstNonBlank(row.matchReason(), row.skipReason());
+    return reason.isBlank() ? null : reason;
   }
 
   private Category getOrCreateCategory(UUID profileId, String name, Category.Type type) {
@@ -1452,11 +1516,17 @@ public class TransactionImportService {
       var tx = txRepository.findByProfileIdAndSourceAndSourceOperationId(profileId, row.source().name(), row.sourceOperationId());
       if (!tx.isEmpty()) return new ImportMatch(ImportMatchType.SOURCE_DUPLICATE, tx.get(0).getId(), "Duplicado de origen: source + sourceOperationId.");
     }
-    var nearby = txRepository.findByProfileIdAndRealDateBetweenAndAmount(profileId, row.realDate().minusDays(1), row.realDate().plusDays(1), row.amount());
+    var nearby = txRepository.findByProfileIdAndRealDateBetweenAndAmount(profileId, row.realDate().minusDays(2), row.realDate().plusDays(2), row.amount());
     for (var transaction : nearby) {
       if (Objects.equals(transaction.getAccountId(), accountId)
               && normalizeDescription(transaction.getDescription()).equals(normalizeDescription(row.normalizedDescription()))) {
         return new ImportMatch(ImportMatchType.STRONG_SAME_ACCOUNT_DUPLICATE, transaction.getId(), "Duplicado fuerte en misma cuenta/fecha/monto.");
+      }
+      if (isBancoProvinciaMercadoPagoFundingPair(row, transaction)) {
+        return new ImportMatch(ImportMatchType.INTERNAL_TRANSFER_MATCHED, transaction.getId(), "Fondeo Banco Provincia ↔ Mercado Pago detectado: mismo monto y fecha cercana. Se trata como transferencia interna, no como gasto.");
+      }
+      if (isDebitCardCrossSourceDuplicate(row, transaction)) {
+        return new ImportMatch(ImportMatchType.POSSIBLE_CROSS_SOURCE_DUPLICATE, transaction.getId(), "Posible duplicado Banco Provincia ↔ Mercado Pago por compra con tarjeta de débito. Revisar antes de contar ambos como consumo.");
       }
       if (!Objects.equals(transaction.getAccountId(), accountId) && isPotentialInternalTransferText(row.normalizedDescription() + " " + transaction.getDescription())) {
         return new ImportMatch(ImportMatchType.POSSIBLE_INTERNAL_TRANSFER, transaction.getId(), "Posible transferencia interna: mismo monto, fecha cercana y cuenta distinta. Se omite para no inflar ingresos/gastos.");
@@ -1471,6 +1541,59 @@ public class TransactionImportService {
             || t.contains("TRANSFERENCIA BANCARIA") || t.contains("CUENTA BANCARIA DIGITAL")
             || t.contains("CUENTA DNI") || t.contains("TRASPASO") || t.contains("FONDEO")
             || t.contains("DEBITO INMEDIATO") || t.contains("MERCADO PAGO");
+  }
+
+  private boolean isBancoProvinciaMercadoPagoFundingPair(TransactionImportPreviewRow row, MoneyTransaction transaction) {
+    var rowText = normalizeText(firstNonBlank(row.normalizedDescription(), row.rawDescription()));
+    var txText = normalizeText(transaction.getDescription());
+    var rowSource = row.source();
+    var txSource = normalizeText(transaction.getSource());
+
+    boolean rowIsBancoFunding = rowSource == TransactionImportSource.BANCO_PROVINCIA && isBancoProvinciaInternalFunding(rowText);
+    boolean rowIsMpFunding = rowSource == TransactionImportSource.MERCADO_PAGO && isMercadoPagoInternalFunding(rowText);
+    boolean txIsBancoFunding = txSource.equals("BANCO_PROVINCIA") && isBancoProvinciaInternalFunding(txText);
+    boolean txIsMpFunding = txSource.equals("MERCADO_PAGO") && isMercadoPagoInternalFunding(txText);
+
+    return (rowIsBancoFunding && txIsMpFunding) || (rowIsMpFunding && txIsBancoFunding);
+  }
+
+  private boolean isDebitCardCrossSourceDuplicate(TransactionImportPreviewRow row, MoneyTransaction transaction) {
+    var rowText = normalizeText(firstNonBlank(row.normalizedDescription(), row.rawDescription()));
+    var txText = normalizeText(transaction.getDescription());
+    var rowSource = row.source();
+    var txSource = normalizeText(transaction.getSource());
+
+    boolean rowIsBancoDebit = rowSource == TransactionImportSource.BANCO_PROVINCIA && isBancoProvinciaDebitCardPurchase(rowText);
+    boolean rowIsMpDebit = rowSource == TransactionImportSource.MERCADO_PAGO && isMercadoPagoDebitCardPurchase(rowText);
+    boolean txIsBancoDebit = txSource.equals("BANCO_PROVINCIA") && isBancoProvinciaDebitCardPurchase(txText);
+    boolean txIsMpDebit = txSource.equals("MERCADO_PAGO") && isMercadoPagoDebitCardPurchase(txText);
+
+    return (rowIsBancoDebit && txIsMpDebit) || (rowIsMpDebit && txIsBancoDebit);
+  }
+
+  private boolean isBancoProvinciaInternalFunding(String normalizedText) {
+    var text = normalizeText(normalizedText);
+    return text.contains("DEBITO DEBIN")
+            || text.contains("DB.DEBIN")
+            || text.contains("DEBIN")
+            || text.contains("DEBITO CUENTA DNI")
+            || text.contains("CUENTA DNI")
+            || text.contains("CDNI");
+  }
+
+  private boolean isBancoProvinciaDebitCardPurchase(String normalizedText) {
+    var text = normalizeText(normalizedText);
+    return text.contains("PAGO CON TARJETA DEBITO")
+            || text.contains("PAGO CON T.D.")
+            || text.contains("COMPRA TARJETA DEBITO");
+  }
+
+  private boolean isMercadoPagoDebitCardPurchase(String normalizedText) {
+    var text = normalizeText(normalizedText);
+    return text.contains("TARJETA DE DEBITO")
+            || text.contains("TARJETA DEBITO")
+            || text.contains("TARJETA DE DEBITO VISA")
+            || text.contains("TARJETA DEBITO VISA");
   }
 
   private List<Category> loadVisibleCategories(UUID profileId) {
@@ -1494,15 +1617,47 @@ public class TransactionImportService {
             null
     );
     if (suggestion.status() == TransactionCategorySuggestionService.Status.READY && suggestion.suggestedCategoryId() != null) {
-      return new CategorySuggestion(suggestion.suggestedCategoryId(), suggestion.suggestedCategoryName(), Confidence.valueOf(suggestion.confidence().name()), RowStatus.READY, suggestion.suggestedCategoryType());
+      return new CategorySuggestion(
+              suggestion.suggestedCategoryId(),
+              suggestion.suggestedCategoryName(),
+              Confidence.valueOf(suggestion.confidence().name()),
+              RowStatus.READY,
+              suggestion.suggestedCategoryType(),
+              suggestion.suggestedMovementType(),
+              suggestion.classificationStatus(),
+              suggestion.reason(),
+              suggestion.warning());
     }
     if (suggestion.status() == TransactionCategorySuggestionService.Status.NEEDS_CATEGORY) {
-      return new CategorySuggestion(null, suggestion.suggestedCategoryName(), Confidence.LOW, RowStatus.NEEDS_CATEGORY, suggestion.suggestedCategoryType());
+      return new CategorySuggestion(
+              null,
+              suggestion.suggestedCategoryName(),
+              Confidence.LOW,
+              RowStatus.NEEDS_CATEGORY,
+              suggestion.suggestedCategoryType(),
+              suggestion.suggestedMovementType(),
+              suggestion.classificationStatus(),
+              suggestion.reason(),
+              suggestion.warning());
+    }
+    if (suggestion.status() == TransactionCategorySuggestionService.Status.SKIPPED) {
+      return new CategorySuggestion(
+              null,
+              suggestion.suggestedCategoryName(),
+              Confidence.LOW,
+              RowStatus.SKIPPED,
+              suggestion.suggestedCategoryType(),
+              suggestion.suggestedMovementType(),
+              suggestion.classificationStatus(),
+              suggestion.reason(),
+              suggestion.warning());
     }
     var fallbackName = fallbackCategoryName(movementType);
     var fallback = findCategoryByName(categories, fallbackName);
-    if (fallback != null) return new CategorySuggestion(fallback.getId(), fallback.getName(), Confidence.LOW, RowStatus.READY, fallback.getType());
-    return new CategorySuggestion(null, fallbackName, Confidence.LOW, RowStatus.NEEDS_CATEGORY, inferCategoryType(fallbackName, movementType));
+    if (fallback != null) {
+      return new CategorySuggestion(fallback.getId(), fallback.getName(), Confidence.LOW, RowStatus.READY, fallback.getType(), movementType, null, null, null);
+    }
+    return new CategorySuggestion(null, fallbackName, Confidence.LOW, RowStatus.NEEDS_CATEGORY, inferCategoryType(fallbackName, movementType), movementType, null, null, null);
   }
 
   private Category findCategoryByName(List<Category> categories, String name) {
@@ -1543,6 +1698,11 @@ public class TransactionImportService {
             || normalized.contains("CUENTA DNI")
             || normalized.contains("DEBIN")) {
       return Category.Type.SAVING;
+    }
+
+    if (normalized.contains("CJ CAPITAL PRESTADO")
+            || normalized.contains("CJ - CAPITAL PRESTADO")) {
+      return Category.Type.INVESTMENT;
     }
 
     if (normalized.contains("AJUSTES MERCADOPAGO")) {
@@ -2064,7 +2224,11 @@ public class TransactionImportService {
           String categoryName,
           Confidence confidence,
           RowStatus status,
-          Category.Type categoryType
+          Category.Type categoryType,
+          MoneyTransaction.MovementType movementType,
+          MoneyTransaction.ClassificationStatus classificationStatus,
+          String reason,
+          String warning
   ) {
   }
 
@@ -2363,7 +2527,11 @@ public class TransactionImportService {
               category.getName(),
               confidence,
               preferredStatus != null ? preferredStatus : RowStatus.READY,
-              category.getType()
+              category.getType(),
+              null,
+              null,
+              null,
+              null
       );
     }
 
@@ -2373,6 +2541,10 @@ public class TransactionImportService {
               categoryName,
               confidence,
               RowStatus.SKIPPED,
+              null,
+              null,
+              null,
+              null,
               null
       );
     }
@@ -2382,6 +2554,10 @@ public class TransactionImportService {
             categoryName,
             confidence,
             RowStatus.NEEDS_CATEGORY,
+            null,
+            null,
+            null,
+            null,
             null
     );
   }

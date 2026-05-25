@@ -17,6 +17,7 @@ export function countImportRows(rows: TransactionImportRow[]) {
       DUPLICATE_EXACT: 0,
       POSSIBLE_INTERNAL_TRANSFER: 0,
       INTERNAL_TRANSFER_MATCHED: 0,
+      POSSIBLE_CROSS_SOURCE_DUPLICATE: 0,
       ERROR: 0,
       SKIPPED: 0,
     } as Record<RowStatus | 'total', number>,

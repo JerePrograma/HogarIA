@@ -209,6 +209,7 @@ export const importRowStatusLabels: Record<string, string> = {
   DUPLICATE_EXACT: "Duplicado exacto",
   POSSIBLE_INTERNAL_TRANSFER: "Posible transferencia interna",
   INTERNAL_TRANSFER_MATCHED: "Transferencia interna",
+  POSSIBLE_CROSS_SOURCE_DUPLICATE: "Posible duplicado cross-source",
   NEEDS_CATEGORY: "Requiere categoría",
 };
 

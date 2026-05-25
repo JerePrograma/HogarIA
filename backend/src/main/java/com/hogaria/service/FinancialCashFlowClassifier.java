@@ -18,6 +18,29 @@ public class FinancialCashFlowClassifier {
       };
     }
 
+    var classificationReason = tx.getClassificationReason();
+    if (classificationReason != null) {
+      switch (classificationReason) {
+        case "CJPRESTAMOS_DISBURSEMENT" -> {
+          return CashFlowTreatment.RECOVERABLE_OUTFLOW;
+        }
+        case "CJPRESTAMOS_PAYMENT_PRINCIPAL_RECOVERY" -> {
+          return CashFlowTreatment.PRINCIPAL_RECOVERY;
+        }
+        case "CJPRESTAMOS_PAYMENT_INTEREST_INCOME" -> {
+          return CashFlowTreatment.INTEREST_INCOME;
+        }
+        case "POSSIBLE_INTERNAL_TRANSFER", "INTERNAL_TRANSFER_MATCHED", "USER_MARKED_INTERNAL_TRANSFER" -> {
+          return CashFlowTreatment.INTERNAL_TRANSFER;
+        }
+        case "POSSIBLE_CROSS_SOURCE_DUPLICATE", "USER_IGNORED_CROSS_SOURCE" -> {
+          return CashFlowTreatment.UNKNOWN;
+        }
+        default -> {
+        }
+      }
+    }
+
     if (tx.getMovementType() == MoneyTransaction.MovementType.TRANSFER) {
       var description = tx.getDescription() == null ? "" : tx.getDescription().toLowerCase(Locale.ROOT);
       return description.contains("interna") || description.contains("internal")

@@ -52,7 +52,7 @@ public class ExternalLoanSyncEventProcessor {
                 .profileId(profileId)
                 .accountId(cfg.getAccountId())
                 .categoryId(cfg.getLoanDisbursementCategoryId())
-                .movementType(MoneyTransaction.MovementType.EXPENSE)
+                .movementType(MoneyTransaction.MovementType.ADJUSTMENT)
                 .realDate(date)
                 .budgetDate(date)
                 .amount(amount)

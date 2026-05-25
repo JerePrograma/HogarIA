@@ -135,6 +135,18 @@ public class TransactionCategorySuggestionService {
                     "Transferencia recibida: revisar si es ingreso real o movimiento entre cuentas propias."
             ),
             rule(
+                    "\\b(PR[EÉ]STAMO\\s+CJ|CJ\\s*-\\s*CAPITAL\\s+PRESTADO)\\b",
+                    "CJ - Capital prestado",
+                    "cj_capital_prestado",
+                    MoneyTransaction.MovementType.ADJUSTMENT,
+                    Category.Type.INVESTMENT,
+                    Confidence.HIGH,
+                    MoneyTransaction.PaymentChannel.BANK_TRANSFER,
+                    MoneyTransaction.ClassificationStatus.CLASSIFIED,
+                    "CJPRESTAMOS_DISBURSEMENT",
+                    "Capital prestado recuperable: no debería tratarse como gasto de consumo."
+            ),
+            rule(
                     "\\b(LINK\\s+DE\\s+PAGO|PRESTAMOS|PRÉSTAMOS|MONEDA\\s+DIGITAL)\\b",
                     "CJ - Capital recuperado",
                     "cj_capital_recuperado",

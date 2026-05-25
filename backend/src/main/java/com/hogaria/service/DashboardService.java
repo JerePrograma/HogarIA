@@ -1,60 +1,406 @@
 package com.hogaria.service;
 
-import com.hogaria.dto.DashboardDtos.*;import com.hogaria.entity.*;import com.hogaria.exception.ForbiddenException;import com.hogaria.repository.*;import java.math.*;import java.time.*;import java.util.*;import java.util.stream.*;import org.springframework.stereotype.Service;
+import com.hogaria.dto.DashboardDtos.BudgetSummaryResponse;
+import com.hogaria.dto.DashboardDtos.CategorySummaryResponse;
+import com.hogaria.dto.DashboardDtos.DashboardOperationalSummaryResponse;
+import com.hogaria.dto.DashboardDtos.DashboardSummaryResponse;
+import com.hogaria.dto.DashboardDtos.FiftyThirtyTwentyResponse;
+import com.hogaria.dto.DashboardDtos.MonthlyBalanceResponse;
+import com.hogaria.dto.DashboardDtos.MonthlyCashFlowSummaryResponse;
+import com.hogaria.dto.DashboardDtos.PlanningDashboardSummaryResponse;
+import com.hogaria.entity.BudgetCategoryItem;
+import com.hogaria.entity.Category;
+import com.hogaria.entity.ExternalSyncMapping;
+import com.hogaria.entity.MoneyTransaction;
+import com.hogaria.entity.MonthlyPlanItem;
+import com.hogaria.exception.ForbiddenException;
+import com.hogaria.repository.BudgetCategoryItemRepository;
+import com.hogaria.repository.BudgetMonthRepository;
+import com.hogaria.repository.BudgetYearRepository;
+import com.hogaria.repository.CategoryRepository;
+import com.hogaria.repository.ExternalSyncMappingRepository;
+import com.hogaria.repository.FinancialProfileRepository;
+import com.hogaria.repository.MoneyTransactionRepository;
+import com.hogaria.repository.MonthlyPlanItemRepository;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+import org.springframework.stereotype.Service;
+
 @Service
 public class DashboardService {
-  private final FinancialProfileRepository profileRepository; private final MoneyTransactionRepository transactionRepository; private final CategoryRepository categoryRepository; private final BudgetYearRepository budgetYearRepository; private final BudgetMonthRepository budgetMonthRepository; private final BudgetCategoryItemRepository budgetCategoryItemRepository; private final MonthlyPlanItemRepository monthlyPlanItemRepository; private final ExternalSyncMappingRepository externalSyncMappingRepository; private final FinancialCashFlowClassifier classifier; private final MonthlyPlanAmountCalculator monthlyPlanAmountCalculator;
-  public DashboardService(FinancialProfileRepository profileRepository, MoneyTransactionRepository transactionRepository, CategoryRepository categoryRepository, BudgetYearRepository budgetYearRepository, BudgetMonthRepository budgetMonthRepository, BudgetCategoryItemRepository budgetCategoryItemRepository, MonthlyPlanItemRepository monthlyPlanItemRepository, ExternalSyncMappingRepository externalSyncMappingRepository, FinancialCashFlowClassifier classifier, MonthlyPlanAmountCalculator monthlyPlanAmountCalculator){this.profileRepository=profileRepository;this.transactionRepository=transactionRepository;this.categoryRepository=categoryRepository;this.budgetYearRepository=budgetYearRepository;this.budgetMonthRepository=budgetMonthRepository;this.budgetCategoryItemRepository=budgetCategoryItemRepository;this.monthlyPlanItemRepository=monthlyPlanItemRepository;this.externalSyncMappingRepository=externalSyncMappingRepository;this.classifier=classifier;this.monthlyPlanAmountCalculator=monthlyPlanAmountCalculator;}
-  public DashboardSummaryResponse getMonthlySummary(UUID userId, UUID profileId, int year, int month){profileRepository.findByIdAndUserId(profileId,userId).orElseThrow(()->new ForbiddenException("Profile does not belong to user")); var from=LocalDate.of(year,month,1); var to=from.withDayOfMonth(from.lengthOfMonth()); var txs=transactionRepository.findByProfileIdAndBudgetDateBetween(profileId,from,to).stream().filter(t->t.getStatus()==MoneyTransaction.Status.CONFIRMED).toList(); var categories=categoryRepository.findAllById(txs.stream().map(MoneyTransaction::getCategoryId).collect(Collectors.toSet())).stream().collect(Collectors.toMap(Category::getId,c->c));
-    BigDecimal income=sum(txs.stream().filter(t->t.getMovementType()==MoneyTransaction.MovementType.INCOME).map(MoneyTransaction::getAmount).toList());
-    BigDecimal fixed=sumByType(txs,categories,Category.Type.FIXED_EXPENSE); BigDecimal variable=sumByType(txs,categories,Category.Type.VARIABLE_EXPENSE); BigDecimal investment=sumByType(txs,categories,Category.Type.INVESTMENT);
-    BigDecimal savings=sum(txs.stream().filter(t->t.getMovementType()==MoneyTransaction.MovementType.SAVING || categories.get(t.getCategoryId())!=null && categories.get(t.getCategoryId()).getType()==Category.Type.SAVING).map(MoneyTransaction::getAmount).toList());
-    BigDecimal totalExpenses=fixed.add(variable).add(investment); BigDecimal balance=income.subtract(totalExpenses).subtract(savings);
-    BigDecimal fp=percent(fixed,income), vp=percent(variable,income), sp=percent(savings,income);
-    String health=balance.signum()<0?"CRITICAL":(sp.compareTo(new BigDecimal("20"))>=0&&fp.compareTo(new BigDecimal("50"))<=0&&vp.compareTo(new BigDecimal("30"))<=0?"EXCELLENT":(savings.signum()>0?"HEALTHY":"WARNING"));
-    var breakdown=txs.stream().collect(Collectors.groupingBy(MoneyTransaction::getCategoryId)).entrySet().stream().map(e->{var c=categories.get(e.getKey()); var total=sum(e.getValue().stream().map(MoneyTransaction::getAmount).toList()); return new CategorySummaryResponse(e.getKey(),c==null?"Unknown":c.getName(),c==null?null:c.getType(),total,percent(total,income),e.getValue().size());}).toList();
-    BudgetSummaryResponse bs=null; var by=budgetYearRepository.findByProfileIdAndYear(profileId,year); if(by.isPresent()){ var bm=budgetMonthRepository.findByBudgetYearIdAndMonth(by.get().getId(),month); if(bm.isPresent()){ var itemMap=budgetCategoryItemRepository.findByBudgetMonthId(bm.get().getId()).stream().collect(Collectors.toMap(BudgetCategoryItem::getCategoryId,BudgetCategoryItem::getBudgetAmount)); BigDecimal tb=itemMap.values().stream().reduce(BigDecimal.ZERO,BigDecimal::add); BigDecimal tr=txs.stream().filter(t->itemMap.containsKey(t.getCategoryId())).map(MoneyTransaction::getAmount).reduce(BigDecimal.ZERO,BigDecimal::add); long ex=itemMap.entrySet().stream().filter(e->{var rv=txs.stream().filter(t->t.getCategoryId().equals(e.getKey())).map(MoneyTransaction::getAmount).reduce(BigDecimal.ZERO,BigDecimal::add); return e.getValue().signum()==0?rv.signum()>0:rv.multiply(new BigDecimal("100")).divide(e.getValue(),2,RoundingMode.HALF_UP).compareTo(new BigDecimal("100"))>0;}).count(); long wr=itemMap.entrySet().stream().filter(e->{if(e.getValue().signum()==0)return false; var rv=txs.stream().filter(t->t.getCategoryId().equals(e.getKey())).map(MoneyTransaction::getAmount).reduce(BigDecimal.ZERO,BigDecimal::add); var p=rv.multiply(new BigDecimal("100")).divide(e.getValue(),2,RoundingMode.HALF_UP); return p.compareTo(new BigDecimal("80"))>0 && p.compareTo(new BigDecimal("100"))<=0;}).count(); bs=new BudgetSummaryResponse(tb,tr,tb.subtract(tr),ex,wr); }}
-    var planning=buildPlanning(profileId, year, month);
+  private final FinancialProfileRepository profileRepository;
+  private final MoneyTransactionRepository transactionRepository;
+  private final CategoryRepository categoryRepository;
+  private final BudgetYearRepository budgetYearRepository;
+  private final BudgetMonthRepository budgetMonthRepository;
+  private final BudgetCategoryItemRepository budgetCategoryItemRepository;
+  private final MonthlyPlanItemRepository monthlyPlanItemRepository;
+  private final ExternalSyncMappingRepository externalSyncMappingRepository;
+  private final FinancialCashFlowClassifier classifier;
+  private final MonthlyPlanAmountCalculator monthlyPlanAmountCalculator;
+
+  public DashboardService(
+      FinancialProfileRepository profileRepository,
+      MoneyTransactionRepository transactionRepository,
+      CategoryRepository categoryRepository,
+      BudgetYearRepository budgetYearRepository,
+      BudgetMonthRepository budgetMonthRepository,
+      BudgetCategoryItemRepository budgetCategoryItemRepository,
+      MonthlyPlanItemRepository monthlyPlanItemRepository,
+      ExternalSyncMappingRepository externalSyncMappingRepository,
+      FinancialCashFlowClassifier classifier,
+      MonthlyPlanAmountCalculator monthlyPlanAmountCalculator) {
+    this.profileRepository = profileRepository;
+    this.transactionRepository = transactionRepository;
+    this.categoryRepository = categoryRepository;
+    this.budgetYearRepository = budgetYearRepository;
+    this.budgetMonthRepository = budgetMonthRepository;
+    this.budgetCategoryItemRepository = budgetCategoryItemRepository;
+    this.monthlyPlanItemRepository = monthlyPlanItemRepository;
+    this.externalSyncMappingRepository = externalSyncMappingRepository;
+    this.classifier = classifier;
+    this.monthlyPlanAmountCalculator = monthlyPlanAmountCalculator;
+  }
+
+  public DashboardSummaryResponse getMonthlySummary(UUID userId, UUID profileId, int year, int month) {
+    profileRepository
+        .findByIdAndUserId(profileId, userId)
+        .orElseThrow(() -> new ForbiddenException("Profile does not belong to user"));
+
+    var from = LocalDate.of(year, month, 1);
+    var to = from.withDayOfMonth(from.lengthOfMonth());
+    var txs =
+        transactionRepository.findByProfileIdAndBudgetDateBetween(profileId, from, to).stream()
+            .filter(t -> t.getStatus() == MoneyTransaction.Status.CONFIRMED)
+            .toList();
+    var categoryIds =
+        txs.stream().map(MoneyTransaction::getCategoryId).filter(id -> id != null).collect(Collectors.toSet());
+    var categories =
+        categoryRepository.findAllById(categoryIds).stream()
+            .collect(Collectors.toMap(Category::getId, Function.identity()));
+
+    var planning = buildPlanning(profileId, year, month);
     var cashFlowSummary = buildCashFlowSummary(profileId, txs, categories);
-    var op=buildOperational(cashFlowSummary,planning,txs.isEmpty());
-    return new DashboardSummaryResponse(new MonthlyBalanceResponse(income,totalExpenses,savings,balance),new FiftyThirtyTwentyResponse(fp,vp,sp),fixed,variable,health,breakdown,bs,planning,op,cashFlowSummary);
+
+    BigDecimal income = cashFlowSummary.totalIncome();
+    BigDecimal fixed = cashFlowSummary.fixedExpense();
+    BigDecimal variable = cashFlowSummary.variableExpense();
+    BigDecimal savings = cashFlowSummary.savingOutflow().add(cashFlowSummary.investmentOutflow());
+    BigDecimal totalExpenses = cashFlowSummary.consumptionExpense();
+    BigDecimal balance = cashFlowSummary.operationalBalanceExcludingRecoverables();
+
+    BigDecimal fp = percent(fixed, income);
+    BigDecimal vp = percent(variable, income);
+    BigDecimal sp = percent(savings, income);
+    String health =
+        balance.signum() < 0
+            ? "CRITICAL"
+            : (sp.compareTo(new BigDecimal("20")) >= 0
+                    && fp.compareTo(new BigDecimal("50")) <= 0
+                    && vp.compareTo(new BigDecimal("30")) <= 0
+                ? "EXCELLENT"
+                : (savings.signum() > 0 ? "HEALTHY" : "WARNING"));
+
+    var breakdown = buildBreakdown(txs, categories, income);
+    var budgetSummary = buildBudgetSummary(profileId, year, month, txs);
+    var operational = buildOperational(cashFlowSummary, planning, txs.isEmpty());
+
+    return new DashboardSummaryResponse(
+        new MonthlyBalanceResponse(income, totalExpenses, savings, balance),
+        new FiftyThirtyTwentyResponse(fp, vp, sp),
+        fixed,
+        variable,
+        health,
+        breakdown,
+        budgetSummary,
+        planning,
+        operational,
+        cashFlowSummary);
   }
-  private PlanningDashboardSummaryResponse buildPlanning(UUID profileId,int year,int month){ var items=monthlyPlanItemRepository.findByProfileIdAndPeriodYearAndPeriodMonth(profileId,year,month); BigDecimal inMin=BigDecimal.ZERO,inMax=BigDecimal.ZERO,exMin=BigDecimal.ZERO,exMax=BigDecimal.ZERO,recMin=BigDecimal.ZERO,recMax=BigDecimal.ZERO,nMin=BigDecimal.ZERO,nMax=BigDecimal.ZERO,pIn=BigDecimal.ZERO,pEx=BigDecimal.ZERO; int unpriced=0,due7=0,cancelled=0,converted=0; var pend=Set.of(MonthlyPlanItem.Status.DRAFT,MonthlyPlanItem.Status.ESTIMATED,MonthlyPlanItem.Status.SCHEDULED,MonthlyPlanItem.Status.DUE); var today=LocalDate.now();
-    for(var i:items){ var c=monthlyPlanAmountCalculator.calculate(i); boolean isCancelled=i.getStatus()==MonthlyPlanItem.Status.CANCELLED; if(isCancelled) cancelled++; if(i.getTransactionId()!=null) converted++; if(!isCancelled&&i.getAmount()==null&&i.getMinAmount()==null&&i.getMaxAmount()==null) unpriced++; if(!isCancelled&&i.getExpectedDate()!=null&&!i.getExpectedDate().isBefore(today)&&!i.getExpectedDate().isAfter(today.plusDays(7))) due7++; if(isCancelled||i.getType()==MonthlyPlanItem.Type.TODO) continue; boolean inc=i.getType()==MonthlyPlanItem.Type.INCOME||i.getType()==MonthlyPlanItem.Type.RECOVERY; if(inc){inMin=inMin.add(c.grossMin()); inMax=inMax.add(c.grossMax()); nMin=nMin.add(c.netMin()); nMax=nMax.add(c.netMax()); if(pend.contains(i.getStatus())) pIn=pIn.add(c.netMax());} else {exMin=exMin.add(c.grossMin()); exMax=exMax.add(c.grossMax()); recMin=recMin.add(c.recoveryMin()); recMax=recMax.add(c.recoveryMax()); nMin=nMin.subtract(c.netMax()); nMax=nMax.subtract(c.netMin()); if(pend.contains(i.getStatus())) pEx=pEx.add(c.netMax());} }
-    return new PlanningDashboardSummaryResponse(inMin,inMax,exMin,exMax,recMin,recMax,nMin,nMax,pIn,pEx,unpriced,due7,items.size(),cancelled,converted);
+
+  private List<CategorySummaryResponse> buildBreakdown(
+      List<MoneyTransaction> txs, Map<UUID, Category> categories, BigDecimal income) {
+    Map<UUID, List<MoneyTransaction>> byCategory = new LinkedHashMap<>();
+    for (var tx : txs) {
+      byCategory.computeIfAbsent(tx.getCategoryId(), ignored -> new ArrayList<>()).add(tx);
+    }
+
+    return byCategory.entrySet().stream()
+        .map(
+            entry -> {
+              var category = categories.get(entry.getKey());
+              var total = sum(entry.getValue().stream().map(MoneyTransaction::getAmount).toList());
+              return new CategorySummaryResponse(
+                  entry.getKey(),
+                  category == null ? "Unknown" : category.getName(),
+                  category == null ? null : category.getType(),
+                  total,
+                  percent(total, income),
+                  entry.getValue().size());
+            })
+        .toList();
   }
-  private DashboardOperationalSummaryResponse buildOperational(MonthlyCashFlowSummaryResponse cashFlow,PlanningDashboardSummaryResponse p,boolean noConfirmed){ BigDecimal deltaMin=p.projectedNetMin().subtract(cashFlow.netCashFlow()); BigDecimal deltaMax=p.projectedNetMax().subtract(cashFlow.netCashFlow()); var risk="OK"; var alerts=new ArrayList<String>(); if(p.projectedNetMin().signum()<0){risk="CRITICAL"; alerts.add("El neto proyectado mínimo queda negativo.");} else if(p.projectedNetMax().compareTo(cashFlow.netCashFlow())<0 || p.pendingExpense().compareTo(p.pendingIncome().add(cashFlow.netCashFlow()))>0){risk="RISK";} else if(p.unpricedCount()>0||p.dueNext7DaysCount()>0){risk="WATCH";}
-    if(p.unpricedCount()>0) alerts.add("Hay "+p.unpricedCount()+" ítems sin cotizar."); if(p.dueNext7DaysCount()>0) alerts.add("Hay "+p.dueNext7DaysCount()+" vencimientos/cobros en los próximos 7 días."); if(p.pendingExpense().compareTo(p.pendingIncome().add(cashFlow.netCashFlow()))>0) alerts.add("Los egresos pendientes superan los ingresos pendientes más el flujo neto confirmado."); if(p.plannedItemsCount()>0&&noConfirmed) alerts.add("Hay planificación cargada pero todavía no hay movimientos confirmados.");
-    return new DashboardOperationalSummaryResponse(cashFlow.totalIncome(),cashFlow.consumptionExpense(),cashFlow.savingOutflow(),cashFlow.netCashFlow(),p.projectedNetMin(),p.projectedNetMax(),deltaMin,deltaMax,p.pendingIncome(),p.pendingExpense(),p.totalRecoveryMin(),p.totalRecoveryMax(),p.unpricedCount(),p.dueNext7DaysCount(),risk,alerts);
+
+  private BudgetSummaryResponse buildBudgetSummary(
+      UUID profileId, int year, int month, List<MoneyTransaction> txs) {
+    var budgetYear = budgetYearRepository.findByProfileIdAndYear(profileId, year);
+    if (budgetYear.isEmpty()) {
+      return null;
+    }
+
+    var budgetMonth = budgetMonthRepository.findByBudgetYearIdAndMonth(budgetYear.get().getId(), month);
+    if (budgetMonth.isEmpty()) {
+      return null;
+    }
+
+    var itemMap =
+        budgetCategoryItemRepository.findByBudgetMonthId(budgetMonth.get().getId()).stream()
+            .collect(Collectors.toMap(BudgetCategoryItem::getCategoryId, BudgetCategoryItem::getBudgetAmount));
+    BigDecimal totalBudget = itemMap.values().stream().reduce(BigDecimal.ZERO, BigDecimal::add);
+    BigDecimal totalReal =
+        txs.stream()
+            .filter(t -> itemMap.containsKey(t.getCategoryId()))
+            .map(MoneyTransaction::getAmount)
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+    long exceeded =
+        itemMap.entrySet().stream()
+            .filter(
+                entry -> {
+                  var real =
+                      txs.stream()
+                          .filter(t -> t.getCategoryId() != null && t.getCategoryId().equals(entry.getKey()))
+                          .map(MoneyTransaction::getAmount)
+                          .reduce(BigDecimal.ZERO, BigDecimal::add);
+                  if (entry.getValue().signum() == 0) {
+                    return real.signum() > 0;
+                  }
+                  return real
+                          .multiply(new BigDecimal("100"))
+                          .divide(entry.getValue(), 2, RoundingMode.HALF_UP)
+                          .compareTo(new BigDecimal("100"))
+                      > 0;
+                })
+            .count();
+    long warnings =
+        itemMap.entrySet().stream()
+            .filter(
+                entry -> {
+                  if (entry.getValue().signum() == 0) {
+                    return false;
+                  }
+                  var real =
+                      txs.stream()
+                          .filter(t -> t.getCategoryId() != null && t.getCategoryId().equals(entry.getKey()))
+                          .map(MoneyTransaction::getAmount)
+                          .reduce(BigDecimal.ZERO, BigDecimal::add);
+                  var percentage =
+                      real.multiply(new BigDecimal("100"))
+                          .divide(entry.getValue(), 2, RoundingMode.HALF_UP);
+                  return percentage.compareTo(new BigDecimal("80")) > 0
+                      && percentage.compareTo(new BigDecimal("100")) <= 0;
+                })
+            .count();
+
+    return new BudgetSummaryResponse(totalBudget, totalReal, totalBudget.subtract(totalReal), exceeded, warnings);
   }
-    private MonthlyCashFlowSummaryResponse buildCashFlowSummary(UUID profileId, List<MoneyTransaction> txs, Map<UUID, Category> categories){
-    var mappingByTx = externalSyncMappingRepository.findByProfileId(profileId).stream().filter(m->m.getMoneyTransactionId()!=null).collect(Collectors.toMap(ExternalSyncMapping::getMoneyTransactionId, ExternalSyncMapping::getExternalEventType, (a,b)->a));
-    BigDecimal gross=BigDecimal.ZERO,cons=BigDecimal.ZERO,fixed=BigDecimal.ZERO,varx=BigDecimal.ZERO,debt=BigDecimal.ZERO,saving=BigDecimal.ZERO,inv=BigDecimal.ZERO,recOut=BigDecimal.ZERO,principal=BigDecimal.ZERO,refund=BigDecimal.ZERO,earned=BigDecimal.ZERO,interest=BigDecimal.ZERO,intTr=BigDecimal.ZERO,extTr=BigDecimal.ZERO,neutral=BigDecimal.ZERO,unknown=BigDecimal.ZERO;
-    List<String> alerts=new ArrayList<>();
-    for (var tx:txs){
-      var treatment=classifier.classify(tx,categories.get(tx.getCategoryId()),mappingByTx.get(tx.getId()));
-      var amount=tx.getAmount();
-      switch(treatment){
-        case FIXED_CONSUMPTION_EXPENSE -> {fixed=fixed.add(amount); cons=cons.add(amount); gross=gross.add(amount);}
-        case VARIABLE_CONSUMPTION_EXPENSE, CONSUMPTION_EXPENSE -> {varx=varx.add(amount); cons=cons.add(amount); gross=gross.add(amount);}
-        case DEBT_OUTFLOW, DEBT_INTEREST -> {debt=debt.add(amount); gross=gross.add(amount);}
-        case SAVING_OUTFLOW -> {saving=saving.add(amount); gross=gross.add(amount);}
-        case INVESTMENT_OUTFLOW -> {inv=inv.add(amount); gross=gross.add(amount);}
-        case RECOVERABLE_OUTFLOW -> {recOut=recOut.add(amount); gross=gross.add(amount);}
-        case PRINCIPAL_RECOVERY -> principal=principal.add(amount);
-        case REFUND_OR_REIMBURSEMENT -> refund=refund.add(amount);
-        case EARNED_INCOME -> earned=earned.add(amount);
-        case INTEREST_INCOME -> interest=interest.add(amount);
-        case INTERNAL_TRANSFER -> intTr=intTr.add(amount);
-        case EXTERNAL_TRANSFER -> {extTr=extTr.add(amount); gross=gross.add(amount);}
-        case NEUTRAL_ADJUSTMENT -> neutral=neutral.add(amount);
-        case UNKNOWN -> { if(tx.getMovementType()==MoneyTransaction.MovementType.EXPENSE) unknown=unknown.add(amount); alerts.add("Movimiento sin clasificación: "+(tx.getDescription()==null?tx.getId():tx.getDescription())); }
+
+  private PlanningDashboardSummaryResponse buildPlanning(UUID profileId, int year, int month) {
+    var items = monthlyPlanItemRepository.findByProfileIdAndPeriodYearAndPeriodMonth(profileId, year, month);
+    BigDecimal inMin = BigDecimal.ZERO, inMax = BigDecimal.ZERO, exMin = BigDecimal.ZERO, exMax = BigDecimal.ZERO;
+    BigDecimal recMin = BigDecimal.ZERO, recMax = BigDecimal.ZERO, nMin = BigDecimal.ZERO, nMax = BigDecimal.ZERO;
+    BigDecimal pendingIncome = BigDecimal.ZERO, pendingExpense = BigDecimal.ZERO;
+    int unpriced = 0, due7 = 0, cancelled = 0, converted = 0;
+    var pendingStatuses = Set.of(MonthlyPlanItem.Status.DRAFT, MonthlyPlanItem.Status.ESTIMATED, MonthlyPlanItem.Status.SCHEDULED, MonthlyPlanItem.Status.DUE);
+    var today = LocalDate.now();
+
+    for (var item : items) {
+      var calculated = monthlyPlanAmountCalculator.calculate(item);
+      boolean isCancelled = item.getStatus() == MonthlyPlanItem.Status.CANCELLED;
+      if (isCancelled) cancelled++;
+      if (item.getTransactionId() != null) converted++;
+      if (!isCancelled && item.getAmount() == null && item.getMinAmount() == null && item.getMaxAmount() == null) unpriced++;
+      if (!isCancelled && item.getExpectedDate() != null && !item.getExpectedDate().isBefore(today) && !item.getExpectedDate().isAfter(today.plusDays(7))) due7++;
+      if (isCancelled || item.getType() == MonthlyPlanItem.Type.TODO) continue;
+
+      boolean incoming = item.getType() == MonthlyPlanItem.Type.INCOME || item.getType() == MonthlyPlanItem.Type.RECOVERY;
+      if (incoming) {
+        inMin = inMin.add(calculated.grossMin());
+        inMax = inMax.add(calculated.grossMax());
+        nMin = nMin.add(calculated.netMin());
+        nMax = nMax.add(calculated.netMax());
+        if (pendingStatuses.contains(item.getStatus())) pendingIncome = pendingIncome.add(calculated.netMax());
+      } else {
+        exMin = exMin.add(calculated.grossMin());
+        exMax = exMax.add(calculated.grossMax());
+        recMin = recMin.add(calculated.recoveryMin());
+        recMax = recMax.add(calculated.recoveryMax());
+        nMin = nMin.subtract(calculated.netMax());
+        nMax = nMax.subtract(calculated.netMin());
+        if (pendingStatuses.contains(item.getStatus())) pendingExpense = pendingExpense.add(calculated.netMax());
       }
     }
-    var totalIncome=earned.add(interest);
-    var netCash=totalIncome.add(principal).add(refund).subtract(gross);
-    var economic=cons.add(debt).subtract(refund).subtract(interest);
-    return new MonthlyCashFlowSummaryResponse(gross,cons,fixed,varx,debt,saving,inv,recOut,principal,refund,earned,interest,totalIncome,netCash,economic,intTr,extTr,neutral,unknown,alerts);
+
+    return new PlanningDashboardSummaryResponse(
+        inMin, inMax, exMin, exMax, recMin, recMax, nMin, nMax, pendingIncome, pendingExpense,
+        unpriced, due7, items.size(), cancelled, converted);
   }
-  private BigDecimal sumByType(List<MoneyTransaction> txs, Map<UUID,Category> m, Category.Type type){ return sum(txs.stream().filter(t->m.get(t.getCategoryId())!=null && m.get(t.getCategoryId()).getType()==type).map(MoneyTransaction::getAmount).toList()); }
-  private BigDecimal sum(List<BigDecimal> values){return values.stream().reduce(BigDecimal.ZERO,BigDecimal::add);} private BigDecimal percent(BigDecimal a, BigDecimal income){ if(income.signum()==0) return BigDecimal.ZERO; return a.multiply(new BigDecimal("100")).divide(income,2,RoundingMode.HALF_UP);} }
+
+  private DashboardOperationalSummaryResponse buildOperational(
+      MonthlyCashFlowSummaryResponse cashFlow, PlanningDashboardSummaryResponse planning, boolean noConfirmed) {
+    BigDecimal confirmedBalance = cashFlow.operationalBalanceExcludingRecoverables();
+    BigDecimal confirmedSavings = cashFlow.savingOutflow().add(cashFlow.investmentOutflow());
+    BigDecimal deltaMin = planning.projectedNetMin().subtract(confirmedBalance);
+    BigDecimal deltaMax = planning.projectedNetMax().subtract(confirmedBalance);
+    var risk = "OK";
+    var alerts = new ArrayList<String>();
+
+    if (planning.projectedNetMin().signum() < 0) {
+      risk = "CRITICAL";
+      alerts.add("El neto proyectado mínimo queda negativo.");
+    } else if (planning.projectedNetMax().compareTo(confirmedBalance) < 0
+        || planning.pendingExpense().compareTo(planning.pendingIncome().add(confirmedBalance)) > 0) {
+      risk = "RISK";
+    } else if (planning.unpricedCount() > 0 || planning.dueNext7DaysCount() > 0) {
+      risk = "WATCH";
+    }
+
+    if (planning.unpricedCount() > 0) alerts.add("Hay " + planning.unpricedCount() + " ítems sin cotizar.");
+    if (planning.dueNext7DaysCount() > 0) alerts.add("Hay " + planning.dueNext7DaysCount() + " vencimientos/cobros en los próximos 7 días.");
+    if (planning.pendingExpense().compareTo(planning.pendingIncome().add(confirmedBalance)) > 0) alerts.add("Los egresos pendientes superan los ingresos pendientes más el balance operativo confirmado.");
+    if (planning.plannedItemsCount() > 0 && noConfirmed) alerts.add("Hay planificación cargada pero todavía no hay movimientos confirmados.");
+
+    return new DashboardOperationalSummaryResponse(
+        cashFlow.totalIncome(),
+        cashFlow.consumptionExpense(),
+        confirmedSavings,
+        confirmedBalance,
+        planning.projectedNetMin(),
+        planning.projectedNetMax(),
+        deltaMin,
+        deltaMax,
+        planning.pendingIncome(),
+        planning.pendingExpense(),
+        planning.totalRecoveryMin(),
+        planning.totalRecoveryMax(),
+        planning.unpricedCount(),
+        planning.dueNext7DaysCount(),
+        risk,
+        alerts,
+        cashFlow.consumptionExpense(),
+        cashFlow.recoverableOutflow(),
+        cashFlow.principalRecovered(),
+        cashFlow.operationalBalanceExcludingRecoverables(),
+        cashFlow.netCashFlowIncludingRecoverables());
+  }
+
+  private MonthlyCashFlowSummaryResponse buildCashFlowSummary(
+      UUID profileId, List<MoneyTransaction> txs, Map<UUID, Category> categories) {
+    var mappingByTx =
+        externalSyncMappingRepository.findByProfileId(profileId).stream()
+            .filter(m -> m.getMoneyTransactionId() != null)
+            .collect(Collectors.toMap(ExternalSyncMapping::getMoneyTransactionId, ExternalSyncMapping::getExternalEventType, (a, b) -> a));
+    BigDecimal gross = BigDecimal.ZERO, consumption = BigDecimal.ZERO, fixed = BigDecimal.ZERO, variable = BigDecimal.ZERO;
+    BigDecimal debt = BigDecimal.ZERO, saving = BigDecimal.ZERO, investment = BigDecimal.ZERO, recoverableOut = BigDecimal.ZERO;
+    BigDecimal principal = BigDecimal.ZERO, refund = BigDecimal.ZERO, earned = BigDecimal.ZERO, interest = BigDecimal.ZERO;
+    BigDecimal internalTransfer = BigDecimal.ZERO, externalTransfer = BigDecimal.ZERO, neutral = BigDecimal.ZERO, unknown = BigDecimal.ZERO;
+    List<String> alerts = new ArrayList<>();
+
+    for (var tx : txs) {
+      var treatment = classifier.classify(tx, categories.get(tx.getCategoryId()), mappingByTx.get(tx.getId()));
+      var amount = tx.getAmount();
+      switch (treatment) {
+        case FIXED_CONSUMPTION_EXPENSE -> {
+          fixed = fixed.add(amount);
+          consumption = consumption.add(amount);
+          gross = gross.add(amount);
+        }
+        case VARIABLE_CONSUMPTION_EXPENSE, CONSUMPTION_EXPENSE -> {
+          variable = variable.add(amount);
+          consumption = consumption.add(amount);
+          gross = gross.add(amount);
+        }
+        case DEBT_OUTFLOW, DEBT_INTEREST -> {
+          debt = debt.add(amount);
+          gross = gross.add(amount);
+        }
+        case SAVING_OUTFLOW -> {
+          saving = saving.add(amount);
+          gross = gross.add(amount);
+        }
+        case INVESTMENT_OUTFLOW -> {
+          investment = investment.add(amount);
+          gross = gross.add(amount);
+        }
+        case RECOVERABLE_OUTFLOW -> {
+          recoverableOut = recoverableOut.add(amount);
+          gross = gross.add(amount);
+        }
+        case PRINCIPAL_RECOVERY -> principal = principal.add(amount);
+        case REFUND_OR_REIMBURSEMENT -> refund = refund.add(amount);
+        case EARNED_INCOME -> earned = earned.add(amount);
+        case INTEREST_INCOME -> interest = interest.add(amount);
+        case INTERNAL_TRANSFER -> internalTransfer = internalTransfer.add(amount);
+        case EXTERNAL_TRANSFER -> {
+          externalTransfer = externalTransfer.add(amount);
+          gross = gross.add(amount);
+        }
+        case NEUTRAL_ADJUSTMENT -> neutral = neutral.add(amount);
+        case UNKNOWN -> {
+          if (tx.getMovementType() == MoneyTransaction.MovementType.EXPENSE) {
+            unknown = unknown.add(amount);
+          }
+          alerts.add("Movimiento sin clasificación: " + (tx.getDescription() == null ? tx.getId() : tx.getDescription()));
+        }
+      }
+    }
+
+    var totalIncome = earned.add(interest);
+    var netCashIncludingRecoverables = totalIncome.add(principal).add(refund).subtract(gross);
+    var operationalExcludingRecoverables = totalIncome.add(refund).subtract(consumption).subtract(saving).subtract(investment);
+    var economic = consumption.add(debt).subtract(refund).subtract(interest);
+    return new MonthlyCashFlowSummaryResponse(
+        gross,
+        consumption,
+        fixed,
+        variable,
+        debt,
+        saving,
+        investment,
+        recoverableOut,
+        principal,
+        refund,
+        earned,
+        interest,
+        totalIncome,
+        netCashIncludingRecoverables,
+        economic,
+        internalTransfer,
+        externalTransfer,
+        neutral,
+        unknown,
+        alerts,
+        principal,
+        operationalExcludingRecoverables,
+        netCashIncludingRecoverables);
+  }
+
+  private BigDecimal sum(List<BigDecimal> values) {
+    return values.stream().reduce(BigDecimal.ZERO, BigDecimal::add);
+  }
+
+  private BigDecimal percent(BigDecimal amount, BigDecimal income) {
+    if (income.signum() == 0) {
+      return BigDecimal.ZERO;
+    }
+    return amount.multiply(new BigDecimal("100")).divide(income, 2, RoundingMode.HALF_UP);
+  }
+}

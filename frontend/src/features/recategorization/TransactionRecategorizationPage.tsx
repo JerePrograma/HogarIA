@@ -33,6 +33,13 @@ interface CandidateFilters {
 
 const ALL = 'ALL';
 
+type ReviewAction =
+  | 'RECATEGORIZE'
+  | 'CONVERT_TRANSFER'
+  | 'MARK_IGNORED'
+  | 'ADJUST_RECOVERABLE'
+  | 'CONFIRM_EXPENSE';
+
 const MOVEMENT_LABELS: Record<string, string> = {
   INCOME: 'Ingreso',
   EXPENSE: 'Gasto',
@@ -116,8 +123,15 @@ export function TransactionRecategorizationPage() {
     minAmount: null,
     maxAmount: null,
     onlyImported: search.get('onlyImported') === 'true' ? true : null,
+    reviewFilter: (search.get('reviewFilter') as BulkRecategorizePreviewPayload['reviewFilter']) ?? null,
+    targetMovementType: (search.get('targetMovementType') as BulkRecategorizePreviewPayload['targetMovementType']) ?? null,
+    targetStatus: (search.get('targetStatus') as BulkRecategorizePreviewPayload['targetStatus']) ?? null,
+    targetClassificationStatus: (search.get('targetClassificationStatus') as BulkRecategorizePreviewPayload['targetClassificationStatus']) ?? null,
+    targetClassificationReason: search.get('targetClassificationReason'),
     transactionIds: (search.get('transactionIds')?.split(',').filter(Boolean) ?? null),
   });
+
+  const [reviewAction, setReviewAction] = useState<ReviewAction>('RECATEGORIZE');
 
   const [missingCategoryName, setMissingCategoryName] = useState(
     search.get('suggestedCategoryName') ?? '',
@@ -208,7 +222,9 @@ export function TransactionRecategorizationPage() {
         normalize(candidate.realDate).includes(searchValue) ||
         normalize(candidate.amount).includes(searchValue) ||
         normalize(candidate.movementType).includes(searchValue) ||
-        normalize(candidate.warning).includes(searchValue);
+        normalize(candidate.warning).includes(searchValue) ||
+        normalize(candidate.source).includes(searchValue) ||
+        normalize(candidate.classificationReason).includes(searchValue);
 
       const matchesStatus =
         candidateFilters.status === ALL ||
@@ -223,11 +239,19 @@ export function TransactionRecategorizationPage() {
       applyBulkRecategorize(profileId, {
         targetMode: form.targetMode ?? 'MANUAL',
         toCategoryId: isAutoTargetMode ? null : form.toCategoryId,
+        targetMovementType: form.targetMovementType,
+        targetStatus: form.targetStatus,
+        targetClassificationStatus: form.targetClassificationStatus,
+        targetClassificationReason: form.targetClassificationReason,
         transactionIds: isAutoTargetMode ? [] : readyIds,
         updates: isAutoTargetMode
           ? candidates
               .filter((candidate) => candidate.previewStatus === 'READY' && candidate.targetCategoryId)
-              .map((candidate) => ({ transactionId: candidate.transactionId, targetCategoryId: candidate.targetCategoryId! }))
+              .map((candidate) => ({
+                transactionId: candidate.transactionId,
+                targetCategoryId: candidate.targetCategoryId!,
+                targetMovementType: candidate.targetMovementType,
+              }))
           : [],
       }),
     onSuccess: async () => {
@@ -251,7 +275,9 @@ export function TransactionRecategorizationPage() {
       form.exactAmount != null ||
       form.minAmount != null ||
       form.maxAmount != null ||
-      form.onlyImported != null || (form.transactionIds?.length ?? 0) > 0,
+      form.onlyImported != null ||
+      form.reviewFilter ||
+      (form.transactionIds?.length ?? 0) > 0,
   );
 
   const activeCandidateFilterCount = [
@@ -263,8 +289,15 @@ export function TransactionRecategorizationPage() {
   const canCreateMissingCategory =
     Boolean(missingCategoryName.trim()) && Boolean(inferredCategoryType) && !createCategoryMutation.isPending;
 
+  const hasNonCategoryTarget = Boolean(
+    form.targetMovementType ||
+      form.targetStatus ||
+      form.targetClassificationStatus ||
+      form.targetClassificationReason,
+  );
+
   const canPreview =
-    (isAutoTargetMode || Boolean(form.toCategoryId)) &&
+    (isAutoTargetMode || Boolean(form.toCategoryId) || hasNonCategoryTarget) &&
     hasAnySearchCriteria &&
     !previewMutation.isPending;
 
@@ -302,8 +335,59 @@ export function TransactionRecategorizationPage() {
       minAmount: null,
       maxAmount: null,
       onlyImported: search.get('onlyImported') === 'true' ? true : null,
+      reviewFilter: null,
+      targetMovementType: null,
+      targetStatus: null,
+      targetClassificationStatus: null,
+      targetClassificationReason: null,
     transactionIds: (search.get('transactionIds')?.split(',').filter(Boolean) ?? null),
     });
+  };
+
+  const applyReviewAction = (action: ReviewAction) => {
+    setReviewAction(action);
+
+    const patch: Partial<BulkRecategorizePreviewPayload> = {
+      targetMovementType: null,
+      targetStatus: null,
+      targetClassificationStatus: null,
+      targetClassificationReason: null,
+    };
+
+    if (action === 'CONVERT_TRANSFER') {
+      Object.assign(patch, {
+        targetMovementType: 'TRANSFER',
+        targetClassificationStatus: 'TECHNICAL',
+        targetClassificationReason: 'USER_MARKED_INTERNAL_TRANSFER',
+      });
+    }
+
+    if (action === 'MARK_IGNORED') {
+      Object.assign(patch, {
+        targetStatus: 'IGNORED',
+        targetClassificationStatus: 'IGNORED_BY_RULE',
+        targetClassificationReason: 'USER_IGNORED_CROSS_SOURCE',
+      });
+    }
+
+    if (action === 'ADJUST_RECOVERABLE') {
+      Object.assign(patch, {
+        targetMovementType: 'ADJUSTMENT',
+        targetClassificationStatus: 'CLASSIFIED',
+        targetClassificationReason: 'CJPRESTAMOS_DISBURSEMENT',
+      });
+    }
+
+    if (action === 'CONFIRM_EXPENSE') {
+      Object.assign(patch, {
+        targetMovementType: 'EXPENSE',
+        targetStatus: 'CONFIRMED',
+        targetClassificationStatus: 'CLASSIFIED',
+        targetClassificationReason: 'USER_CONFIRMED_EXPENSE',
+      });
+    }
+
+    updateForm(patch);
   };
 
   return (
@@ -595,6 +679,77 @@ export function TransactionRecategorizationPage() {
                     <option value="">Todos</option>
                     <option value="true">Sí</option>
                     <option value="false">No</option>
+                  </select>
+                </label>
+
+                <label>
+                  Revisión
+                  <select
+                    className="input-ui"
+                    value={form.reviewFilter ?? ''}
+                    onChange={(event) =>
+                      updateForm({
+                        reviewFilter: (event.target.value || null) as BulkRecategorizePreviewPayload['reviewFilter'],
+                      })
+                    }
+                  >
+                    <option value="">Sin filtro</option>
+                    <option value="POSSIBLE_INTERNAL_TRANSFER">Fondeos Banco ↔ MP</option>
+                    <option value="POSSIBLE_CROSS_SOURCE_DUPLICATE">Duplicados Banco ↔ MP</option>
+                    <option value="CJ_DISBURSEMENT_EXPENSE">CJ capital como gasto</option>
+                  </select>
+                </label>
+
+                <label>
+                  Acción
+                  <select
+                    className="input-ui"
+                    value={reviewAction}
+                    onChange={(event) => applyReviewAction(event.target.value as ReviewAction)}
+                  >
+                    <option value="RECATEGORIZE">Solo recategorizar</option>
+                    <option value="CONVERT_TRANSFER">Convertir a transferencia</option>
+                    <option value="MARK_IGNORED">Marcar ignorado</option>
+                    <option value="ADJUST_RECOVERABLE">Ajuste recuperable</option>
+                    <option value="CONFIRM_EXPENSE">Mantener como gasto</option>
+                  </select>
+                </label>
+
+                <label>
+                  Tipo destino
+                  <select
+                    className="input-ui"
+                    value={form.targetMovementType ?? ''}
+                    onChange={(event) =>
+                      updateForm({
+                        targetMovementType: (event.target.value || null) as MovementType | null,
+                      })
+                    }
+                  >
+                    <option value="">Sin cambio</option>
+                    <option value="INCOME">Ingreso</option>
+                    <option value="EXPENSE">Gasto</option>
+                    <option value="SAVING">Ahorro</option>
+                    <option value="TRANSFER">Transferencia</option>
+                    <option value="ADJUSTMENT">Ajuste</option>
+                  </select>
+                </label>
+
+                <label>
+                  Estado destino
+                  <select
+                    className="input-ui"
+                    value={form.targetStatus ?? ''}
+                    onChange={(event) =>
+                      updateForm({
+                        targetStatus: (event.target.value || null) as BulkRecategorizePreviewPayload['targetStatus'],
+                      })
+                    }
+                  >
+                    <option value="">Sin cambio</option>
+                    <option value="CONFIRMED">Confirmado</option>
+                    <option value="PENDING">Pendiente</option>
+                    <option value="IGNORED">Ignorado</option>
                   </select>
                 </label>
               </div>

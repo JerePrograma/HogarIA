@@ -1,5 +1,11 @@
 import { http } from './http';
-import type { MovementType, TransactionOrigin, TransactionStatus } from '../domain/types';
+import type {
+  MovementType,
+  PaymentChannel,
+  TransactionClassificationStatus,
+  TransactionOrigin,
+  TransactionStatus,
+} from '../domain/types';
 
 export type BulkRecategorizeTargetMode = 'MANUAL' | 'AUTO_BY_IMPORT_RULES';
 
@@ -24,6 +30,11 @@ export interface BulkRecategorizePreviewPayload {
   minAmount?: number | null;
   maxAmount?: number | null;
   onlyImported?: boolean | null;
+  reviewFilter?: 'POSSIBLE_INTERNAL_TRANSFER' | 'POSSIBLE_CROSS_SOURCE_DUPLICATE' | 'CJ_DISBURSEMENT_EXPENSE' | null;
+  targetMovementType?: MovementType | null;
+  targetStatus?: TransactionStatus | null;
+  targetClassificationStatus?: TransactionClassificationStatus | null;
+  targetClassificationReason?: string | null;
   transactionIds?: string[] | null;
 }
 
@@ -45,6 +56,10 @@ export interface BulkRecategorizeCandidate {
   description: string | null;
   origin: TransactionOrigin;
   status: TransactionStatus;
+  source?: string | null;
+  paymentChannel?: PaymentChannel | null;
+  classificationStatus?: TransactionClassificationStatus | null;
+  classificationReason?: string | null;
   previewStatus: BulkRecategorizePreviewStatus;
   warning: string | null;
 }
@@ -64,10 +79,18 @@ export interface BulkRecategorizePreviewResult {
 export interface BulkRecategorizeApplyPayload {
   targetMode?: BulkRecategorizeTargetMode;
   toCategoryId?: string | null;
+  targetMovementType?: MovementType | null;
+  targetStatus?: TransactionStatus | null;
+  targetClassificationStatus?: TransactionClassificationStatus | null;
+  targetClassificationReason?: string | null;
   transactionIds?: string[];
   updates?: Array<{
     transactionId: string;
     targetCategoryId: string;
+    targetMovementType?: MovementType | null;
+    targetStatus?: TransactionStatus | null;
+    targetClassificationStatus?: TransactionClassificationStatus | null;
+    targetClassificationReason?: string | null;
   }>;
 }
 

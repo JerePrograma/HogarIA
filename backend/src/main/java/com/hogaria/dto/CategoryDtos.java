@@ -20,6 +20,17 @@ public class CategoryDtos {
       Boolean active) {}
 
   public record CategoryResponse(
-      UUID id, UUID profileId, UUID parentId, String name, Category.Type type,
-      Category.Scope scope, Boolean active, LocalDateTime createdAt, LocalDateTime updatedAt) {}
+      UUID id,
+      UUID profileId,
+      UUID parentId,
+      String name,
+      String categoryKey,
+      Category.Type type,
+      Category.Scope scope,
+      com.hogaria.entity.MoneyTransaction.MovementType defaultMovementType,
+      Boolean budgetable,
+      Boolean technical,
+      Boolean active,
+      LocalDateTime createdAt,
+      LocalDateTime updatedAt) {}
 }
