@@ -9,6 +9,7 @@ import com.hogaria.dto.BulkRecategorizePreviewResponse;
 import com.hogaria.dto.TransactionCreateRequest;
 import com.hogaria.dto.TransactionResponse;
 import com.hogaria.dto.TransactionUpdateRequest;
+import com.hogaria.domains.transactions.lifecycle.TransactionLifecycleService;
 import com.hogaria.entity.Category;
 import com.hogaria.entity.MoneyTransaction;
 import com.hogaria.exception.BadRequestException;
@@ -39,19 +40,22 @@ public class TransactionService {
     private final AccountRepository accountRepository;
     private final CategoryRepository categoryRepository;
     private final TransactionCategorySuggestionService suggestionService;
+    private final TransactionLifecycleService transactionLifecycleService;
 
     public TransactionService(
             MoneyTransactionRepository repository,
             FinancialProfileRepository profileRepository,
             AccountRepository accountRepository,
             CategoryRepository categoryRepository,
-            TransactionCategorySuggestionService suggestionService
+            TransactionCategorySuggestionService suggestionService,
+            TransactionLifecycleService transactionLifecycleService
     ) {
         this.repository = repository;
         this.profileRepository = profileRepository;
         this.accountRepository = accountRepository;
         this.categoryRepository = categoryRepository;
         this.suggestionService = suggestionService;
+        this.transactionLifecycleService = transactionLifecycleService;
     }
 
     @Transactional
@@ -201,7 +205,7 @@ public class TransactionService {
 
         ensureProfile(transaction.getProfileId(), userId);
 
-        repository.delete(transaction);
+        transactionLifecycleService.delete(transaction, userId);
     }
 
     @Transactional(readOnly = true)

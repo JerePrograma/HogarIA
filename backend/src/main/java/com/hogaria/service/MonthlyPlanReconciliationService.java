@@ -8,6 +8,7 @@ import com.hogaria.exception.ForbiddenException;
 import com.hogaria.exception.NotFoundException;
 import com.hogaria.repository.*;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -16,6 +17,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Service
+@Transactional(readOnly = true)
 public class MonthlyPlanReconciliationService {
   private final FinancialProfileRepository profiles; private final MonthlyPlanItemRepository itemRepo; private final MoneyTransactionRepository txRepo; private final MonthlyPlanTransactionMatchRepository matchRepo; private final MonthlyPlanAmountCalculator amountCalculator;
   public MonthlyPlanReconciliationService(FinancialProfileRepository profiles, MonthlyPlanItemRepository itemRepo, MoneyTransactionRepository txRepo, MonthlyPlanTransactionMatchRepository matchRepo, MonthlyPlanAmountCalculator amountCalculator){this.profiles=profiles;this.itemRepo=itemRepo;this.txRepo=txRepo;this.matchRepo=matchRepo;this.amountCalculator=amountCalculator;}
@@ -70,6 +72,7 @@ public class MonthlyPlanReconciliationService {
     };
   }
 
+  @Transactional
   public TransactionMatch confirm(UUID userId, UUID profileId, ConfirmPlanTransactionMatchPayload p){ ensureProfile(profileId,userId);
     itemRepo.findByIdAndProfileId(p.monthlyPlanItemId(), profileId).orElseThrow(()->new ForbiddenException("Item no pertenece al perfil"));
     txRepo.findByIdAndProfileId(p.moneyTransactionId(), profileId).orElseThrow(()->new ForbiddenException("Transacción no pertenece al perfil"));
@@ -78,5 +81,6 @@ public class MonthlyPlanReconciliationService {
     m.setMatchedAmount(p.matchedAmount()); m.setMatchType(p.matchType()==null?MonthlyPlanTransactionMatch.MatchType.MANUAL:p.matchType()); m.setConfidence(p.confidence()==null?MonthlyPlanTransactionMatch.Confidence.HIGH:p.confidence()); m=matchRepo.save(m);
     return new TransactionMatch(m.getId(),m.getMonthlyPlanItemId(),m.getMoneyTransactionId(),m.getMatchedAmount(),m.getMatchType(),m.getConfidence()); }
 
-  public void delete(UUID userId, UUID profileId, UUID matchId){ ensureProfile(profileId,userId); var m=matchRepo.findByIdAndProfileId(matchId,profileId).orElseThrow(()->new NotFoundException("Match no encontrado")); matchRepo.delete(m); }
+  @Transactional
+  public void delete(UUID userId, UUID profileId, UUID matchId){ ensureProfile(profileId,userId); var m=matchRepo.findByIdAndProfileId(matchId,profileId).orElseThrow(()->new NotFoundException("Match no encontrado")); if(m.getMatchType()==MonthlyPlanTransactionMatch.MatchType.SYSTEM_CONVERSION){ itemRepo.findByIdAndProfileId(m.getMonthlyPlanItemId(),profileId).ifPresent(item->{ if(Objects.equals(item.getTransactionId(),m.getMoneyTransactionId())){ item.setTransactionId(null); if(item.getStatus()==MonthlyPlanItem.Status.PAID||item.getStatus()==MonthlyPlanItem.Status.COLLECTED) item.setStatus(item.getExpectedDate()!=null&&!item.getExpectedDate().isBefore(LocalDate.now())?MonthlyPlanItem.Status.SCHEDULED:MonthlyPlanItem.Status.ESTIMATED); itemRepo.save(item); }}); } matchRepo.delete(m); }
 }
