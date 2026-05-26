@@ -1,20 +1,30 @@
-import { http } from './http';
+import { http } from "./http";
 import type {
+  CategoryType,
   MovementType,
   PaymentChannel,
   TransactionClassificationStatus,
   TransactionOrigin,
   TransactionStatus,
-} from '../domain/types';
+} from "../domain/types";
 
-export type BulkRecategorizeTargetMode = 'MANUAL' | 'AUTO_BY_IMPORT_RULES';
+export type BulkRecategorizeTargetMode = "MANUAL" | "AUTO_BY_IMPORT_RULES";
 
 export type BulkRecategorizePreviewStatus =
-  | 'READY'
-  | 'SKIPPED'
-  | 'AMBIGUOUS'
-  | 'NEEDS_CATEGORY'
-  | 'ERROR';
+  | "READY"
+  | "SKIPPED"
+  | "AMBIGUOUS"
+  | "NEEDS_CATEGORY"
+  | "ERROR";
+
+export type BulkRecategorizeReviewFilter =
+  | "POSSIBLE_INTERNAL_TRANSFER"
+  | "POSSIBLE_CROSS_SOURCE_DUPLICATE"
+  | "CJ_DISBURSEMENT_EXPENSE"
+  | "DEBIN_CDNI_PENDING"
+  | "NEEDS_CATEGORY"
+  | "TECHNICAL"
+  | "REVIEW";
 
 export interface BulkRecategorizePreviewPayload {
   accountId?: string | null;
@@ -30,12 +40,17 @@ export interface BulkRecategorizePreviewPayload {
   minAmount?: number | null;
   maxAmount?: number | null;
   onlyImported?: boolean | null;
-  reviewFilter?: 'POSSIBLE_INTERNAL_TRANSFER' | 'POSSIBLE_CROSS_SOURCE_DUPLICATE' | 'CJ_DISBURSEMENT_EXPENSE' | null;
+  reviewFilter?: BulkRecategorizeReviewFilter | null;
   targetMovementType?: MovementType | null;
   targetStatus?: TransactionStatus | null;
   targetClassificationStatus?: TransactionClassificationStatus | null;
   targetClassificationReason?: string | null;
   transactionIds?: string[] | null;
+
+  classificationStatus?: TransactionClassificationStatus | null;
+  paymentChannel?: PaymentChannel | null;
+  source?: string | null;
+  counterpartyContains?: string | null;
 }
 
 export interface BulkRecategorizeCandidate {
@@ -45,8 +60,13 @@ export interface BulkRecategorizeCandidate {
   currentCategoryName?: string | null;
   targetCategoryId: string | null;
   targetCategoryName?: string | null;
-  targetCategoryType?: string | null;
+  targetCategoryType?: CategoryType | null;
   targetMovementType?: MovementType | null;
+
+  // Si el backend lo empieza a devolver, el frontend ya queda preparado.
+  targetClassificationStatus?: TransactionClassificationStatus | null;
+  targetClassificationReason?: string | null;
+
   suggestionReason?: string | null;
   confidence?: string | null;
   movementType: MovementType;
@@ -76,6 +96,15 @@ export interface BulkRecategorizePreviewResult {
   errors: string[];
 }
 
+export interface BulkRecategorizeApplyUpdate {
+  transactionId: string;
+  targetCategoryId?: string | null;
+  targetMovementType?: MovementType | null;
+  targetStatus?: TransactionStatus | null;
+  targetClassificationStatus?: TransactionClassificationStatus | null;
+  targetClassificationReason?: string | null;
+}
+
 export interface BulkRecategorizeApplyPayload {
   targetMode?: BulkRecategorizeTargetMode;
   toCategoryId?: string | null;
@@ -84,14 +113,8 @@ export interface BulkRecategorizeApplyPayload {
   targetClassificationStatus?: TransactionClassificationStatus | null;
   targetClassificationReason?: string | null;
   transactionIds?: string[];
-  updates?: Array<{
-    transactionId: string;
-    targetCategoryId: string;
-    targetMovementType?: MovementType | null;
-    targetStatus?: TransactionStatus | null;
-    targetClassificationStatus?: TransactionClassificationStatus | null;
-    targetClassificationReason?: string | null;
-  }>;
+  updates?: BulkRecategorizeApplyUpdate[];
+  forceAmbiguous?: boolean | null;
 }
 
 export interface BulkRecategorizeApplyResult {

@@ -273,12 +273,6 @@ public class TransactionService {
                         transaction.getAmount()
                 );
 
-                if (suggestion.classificationStatus() != null
-                        && request.targetClassificationStatus() == null) {
-                    // No lo aplica todavía: solo permite que el preview muestre intención.
-                    // El apply explícito debe venir con targetClassificationStatus o updates.
-                }
-
                 candidateTargetCategoryId = suggestion.suggestedCategoryId();
                 candidateTargetCategoryName = suggestion.suggestedCategoryName();
                 candidateTargetCategoryType = suggestion.suggestedCategoryType();
@@ -302,7 +296,11 @@ public class TransactionService {
 
             if (candidateTargetCategoryId == null && !hasAnyTargetChange) {
                 previewStatus = "NEEDS_CATEGORY";
-                warning = "No se pudo resolver una acción destino automáticamente.";
+
+                if (warning == null || warning.isBlank()) {
+                    warning = "No se pudo resolver una acción destino automáticamente.";
+                }
+
                 skippedCount++;
             } else if (candidateTargetCategoryId != null
                     && Objects.equals(transaction.getCategoryId(), candidateTargetCategoryId)
@@ -452,9 +450,6 @@ public class TransactionService {
                 }
                 if (item.targetStatus() != null) {
                     transaction.setStatus(item.targetStatus());
-                }
-                if (item.targetClassificationStatus() != null) {
-                    transaction.setClassificationStatus(item.targetClassificationStatus());
                 }
                 if (item.targetClassificationReason() != null && !item.targetClassificationReason().isBlank()) {
                     transaction.setClassificationReason(item.targetClassificationReason());
