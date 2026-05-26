@@ -33,6 +33,12 @@ export function useTransactionMutations(
       queryClient.invalidateQueries({
         queryKey: queryKeys.dashboard(profileId),
       }),
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.planning(profileId, year, month),
+      }),
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.monthlyPlanItems(profileId, year, month),
+      }),
     ]);
   };
 

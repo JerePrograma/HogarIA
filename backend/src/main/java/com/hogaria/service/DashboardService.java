@@ -1,13 +1,18 @@
 package com.hogaria.service;
 
 import com.hogaria.dto.DashboardDtos.BudgetSummaryResponse;
+import com.hogaria.dto.DashboardDtos.CategoryDeviationResponse;
 import com.hogaria.dto.DashboardDtos.CategorySummaryResponse;
+import com.hogaria.dto.DashboardDtos.ClosingProjectionResponse;
+import com.hogaria.dto.DashboardDtos.DashboardAlertResponse;
 import com.hogaria.dto.DashboardDtos.DashboardOperationalSummaryResponse;
 import com.hogaria.dto.DashboardDtos.DashboardSummaryResponse;
 import com.hogaria.dto.DashboardDtos.FiftyThirtyTwentyResponse;
 import com.hogaria.dto.DashboardDtos.MonthlyBalanceResponse;
 import com.hogaria.dto.DashboardDtos.MonthlyCashFlowSummaryResponse;
 import com.hogaria.dto.DashboardDtos.PlanningDashboardSummaryResponse;
+import com.hogaria.dto.DashboardDtos.RealConfirmedSummaryResponse;
+import com.hogaria.dto.DashboardDtos.RealVsPlannedResponse;
 import com.hogaria.entity.BudgetCategoryItem;
 import com.hogaria.entity.Category;
 import com.hogaria.entity.ExternalSyncMapping;
@@ -26,6 +31,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -78,18 +84,29 @@ public class DashboardService {
 
     var from = LocalDate.of(year, month, 1);
     var to = from.withDayOfMonth(from.lengthOfMonth());
+    var allTransactions =
+        transactionRepository.findByProfileIdAndBudgetDateBetween(profileId, from, to);
     var txs =
-        transactionRepository.findByProfileIdAndBudgetDateBetween(profileId, from, to).stream()
+        allTransactions.stream()
             .filter(t -> t.getStatus() == MoneyTransaction.Status.CONFIRMED)
             .toList();
     var categoryIds =
-        txs.stream().map(MoneyTransaction::getCategoryId).filter(id -> id != null).collect(Collectors.toSet());
+        allTransactions.stream().map(MoneyTransaction::getCategoryId).filter(id -> id != null).collect(Collectors.toSet());
+    var planningItems = monthlyPlanItemRepository.findByProfileIdAndPeriodYearAndPeriodMonth(profileId, year, month);
+    categoryIds.addAll(
+        planningItems.stream()
+            .map(MonthlyPlanItem::getCategoryId)
+            .filter(id -> id != null)
+            .collect(Collectors.toSet()));
     var categories =
         categoryRepository.findAllById(categoryIds).stream()
             .collect(Collectors.toMap(Category::getId, Function.identity()));
 
-    var planning = buildPlanning(profileId, year, month);
+    var planning = buildPlanning(planningItems);
     var cashFlowSummary = buildCashFlowSummary(profileId, txs, categories);
+    var realConfirmedSummary = buildRealConfirmedSummary(allTransactions);
+    var realVsPlanned = buildRealVsPlanned(allTransactions, planningItems, categories);
+    var closingProjection = buildClosingProjection(realConfirmedSummary, planningItems);
 
     BigDecimal income = cashFlowSummary.totalIncome();
     BigDecimal fixed = cashFlowSummary.fixedExpense();
@@ -113,6 +130,7 @@ public class DashboardService {
     var breakdown = buildBreakdown(txs, categories, income);
     var budgetSummary = buildBudgetSummary(profileId, year, month, txs);
     var operational = buildOperational(cashFlowSummary, planning, txs.isEmpty());
+    var alerts = buildDashboardAlerts(realConfirmedSummary, realVsPlanned, closingProjection, operational);
 
     return new DashboardSummaryResponse(
         new MonthlyBalanceResponse(income, totalExpenses, savings, balance),
@@ -124,7 +142,12 @@ public class DashboardService {
         budgetSummary,
         planning,
         operational,
-        cashFlowSummary);
+        cashFlowSummary,
+        realConfirmedSummary,
+        realVsPlanned,
+        closingProjection,
+        realVsPlanned.categories(),
+        alerts);
   }
 
   private List<CategorySummaryResponse> buildBreakdown(
@@ -141,7 +164,7 @@ public class DashboardService {
               var total = sum(entry.getValue().stream().map(MoneyTransaction::getAmount).toList());
               return new CategorySummaryResponse(
                   entry.getKey(),
-                  category == null ? "Unknown" : category.getName(),
+                  category == null ? "Sin categoría" : category.getName(),
                   category == null ? null : category.getType(),
                   total,
                   percent(total, income),
@@ -213,8 +236,7 @@ public class DashboardService {
     return new BudgetSummaryResponse(totalBudget, totalReal, totalBudget.subtract(totalReal), exceeded, warnings);
   }
 
-  private PlanningDashboardSummaryResponse buildPlanning(UUID profileId, int year, int month) {
-    var items = monthlyPlanItemRepository.findByProfileIdAndPeriodYearAndPeriodMonth(profileId, year, month);
+  private PlanningDashboardSummaryResponse buildPlanning(List<MonthlyPlanItem> items) {
     BigDecimal inMin = BigDecimal.ZERO, inMax = BigDecimal.ZERO, exMin = BigDecimal.ZERO, exMax = BigDecimal.ZERO;
     BigDecimal recMin = BigDecimal.ZERO, recMax = BigDecimal.ZERO, nMin = BigDecimal.ZERO, nMax = BigDecimal.ZERO;
     BigDecimal pendingIncome = BigDecimal.ZERO, pendingExpense = BigDecimal.ZERO;
@@ -300,6 +322,263 @@ public class DashboardService {
         cashFlow.principalRecovered(),
         cashFlow.operationalBalanceExcludingRecoverables(),
         cashFlow.netCashFlowIncludingRecoverables());
+  }
+
+  private RealConfirmedSummaryResponse buildRealConfirmedSummary(List<MoneyTransaction> transactions) {
+    BigDecimal confirmedIncome = BigDecimal.ZERO;
+    BigDecimal confirmedExpenses = BigDecimal.ZERO;
+    BigDecimal confirmedSavings = BigDecimal.ZERO;
+    BigDecimal operationalBalance = BigDecimal.ZERO;
+    BigDecimal ignoredAmount = BigDecimal.ZERO;
+    BigDecimal transfersAmount = BigDecimal.ZERO;
+    BigDecimal adjustmentsAmount = BigDecimal.ZERO;
+    BigDecimal technicalAmount = BigDecimal.ZERO;
+    BigDecimal nonOperationalAmount = BigDecimal.ZERO;
+    long confirmedCount = 0;
+    long pendingCount = 0;
+    long ignoredCount = 0;
+    long withoutCategoryCount = 0;
+    long reviewCount = 0;
+    long technicalCount = 0;
+    long transferCount = 0;
+    long adjustmentCount = 0;
+    long nonOperationalCount = 0;
+
+    for (var tx : transactions) {
+      var amount = tx.getAmount() == null ? BigDecimal.ZERO : tx.getAmount();
+      var classification = classificationStatus(tx);
+
+      if (tx.getStatus() == MoneyTransaction.Status.CONFIRMED) confirmedCount++;
+      if (tx.getStatus() == MoneyTransaction.Status.PENDING) pendingCount++;
+      if (tx.getStatus() == MoneyTransaction.Status.IGNORED) {
+        ignoredCount++;
+        ignoredAmount = ignoredAmount.add(amount);
+      }
+      if (tx.getCategoryId() == null || classification == MoneyTransaction.ClassificationStatus.NEEDS_CATEGORY) {
+        withoutCategoryCount++;
+      }
+      if (classification == MoneyTransaction.ClassificationStatus.REVIEW) reviewCount++;
+      if (classification == MoneyTransaction.ClassificationStatus.TECHNICAL) {
+        technicalCount++;
+        if (tx.getStatus() == MoneyTransaction.Status.CONFIRMED) technicalAmount = technicalAmount.add(amount);
+      }
+      if (tx.getMovementType() == MoneyTransaction.MovementType.TRANSFER) {
+        transferCount++;
+        if (tx.getStatus() == MoneyTransaction.Status.CONFIRMED) transfersAmount = transfersAmount.add(amount);
+      }
+      if (tx.getMovementType() == MoneyTransaction.MovementType.ADJUSTMENT) {
+        adjustmentCount++;
+        if (tx.getStatus() == MoneyTransaction.Status.CONFIRMED) adjustmentsAmount = adjustmentsAmount.add(amount);
+      }
+
+      if (tx.getStatus() != MoneyTransaction.Status.CONFIRMED) continue;
+
+      if (!countsInRealOperationalBalance(tx)) {
+        nonOperationalCount++;
+        nonOperationalAmount = nonOperationalAmount.add(amount);
+        continue;
+      }
+
+      if (tx.getMovementType() == MoneyTransaction.MovementType.INCOME) {
+        confirmedIncome = confirmedIncome.add(amount);
+        operationalBalance = operationalBalance.add(amount);
+      } else if (tx.getMovementType() == MoneyTransaction.MovementType.EXPENSE) {
+        confirmedExpenses = confirmedExpenses.add(amount);
+        operationalBalance = operationalBalance.subtract(amount);
+      } else if (tx.getMovementType() == MoneyTransaction.MovementType.SAVING) {
+        confirmedSavings = confirmedSavings.add(amount);
+        operationalBalance = operationalBalance.subtract(amount);
+      }
+    }
+
+    return new RealConfirmedSummaryResponse(
+        confirmedIncome,
+        confirmedExpenses,
+        confirmedSavings,
+        operationalBalance,
+        confirmedCount,
+        pendingCount,
+        ignoredCount,
+        withoutCategoryCount,
+        reviewCount,
+        technicalCount,
+        transferCount,
+        adjustmentCount,
+        nonOperationalCount,
+        ignoredAmount,
+        transfersAmount,
+        adjustmentsAmount,
+        technicalAmount,
+        nonOperationalAmount);
+  }
+
+  private RealVsPlannedResponse buildRealVsPlanned(
+      List<MoneyTransaction> allTransactions, List<MonthlyPlanItem> planItems, Map<UUID, Category> categories) {
+    Map<UUID, CategoryDeviationAccumulator> byCategory = new LinkedHashMap<>();
+    var convertedTransactionIds =
+        planItems.stream()
+            .map(MonthlyPlanItem::getTransactionId)
+            .filter(id -> id != null)
+            .collect(Collectors.toSet());
+    var pendingStatuses =
+        Set.of(
+            MonthlyPlanItem.Status.DRAFT,
+            MonthlyPlanItem.Status.ESTIMATED,
+            MonthlyPlanItem.Status.SCHEDULED,
+            MonthlyPlanItem.Status.DUE);
+
+    for (var item : planItems) {
+      if (!usesPlanItemForFinancialProjection(item)) continue;
+
+      var row = accumulatorFor(byCategory, item.getCategoryId(), categories);
+      var amount = plannedComparableAmount(item);
+      row.plannedAmount = row.plannedAmount.add(amount);
+      row.plannedCount++;
+
+      if (item.getTransactionId() == null && pendingStatuses.contains(item.getStatus())) {
+        row.pendingPlannedAmount = row.pendingPlannedAmount.add(amount);
+      }
+    }
+
+    for (var tx : allTransactions) {
+      if (!countsInRealOperationalBalance(tx)) continue;
+
+      var row = accumulatorFor(byCategory, tx.getCategoryId(), categories);
+      var amount = tx.getAmount() == null ? BigDecimal.ZERO : tx.getAmount();
+      row.realConfirmedAmount = row.realConfirmedAmount.add(amount);
+      row.realCount++;
+
+      if (!convertedTransactionIds.contains(tx.getId())) {
+        row.realUnplannedAmount = row.realUnplannedAmount.add(amount);
+      }
+    }
+
+    var rows =
+        byCategory.values().stream()
+            .map(this::toCategoryDeviation)
+            .sorted(
+                Comparator.comparingInt((CategoryDeviationResponse row) -> executionStatusPriority(row.status()))
+                    .thenComparing(
+                        (CategoryDeviationResponse row) -> row.difference().abs(),
+                        Comparator.reverseOrder())
+                    .thenComparing(CategoryDeviationResponse::categoryName, String.CASE_INSENSITIVE_ORDER))
+            .toList();
+
+    var totalPlanned = rows.stream().map(CategoryDeviationResponse::plannedAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
+    var totalReal = rows.stream().map(CategoryDeviationResponse::realConfirmedAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
+    var pendingPlanned = rows.stream().map(CategoryDeviationResponse::pendingPlannedAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
+    var realUnplanned = rows.stream().map(CategoryDeviationResponse::realUnplannedAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
+    var totalDifference = totalReal.subtract(totalPlanned);
+
+    return new RealVsPlannedResponse(
+        totalPlanned,
+        totalReal,
+        totalDifference,
+        percent(totalReal, totalPlanned),
+        pendingPlanned,
+        realUnplanned,
+        executionStatus(totalPlanned, totalReal),
+        rows);
+  }
+
+  private ClosingProjectionResponse buildClosingProjection(
+      RealConfirmedSummaryResponse realSummary, List<MonthlyPlanItem> planItems) {
+    BigDecimal pendingPlannedNet = BigDecimal.ZERO;
+    BigDecimal plannedNet = BigDecimal.ZERO;
+    var pendingStatuses =
+        Set.of(
+            MonthlyPlanItem.Status.DRAFT,
+            MonthlyPlanItem.Status.ESTIMATED,
+            MonthlyPlanItem.Status.SCHEDULED,
+            MonthlyPlanItem.Status.DUE);
+
+    for (var item : planItems) {
+      if (!usesPlanItemForFinancialProjection(item)) continue;
+
+      var signedNet = signedPlannedNet(item);
+      plannedNet = plannedNet.add(signedNet);
+
+      if (item.getTransactionId() == null && pendingStatuses.contains(item.getStatus())) {
+        pendingPlannedNet = pendingPlannedNet.add(signedNet);
+      }
+    }
+
+    var estimatedClosing = realSummary.operationalBalance().add(pendingPlannedNet);
+
+    return new ClosingProjectionResponse(
+        realSummary.operationalBalance(),
+        pendingPlannedNet,
+        estimatedClosing,
+        plannedNet,
+        estimatedClosing.subtract(plannedNet));
+  }
+
+  private List<DashboardAlertResponse> buildDashboardAlerts(
+      RealConfirmedSummaryResponse realSummary,
+      RealVsPlannedResponse realVsPlanned,
+      ClosingProjectionResponse closingProjection,
+      DashboardOperationalSummaryResponse operational) {
+    var alerts = new ArrayList<DashboardAlertResponse>();
+
+    for (var alert : operational.alerts()) {
+      alerts.add(new DashboardAlertResponse("Alerta operativa", alert, inferRisk(alert)));
+    }
+
+    if (realSummary.withoutCategoryCount() > 0) {
+      alerts.add(
+          new DashboardAlertResponse(
+              "Movimientos sin categoría",
+              realSummary.withoutCategoryCount()
+                  + " "
+                  + movementLabel(realSummary.withoutCategoryCount())
+                  + " necesita"
+                  + (realSummary.withoutCategoryCount() == 1 ? "" : "n")
+                  + " categoría para mejorar desvíos y reportes.",
+              "WATCH"));
+    }
+
+    if (realSummary.pendingCount() > 0) {
+      alerts.add(
+          new DashboardAlertResponse(
+              "Movimientos pendientes",
+              realSummary.pendingCount()
+                  + " "
+                  + movementLabel(realSummary.pendingCount())
+                  + " no impacta"
+                  + (realSummary.pendingCount() == 1 ? "" : "n")
+                  + " en el real confirmado.",
+              "WATCH"));
+    }
+
+    if (realVsPlanned.realUnplannedAmount().signum() > 0) {
+      alerts.add(
+          new DashboardAlertResponse(
+              "Real no planificado",
+              "Hay movimientos confirmados por fuera del plan por " + realVsPlanned.realUnplannedAmount() + ".",
+              "RISK"));
+    }
+
+    if (Set.of("EXCEEDED", "CRITICAL").contains(realVsPlanned.status())) {
+      alerts.add(
+          new DashboardAlertResponse(
+              "Desvío contra plan",
+              "La ejecución real difiere del plan por " + realVsPlanned.totalDifference().abs() + ".",
+              realVsPlanned.status().equals("CRITICAL") ? "CRITICAL" : "RISK"));
+    }
+
+    if (closingProjection.estimatedClosing().signum() < 0) {
+      alerts.add(
+          new DashboardAlertResponse(
+              "Proyección de cierre negativa",
+              "El cierre estimado queda por debajo de cero si se cumplen los pendientes.",
+              "CRITICAL"));
+    }
+
+    return alerts.stream()
+        .sorted(
+            Comparator.comparingInt((DashboardAlertResponse alert) -> riskPriority(alert.riskLevel()))
+                .thenComparing(DashboardAlertResponse::title, String.CASE_INSENSITIVE_ORDER))
+        .toList();
   }
 
   private MonthlyCashFlowSummaryResponse buildCashFlowSummary(
@@ -393,6 +672,116 @@ public class DashboardService {
         netCashIncludingRecoverables);
   }
 
+  private CategoryDeviationAccumulator accumulatorFor(
+      Map<UUID, CategoryDeviationAccumulator> rows, UUID categoryId, Map<UUID, Category> categories) {
+    return rows.computeIfAbsent(
+        categoryId,
+        ignored -> {
+          var category = categoryId == null ? null : categories.get(categoryId);
+          var row = new CategoryDeviationAccumulator();
+          row.categoryId = categoryId;
+          row.categoryName = category == null ? "Sin categoría" : category.getName();
+          row.categoryType = category == null ? null : category.getType();
+          return row;
+        });
+  }
+
+  private CategoryDeviationResponse toCategoryDeviation(CategoryDeviationAccumulator row) {
+    var difference = row.realConfirmedAmount.subtract(row.plannedAmount);
+
+    return new CategoryDeviationResponse(
+        row.categoryId,
+        row.categoryName,
+        row.categoryType,
+        row.plannedAmount,
+        row.realConfirmedAmount,
+        row.pendingPlannedAmount,
+        row.realUnplannedAmount,
+        difference,
+        percent(row.realConfirmedAmount, row.plannedAmount),
+        executionStatus(row.plannedAmount, row.realConfirmedAmount),
+        row.plannedCount,
+        row.realCount);
+  }
+
+  private boolean countsInRealOperationalBalance(MoneyTransaction tx) {
+    if (tx.getStatus() != MoneyTransaction.Status.CONFIRMED) return false;
+    var classification = classificationStatus(tx);
+    if (classification == MoneyTransaction.ClassificationStatus.TECHNICAL) return false;
+    if (classification == MoneyTransaction.ClassificationStatus.IGNORED_BY_RULE) return false;
+    if (tx.getMovementType() == MoneyTransaction.MovementType.TRANSFER) return false;
+    if (tx.getMovementType() == MoneyTransaction.MovementType.ADJUSTMENT) return false;
+    return true;
+  }
+
+  private MoneyTransaction.ClassificationStatus classificationStatus(MoneyTransaction tx) {
+    if (tx.getClassificationStatus() != null) return tx.getClassificationStatus();
+    return tx.getCategoryId() == null
+        ? MoneyTransaction.ClassificationStatus.NEEDS_CATEGORY
+        : MoneyTransaction.ClassificationStatus.CLASSIFIED;
+  }
+
+  private boolean usesPlanItemForFinancialProjection(MonthlyPlanItem item) {
+    return item.getStatus() != MonthlyPlanItem.Status.CANCELLED && item.getType() != MonthlyPlanItem.Type.TODO;
+  }
+
+  private BigDecimal signedPlannedNet(MonthlyPlanItem item) {
+    var calculated = monthlyPlanAmountCalculator.calculate(item);
+    var value = calculated.netMax();
+    return isIncomingPlanItem(item) ? value : value.negate();
+  }
+
+  private BigDecimal plannedComparableAmount(MonthlyPlanItem item) {
+    return signedPlannedNet(item).abs();
+  }
+
+  private boolean isIncomingPlanItem(MonthlyPlanItem item) {
+    return item.getType() == MonthlyPlanItem.Type.INCOME || item.getType() == MonthlyPlanItem.Type.RECOVERY;
+  }
+
+  private String executionStatus(BigDecimal planned, BigDecimal real) {
+    if (planned.signum() <= 0 && real.signum() > 0) return "EXCEEDED";
+    if (planned.signum() <= 0) return "OK";
+
+    var percentage = real.multiply(new BigDecimal("100")).divide(planned, 2, RoundingMode.HALF_UP);
+
+    if (percentage.compareTo(new BigDecimal("120")) > 0) return "CRITICAL";
+    if (percentage.compareTo(new BigDecimal("100")) > 0) return "EXCEEDED";
+    if (percentage.compareTo(new BigDecimal("85")) >= 0) return "WARNING";
+    return "OK";
+  }
+
+  private int executionStatusPriority(String status) {
+    return switch (status) {
+      case "CRITICAL" -> 1;
+      case "EXCEEDED" -> 2;
+      case "WARNING" -> 3;
+      default -> 4;
+    };
+  }
+
+  private String inferRisk(String text) {
+    var normalized = text == null ? "" : text.toLowerCase();
+
+    if (normalized.contains("negativo") || normalized.contains("superan")) return "CRITICAL";
+    if (normalized.contains("riesgo") || normalized.contains("desvío") || normalized.contains("exced")) return "RISK";
+    if (normalized.contains("pendiente") || normalized.contains("revis") || normalized.contains("cotizar")) return "WATCH";
+    return "OK";
+  }
+
+  private int riskPriority(String riskLevel) {
+    return switch (riskLevel) {
+      case "CRITICAL" -> 1;
+      case "RISK" -> 2;
+      case "WATCH" -> 3;
+      default -> 4;
+    };
+  }
+
+  private String movementLabel(long count) {
+    return count == 1 ? "movimiento" : "movimientos";
+  }
+
   private BigDecimal sum(List<BigDecimal> values) {
     return values.stream().reduce(BigDecimal.ZERO, BigDecimal::add);
   }
@@ -402,5 +791,17 @@ public class DashboardService {
       return BigDecimal.ZERO;
     }
     return amount.multiply(new BigDecimal("100")).divide(income, 2, RoundingMode.HALF_UP);
+  }
+
+  private static class CategoryDeviationAccumulator {
+    UUID categoryId;
+    String categoryName;
+    Category.Type categoryType;
+    BigDecimal plannedAmount = BigDecimal.ZERO;
+    BigDecimal realConfirmedAmount = BigDecimal.ZERO;
+    BigDecimal pendingPlannedAmount = BigDecimal.ZERO;
+    BigDecimal realUnplannedAmount = BigDecimal.ZERO;
+    long plannedCount = 0;
+    long realCount = 0;
   }
 }

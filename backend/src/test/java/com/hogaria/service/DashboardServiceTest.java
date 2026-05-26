@@ -128,6 +128,48 @@ class DashboardServiceTest {
     assertEquals(new BigDecimal("700"), res.monthlyCashFlowSummary().operationalBalanceExcludingRecoverables());
     assertEquals(new BigDecimal("450"), res.monthlyCashFlowSummary().netCashFlowIncludingRecoverables());
     assertEquals(new BigDecimal("700"), res.monthlyBalance().balance());
+    assertEquals(new BigDecimal("1000"), res.realConfirmedSummary().confirmedIncome());
+    assertEquals(new BigDecimal("200"), res.realConfirmedSummary().confirmedExpenses());
+    assertEquals(new BigDecimal("100"), res.realConfirmedSummary().confirmedSavings());
+    assertEquals(new BigDecimal("700"), res.realConfirmedSummary().operationalBalance());
+  }
+
+  @Test
+  void realConfirmedSummaryCountsPendingIgnoredAndNonOperationalSeparately() {
+    var userId = UUID.randomUUID();
+    var profileId = UUID.randomUUID();
+    var incomeCat = UUID.randomUUID();
+    var expenseCat = UUID.randomUUID();
+    var salary = tx(profileId, incomeCat, MoneyTransaction.MovementType.INCOME, "1000", "Sueldo");
+    var pending = tx(profileId, null, MoneyTransaction.MovementType.EXPENSE, "300", "Pendiente");
+    pending.setStatus(MoneyTransaction.Status.PENDING);
+    pending.setClassificationStatus(MoneyTransaction.ClassificationStatus.NEEDS_CATEGORY);
+    var ignored = tx(profileId, expenseCat, MoneyTransaction.MovementType.EXPENSE, "50", "Ignorado");
+    ignored.setStatus(MoneyTransaction.Status.IGNORED);
+    var transfer = tx(profileId, expenseCat, MoneyTransaction.MovementType.TRANSFER, "75", "Transferencia interna");
+    var localService = serviceWithRealClassifier();
+
+    when(profileRepository.findByIdAndUserId(profileId, userId)).thenReturn(Optional.of(new FinancialProfile()));
+    when(transactionRepository.findByProfileIdAndBudgetDateBetween(eq(profileId), any(), any()))
+        .thenReturn(List.of(salary, pending, ignored, transfer));
+    when(categoryRepository.findAllById(any()))
+        .thenReturn(List.of(
+            Category.builder().id(incomeCat).type(Category.Type.INCOME).name("Ingreso").build(),
+            Category.builder().id(expenseCat).type(Category.Type.VARIABLE_EXPENSE).name("Gasto").build()));
+    when(externalSyncMappingRepository.findByProfileId(profileId)).thenReturn(List.of());
+    when(monthlyPlanItemRepository.findByProfileIdAndPeriodYearAndPeriodMonth(profileId, 2026, 5)).thenReturn(List.of());
+
+    var res = localService.getMonthlySummary(userId, profileId, 2026, 5);
+
+    assertEquals(new BigDecimal("1000"), res.realConfirmedSummary().confirmedIncome());
+    assertEquals(BigDecimal.ZERO, res.realConfirmedSummary().confirmedExpenses());
+    assertEquals(new BigDecimal("1000"), res.realConfirmedSummary().operationalBalance());
+    assertEquals(2, res.realConfirmedSummary().confirmedCount());
+    assertEquals(1, res.realConfirmedSummary().pendingCount());
+    assertEquals(1, res.realConfirmedSummary().ignoredCount());
+    assertEquals(1, res.realConfirmedSummary().withoutCategoryCount());
+    assertEquals(1, res.realConfirmedSummary().transferCount());
+    assertEquals(1, res.realConfirmedSummary().nonOperationalCount());
   }
 
   @Test

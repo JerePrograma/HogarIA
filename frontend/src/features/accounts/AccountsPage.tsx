@@ -7,6 +7,9 @@ import { EmptyState } from '../../components/ui/EmptyState';
 import { ErrorState } from '../../components/ui/ErrorState';
 import { MetricCard } from '../../components/ui/MetricCard';
 import { StatusBadge } from '../../components/ui/StatusBadge';
+import { accountTypeLabels, labelOrValue } from '../../domain/financeLabels';
+import { queryKeys } from '../../domain/queryKeys';
+import { sortByNameDesc } from '../../domain/sorting';
 import type { Account } from '../../domain/types';
 
 export function AccountsPage() {
@@ -15,12 +18,12 @@ export function AccountsPage() {
   const [name, setName] = useState('');
 
   const accountsQuery = useQuery<Account[]>({
-    queryKey: ['accounts', profileId],
+    queryKey: queryKeys.accounts(profileId),
     queryFn: () => listAccounts(profileId),
     enabled: Boolean(profileId),
   });
 
-  const accounts = accountsQuery.data ?? [];
+  const accounts = sortByNameDesc(accountsQuery.data ?? []);
   const activeAccounts = accounts.filter((account) => account.active);
   const inactiveAccounts = accounts.filter((account) => !account.active);
 
@@ -32,7 +35,7 @@ export function AccountsPage() {
         currency: 'ARS',
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['accounts', profileId] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.accounts(profileId) });
       setName('');
     },
   });
@@ -48,12 +51,12 @@ export function AccountsPage() {
         dueDay: account.dueDay,
         active: !account.active,
       }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['accounts', profileId] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.accounts(profileId) }),
   });
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => deleteAccount(id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['accounts', profileId] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.accounts(profileId) }),
   });
 
   const canCreate = name.trim().length > 0 && !createMutation.isPending;
@@ -157,7 +160,7 @@ export function AccountsPage() {
                       <td>
                         <strong>{account.name}</strong>
                       </td>
-                      <td>{account.accountType}</td>
+                      <td>{labelOrValue(accountTypeLabels, account.accountType)}</td>
                       <td>{account.currency}</td>
                       <td>{account.creditLimit ?? '-'}</td>
                       <td>

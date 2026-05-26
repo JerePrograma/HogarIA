@@ -11,6 +11,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
+import { categoryTypeLabels, labelOrValue } from '../../../domain/financeLabels';
 import { formatMoney } from '../../../domain/formatters';
 import type { CategoryType, DashboardSummary } from '../../../domain/types';
 
@@ -565,16 +566,7 @@ function formatCategoryType(type: CategoryType | null | undefined): string {
     return 'Sin tipo';
   }
 
-  const labels: Record<CategoryType, string> = {
-    INCOME: 'Ingreso',
-    FIXED_EXPENSE: 'Gasto fijo',
-    VARIABLE_EXPENSE: 'Gasto variable',
-    SAVING: 'Ahorro',
-    DEBT: 'Deuda',
-    INVESTMENT: 'Inversión',
-  };
-
-  return labels[type];
+  return labelOrValue(categoryTypeLabels, type);
 }
 
 function getCategoryBadgeClass(type: CategoryType | null | undefined): string {

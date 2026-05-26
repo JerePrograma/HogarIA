@@ -1,13 +1,164 @@
 package com.hogaria.dto;
-import com.hogaria.entity.Category;import java.math.BigDecimal;import java.util.*;
-public class DashboardDtos {
-  public record CategorySummaryResponse(UUID categoryId, String categoryName, Category.Type categoryType, BigDecimal totalAmount, BigDecimal percentOfIncome, long movementCount) {}
-  public record FiftyThirtyTwentyResponse(BigDecimal fixedPercent, BigDecimal variablePercent, BigDecimal savingPercent) {}
-  public record MonthlyBalanceResponse(BigDecimal totalIncome, BigDecimal totalExpenses, BigDecimal savings, BigDecimal balance) {}
-  public record BudgetSummaryResponse(BigDecimal totalBudget,BigDecimal totalReal,BigDecimal totalDifference,long exceededCount,long warningCount){}
-  public record PlanningDashboardSummaryResponse(BigDecimal totalIncomeMin, BigDecimal totalIncomeMax, BigDecimal totalExpenseMin, BigDecimal totalExpenseMax, BigDecimal totalRecoveryMin, BigDecimal totalRecoveryMax, BigDecimal projectedNetMin, BigDecimal projectedNetMax, BigDecimal pendingIncome, BigDecimal pendingExpense, int unpricedCount, int dueNext7DaysCount, int plannedItemsCount, int cancelledItemsCount, int convertedItemsCount) {}
-  public record DashboardOperationalSummaryResponse(BigDecimal confirmedIncome, BigDecimal confirmedExpenses, BigDecimal confirmedSavings, BigDecimal confirmedBalance, BigDecimal projectedNetMin, BigDecimal projectedNetMax, BigDecimal deltaProjectedMinVsConfirmed, BigDecimal deltaProjectedMaxVsConfirmed, BigDecimal pendingIncome, BigDecimal pendingExpense, BigDecimal expectedRecoveriesMin, BigDecimal expectedRecoveriesMax, int unpricedCount, int dueNext7DaysCount, String financialRiskLevel, List<String> alerts, BigDecimal consumptionExpense, BigDecimal recoverableOutflow, BigDecimal principalRecovery, BigDecimal operationalBalanceExcludingRecoverables, BigDecimal netCashFlowIncludingRecoverables) {}
 
-  public record MonthlyCashFlowSummaryResponse(BigDecimal grossCashOutflow, BigDecimal consumptionExpense, BigDecimal fixedExpense, BigDecimal variableExpense, BigDecimal debtOutflow, BigDecimal savingOutflow, BigDecimal investmentOutflow, BigDecimal recoverableOutflow, BigDecimal principalRecovered, BigDecimal refundsOrReimbursements, BigDecimal earnedIncome, BigDecimal interestIncome, BigDecimal totalIncome, BigDecimal netCashFlow, BigDecimal economicNetExpense, BigDecimal internalTransfers, BigDecimal externalTransfers, BigDecimal neutralAdjustments, BigDecimal unknownOutflow, List<String> alerts, BigDecimal principalRecovery, BigDecimal operationalBalanceExcludingRecoverables, BigDecimal netCashFlowIncludingRecoverables) {}
-  public record DashboardSummaryResponse(MonthlyBalanceResponse monthlyBalance, FiftyThirtyTwentyResponse fiftyThirtyTwenty, BigDecimal fixedExpenses, BigDecimal variableExpenses, String financialHealth, List<CategorySummaryResponse> categoryBreakdown,BudgetSummaryResponse budgetSummary, PlanningDashboardSummaryResponse planningSummary, DashboardOperationalSummaryResponse operationalSummary, MonthlyCashFlowSummaryResponse monthlyCashFlowSummary) {}
+import com.hogaria.entity.Category;
+import java.math.BigDecimal;
+import java.util.List;
+import java.util.UUID;
+
+public class DashboardDtos {
+  public record CategorySummaryResponse(
+      UUID categoryId,
+      String categoryName,
+      Category.Type categoryType,
+      BigDecimal totalAmount,
+      BigDecimal percentOfIncome,
+      long movementCount) {}
+
+  public record FiftyThirtyTwentyResponse(
+      BigDecimal fixedPercent, BigDecimal variablePercent, BigDecimal savingPercent) {}
+
+  public record MonthlyBalanceResponse(
+      BigDecimal totalIncome, BigDecimal totalExpenses, BigDecimal savings, BigDecimal balance) {}
+
+  public record BudgetSummaryResponse(
+      BigDecimal totalBudget,
+      BigDecimal totalReal,
+      BigDecimal totalDifference,
+      long exceededCount,
+      long warningCount) {}
+
+  public record PlanningDashboardSummaryResponse(
+      BigDecimal totalIncomeMin,
+      BigDecimal totalIncomeMax,
+      BigDecimal totalExpenseMin,
+      BigDecimal totalExpenseMax,
+      BigDecimal totalRecoveryMin,
+      BigDecimal totalRecoveryMax,
+      BigDecimal projectedNetMin,
+      BigDecimal projectedNetMax,
+      BigDecimal pendingIncome,
+      BigDecimal pendingExpense,
+      int unpricedCount,
+      int dueNext7DaysCount,
+      int plannedItemsCount,
+      int cancelledItemsCount,
+      int convertedItemsCount) {}
+
+  public record RealConfirmedSummaryResponse(
+      BigDecimal confirmedIncome,
+      BigDecimal confirmedExpenses,
+      BigDecimal confirmedSavings,
+      BigDecimal operationalBalance,
+      long confirmedCount,
+      long pendingCount,
+      long ignoredCount,
+      long withoutCategoryCount,
+      long reviewCount,
+      long technicalCount,
+      long transferCount,
+      long adjustmentCount,
+      long nonOperationalCount,
+      BigDecimal ignoredAmount,
+      BigDecimal transfersAmount,
+      BigDecimal adjustmentsAmount,
+      BigDecimal technicalAmount,
+      BigDecimal nonOperationalAmount) {}
+
+  public record CategoryDeviationResponse(
+      UUID categoryId,
+      String categoryName,
+      Category.Type categoryType,
+      BigDecimal plannedAmount,
+      BigDecimal realConfirmedAmount,
+      BigDecimal pendingPlannedAmount,
+      BigDecimal realUnplannedAmount,
+      BigDecimal difference,
+      BigDecimal executedPercent,
+      String status,
+      long plannedCount,
+      long realCount) {}
+
+  public record RealVsPlannedResponse(
+      BigDecimal totalPlanned,
+      BigDecimal totalRealConfirmed,
+      BigDecimal totalDifference,
+      BigDecimal totalExecutedPercent,
+      BigDecimal pendingPlannedAmount,
+      BigDecimal realUnplannedAmount,
+      String status,
+      List<CategoryDeviationResponse> categories) {}
+
+  public record ClosingProjectionResponse(
+      BigDecimal realAccumulated,
+      BigDecimal pendingPlannedNet,
+      BigDecimal estimatedClosing,
+      BigDecimal plannedNet,
+      BigDecimal estimatedDifferenceVsPlan) {}
+
+  public record DashboardAlertResponse(String title, String message, String riskLevel) {}
+
+  public record DashboardOperationalSummaryResponse(
+      BigDecimal confirmedIncome,
+      BigDecimal confirmedExpenses,
+      BigDecimal confirmedSavings,
+      BigDecimal confirmedBalance,
+      BigDecimal projectedNetMin,
+      BigDecimal projectedNetMax,
+      BigDecimal deltaProjectedMinVsConfirmed,
+      BigDecimal deltaProjectedMaxVsConfirmed,
+      BigDecimal pendingIncome,
+      BigDecimal pendingExpense,
+      BigDecimal expectedRecoveriesMin,
+      BigDecimal expectedRecoveriesMax,
+      int unpricedCount,
+      int dueNext7DaysCount,
+      String financialRiskLevel,
+      List<String> alerts,
+      BigDecimal consumptionExpense,
+      BigDecimal recoverableOutflow,
+      BigDecimal principalRecovery,
+      BigDecimal operationalBalanceExcludingRecoverables,
+      BigDecimal netCashFlowIncludingRecoverables) {}
+
+  public record MonthlyCashFlowSummaryResponse(
+      BigDecimal grossCashOutflow,
+      BigDecimal consumptionExpense,
+      BigDecimal fixedExpense,
+      BigDecimal variableExpense,
+      BigDecimal debtOutflow,
+      BigDecimal savingOutflow,
+      BigDecimal investmentOutflow,
+      BigDecimal recoverableOutflow,
+      BigDecimal principalRecovered,
+      BigDecimal refundsOrReimbursements,
+      BigDecimal earnedIncome,
+      BigDecimal interestIncome,
+      BigDecimal totalIncome,
+      BigDecimal netCashFlow,
+      BigDecimal economicNetExpense,
+      BigDecimal internalTransfers,
+      BigDecimal externalTransfers,
+      BigDecimal neutralAdjustments,
+      BigDecimal unknownOutflow,
+      List<String> alerts,
+      BigDecimal principalRecovery,
+      BigDecimal operationalBalanceExcludingRecoverables,
+      BigDecimal netCashFlowIncludingRecoverables) {}
+
+  public record DashboardSummaryResponse(
+      MonthlyBalanceResponse monthlyBalance,
+      FiftyThirtyTwentyResponse fiftyThirtyTwenty,
+      BigDecimal fixedExpenses,
+      BigDecimal variableExpenses,
+      String financialHealth,
+      List<CategorySummaryResponse> categoryBreakdown,
+      BudgetSummaryResponse budgetSummary,
+      PlanningDashboardSummaryResponse planningSummary,
+      DashboardOperationalSummaryResponse operationalSummary,
+      MonthlyCashFlowSummaryResponse monthlyCashFlowSummary,
+      RealConfirmedSummaryResponse realConfirmedSummary,
+      RealVsPlannedResponse realVsPlanned,
+      ClosingProjectionResponse closingProjection,
+      List<CategoryDeviationResponse> categoryDeviations,
+      List<DashboardAlertResponse> alerts) {}
 }

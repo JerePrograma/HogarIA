@@ -5,6 +5,7 @@ import {
   labelOrValue,
 } from "../../../domain/financeLabels";
 import { formatMoney, formatPercent } from "../../../domain/formatters";
+import { sortBudgetComparisonsByRisk } from "../../../domain/sorting";
 import type { BudgetComparisonItem, CategoryType } from "../../../domain/types";
 import { getBudgetComparisonStatusTone } from "../budgetRules";
 
@@ -12,23 +13,8 @@ type Props = {
   items: BudgetComparisonItem[];
 };
 
-const statusPriority: Record<string, number> = {
-  EXCEEDED: 1,
-  WARNING: 2,
-  OK: 3,
-};
-
 export function BudgetComparisonTable({ items }: Props) {
-  const sortedItems = [...items].sort((a, b) => {
-    const statusA = statusPriority[a.status] ?? 99;
-    const statusB = statusPriority[b.status] ?? 99;
-
-    if (statusA !== statusB) {
-      return statusA - statusB;
-    }
-
-    return Math.abs(b.difference ?? 0) - Math.abs(a.difference ?? 0);
-  });
+  const sortedItems = sortBudgetComparisonsByRisk(items);
 
   return (
     <div className="tabla-ui">

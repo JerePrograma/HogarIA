@@ -26,9 +26,15 @@ const metricTone: Record<FinancialRiskLevel, 'success' | 'warning' | 'danger'> =
 
 type Props = {
   summary: NonNullable<DashboardSummary['operationalSummary']>;
+  realSummary?: DashboardSummary['realConfirmedSummary'];
 };
 
-export function OperationalSummaryCards({ summary }: Props) {
+export function OperationalSummaryCards({ summary, realSummary }: Props) {
+  const result = realSummary?.operationalBalance ?? summary.confirmedBalance;
+  const income = realSummary?.confirmedIncome ?? summary.confirmedIncome;
+  const expenses = realSummary?.confirmedExpenses ?? summary.confirmedExpenses;
+  const savings = realSummary?.confirmedSavings ?? summary.confirmedSavings;
+
   return (
     <section>
       <div className="section-title">
@@ -45,11 +51,32 @@ export function OperationalSummaryCards({ summary }: Props) {
 
       <div className="metric-grid">
         <MetricCard
-          title="Neto proyectado"
-          value={`${formatMoney(summary.projectedNetMin)} – ${formatMoney(summary.projectedNetMax)}`}
-          helper="Rango esperado al cierre del mes."
+          title="Resultado operativo real"
+          value={formatMoney(result)}
+          helper="Movimientos confirmados, sin ignorados, técnicos, transferencias ni ajustes no operativos."
           primary
-          tone={summary.projectedNetMin >= 0 ? 'success' : 'danger'}
+          tone={result >= 0 ? 'success' : 'danger'}
+        />
+
+        <MetricCard
+          title="Ingresos reales"
+          value={formatMoney(income)}
+          helper="Ingresos operativos confirmados."
+          tone="success"
+        />
+
+        <MetricCard
+          title="Gastos reales"
+          value={formatMoney(expenses)}
+          helper="Egresos operativos confirmados."
+          tone="danger"
+        />
+
+        <MetricCard
+          title="Ahorro real"
+          value={formatMoney(savings)}
+          helper="Ahorro confirmado separado del gasto."
+          tone="info"
         />
 
         <MetricCard

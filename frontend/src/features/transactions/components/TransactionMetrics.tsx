@@ -10,30 +10,30 @@ export function TransactionMetrics({ totals }: Props) {
   return (
     <section className="metric-grid">
       <MetricCard
-        title="Ingresos"
+        title="Ingresos confirmados"
         value={formatMoney(totals.income)}
-        helper="Entradas operativas no ignoradas del período."
+        helper="Entradas operativas confirmadas del período."
         tone="success"
       />
 
       <MetricCard
-        title="Gastos"
+        title="Gastos confirmados"
         value={formatMoney(totals.expenses)}
-        helper="Egresos operativos registrados para el mes."
+        helper="Egresos operativos confirmados para el mes."
         tone="danger"
       />
 
       <MetricCard
-        title="Ahorro"
+        title="Ahorro confirmado"
         value={formatMoney(totals.saving)}
-        helper="Movimientos destinados a ahorro."
+        helper="Movimientos confirmados destinados a ahorro."
         tone="info"
       />
 
       <MetricCard
         title="Balance operativo"
         value={formatMoney(totals.operationalBalance)}
-        helper="Ingresos menos gastos y ahorro, excluyendo técnicos/transferencias."
+        helper="Ingresos menos gastos y ahorro, sólo con movimientos confirmados."
         tone={totals.operationalBalance >= 0 ? "success" : "danger"}
       />
     </section>

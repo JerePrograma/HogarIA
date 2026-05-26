@@ -13,6 +13,10 @@ import { EmptyState } from '../../components/ui/EmptyState';
 import { ErrorState } from '../../components/ui/ErrorState';
 import { MetricCard } from '../../components/ui/MetricCard';
 import { StatusBadge } from '../../components/ui/StatusBadge';
+import { labelOrValue, profileTypeLabels } from '../../domain/financeLabels';
+import { profileTypeOptions } from '../../domain/financeOptions';
+import { queryKeys } from '../../domain/queryKeys';
+import { sortByNameDesc } from '../../domain/sorting';
 import type { Profile, ProfileType } from '../../domain/types';
 
 type ProfileForm = {
@@ -21,18 +25,6 @@ type ProfileForm = {
   baseCurrency: string;
   activeYear: number;
 };
-
-const profileTypeLabels: Record<ProfileType, string> = {
-  PERSONAL: 'Personal',
-  FAMILY: 'Familiar',
-  BUSINESS: 'Negocio',
-};
-
-const profileTypeOptions: Array<{ value: ProfileType; label: string }> = [
-  { value: 'PERSONAL', label: 'Personal' },
-  { value: 'FAMILY', label: 'Familiar' },
-  { value: 'BUSINESS', label: 'Negocio' },
-];
 
 const createInitialForm = (): ProfileForm => ({
   name: '',
@@ -48,11 +40,11 @@ export function ProfilesPage() {
   const [form, setForm] = useState<ProfileForm>(createInitialForm);
 
   const profilesQuery = useQuery<Profile[]>({
-    queryKey: ['profiles'],
+    queryKey: queryKeys.profiles,
     queryFn: listProfiles,
   });
 
-  const profiles = profilesQuery.data ?? [];
+  const profiles = sortByNameDesc(profilesQuery.data ?? []);
   const activeProfiles = profiles.filter((profile) => profile.active);
   const inactiveProfiles = profiles.filter((profile) => !profile.active);
 
@@ -64,7 +56,7 @@ export function ProfilesPage() {
         baseCurrency: form.baseCurrency.trim().toUpperCase() || 'ARS',
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['profiles'] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.profiles });
       setForm((current) => ({ ...current, name: '' }));
     },
   });
@@ -77,12 +69,12 @@ export function ProfilesPage() {
       id: string;
       payload: Parameters<typeof updateProfile>[1];
     }) => updateProfile(id, payload),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['profiles'] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.profiles }),
   });
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => deleteProfile(id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['profiles'] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.profiles }),
   });
 
   const canCreate =
@@ -282,7 +274,7 @@ export function ProfilesPage() {
                         <p className="compact-muted">ID: {profile.id.slice(0, 8)}</p>
                       </td>
 
-                      <td>{profileTypeLabels[profile.type] ?? profile.type}</td>
+                      <td>{labelOrValue(profileTypeLabels, profile.type)}</td>
                       <td>{profile.baseCurrency}</td>
                       <td>{profile.activeYear}</td>
 

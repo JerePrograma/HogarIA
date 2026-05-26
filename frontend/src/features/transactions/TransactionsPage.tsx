@@ -11,6 +11,7 @@ import { useTransactionFilters } from "./hooks/useTransactionFilters";
 import { useTransactionMutations } from "./hooks/useTransactionMutations";
 import { TransactionHero } from "./components/TransactionHero";
 import { TransactionMetrics } from "./components/TransactionMetrics";
+import { RealConfirmedPanel } from "./components/RealConfirmedPanel";
 import { TransactionSetupWarnings } from "./components/TransactionSetupWarnings";
 import { TransactionQuickForm } from "./components/TransactionQuickForm";
 import { TransactionSideSummary } from "./components/TransactionSideSummary";
@@ -161,6 +162,8 @@ export function TransactionsPage() {
           onShiftPeriod={onShiftPeriod}
           onCurrentPeriod={onCurrentPeriod}
         />
+
+        <RealConfirmedPanel totals={totals} />
 
         <TransactionMetrics totals={totals} />
 

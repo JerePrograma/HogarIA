@@ -24,7 +24,7 @@ export function TransactionSideSummary({
         </div>
 
         <div>
-          <span>Resultado filtrado</span>
+          <span>Resultado real filtrado</span>
           <strong>{formatMoney(filteredTotal)}</strong>
         </div>
 
@@ -34,19 +34,19 @@ export function TransactionSideSummary({
         </div>
 
         <div>
-          <span>Transferencias</span>
+          <span>Transferencias confirmadas</span>
           <strong>{formatMoney(totals.transfers)}</strong>
         </div>
 
         <div>
-          <span>Técnicos</span>
+          <span>Técnicos confirmados</span>
           <strong>{formatMoney(totals.technical)}</strong>
         </div>
       </div>
 
       <p className="muted">
-        El balance principal excluye técnicos, transferencias, ajustes e
-        ignorados.
+        El resultado filtrado usa sólo movimientos confirmados y excluye
+        técnicos, transferencias, ajustes e ignorados.
       </p>
     </aside>
   );

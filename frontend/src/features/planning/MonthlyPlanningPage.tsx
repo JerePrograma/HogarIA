@@ -15,6 +15,7 @@ import { MonthlyPlanningChecklist } from './components/MonthlyPlanningChecklist'
 import { MonthlyPlanningGuide } from './components/MonthlyPlanningGuide';
 import { PlanningMappingsAuditPanel } from './components/PlanningMappingsAuditPanel';
 import { PlanningWorkspaceNavigator, type PlanningWorkspaceView } from './components/PlanningWorkspaceNavigator';
+import { PlanningRealityPanel } from './components/PlanningRealityPanel';
 import { PlanningSummaryCards } from './components/PlanningSummaryCards';
 import { QuickCapturePanel } from './components/QuickCapturePanel';
 import { QuickCapturePreviewForm } from './components/QuickCapturePreviewForm';
@@ -31,7 +32,16 @@ export function MonthlyPlanningPage() {
 
   const invalidatePlanningViews = useInvalidateMonthlyViews(profileId, year, month);
 
-  const { planningQuery, summary, items, accounts, categories } = useMonthlyPlanningQueries(
+  const {
+    planningQuery,
+    summary,
+    items,
+    accounts,
+    categories,
+    realSummary,
+    realVsPlanned,
+    closingProjection,
+  } = useMonthlyPlanningQueries(
     profileId,
     year,
     month,
@@ -95,7 +105,7 @@ export function MonthlyPlanningPage() {
               </button>
 
               <Link className="boton-principal" to={`/profiles/${profileId}/dashboard`}>
-                Ver dashboard
+                Ver panel mensual
               </Link>
             </div>
           </div>
@@ -112,7 +122,17 @@ export function MonthlyPlanningPage() {
 
         {isReady ? (
           <>
-            <PlanningSummaryCards summary={summary} />
+            <PlanningSummaryCards
+              summary={summary}
+              realSummary={realSummary}
+              closingProjection={closingProjection}
+            />
+
+            <PlanningRealityPanel
+              realSummary={realSummary}
+              realVsPlanned={realVsPlanned}
+              closingProjection={closingProjection}
+            />
 
             <PlanningWorkspaceNavigator
               activeView={currentView}
@@ -126,6 +146,8 @@ export function MonthlyPlanningPage() {
                   <MonthlyPlanningChecklist
                     summary={summary}
                     items={items}
+                    realSummary={realSummary}
+                    realVsPlanned={realVsPlanned}
                     onApply={setTableFilter}
                   />
                 </div>

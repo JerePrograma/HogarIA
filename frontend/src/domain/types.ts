@@ -145,6 +145,12 @@ export type FinancialHealth = "EXCELLENT" | "HEALTHY" | "WARNING" | "CRITICAL";
 
 export type FinancialRiskLevel = "OK" | "WATCH" | "RISK" | "CRITICAL";
 
+export type FinancialExecutionStatus =
+  | "OK"
+  | "WARNING"
+  | "EXCEEDED"
+  | "CRITICAL";
+
 export interface BudgetYear {
   id: string;
   profileId: string;
@@ -270,6 +276,67 @@ export interface DashboardOperationalSummary {
   netCashFlowIncludingRecoverables: number;
 }
 
+export interface RealConfirmedSummary {
+  confirmedIncome: number;
+  confirmedExpenses: number;
+  confirmedSavings: number;
+  operationalBalance: number;
+  confirmedCount: number;
+  pendingCount: number;
+  ignoredCount: number;
+  withoutCategoryCount: number;
+  reviewCount: number;
+  technicalCount: number;
+  transferCount: number;
+  adjustmentCount: number;
+  nonOperationalCount: number;
+  ignoredAmount: number;
+  transfersAmount: number;
+  adjustmentsAmount: number;
+  technicalAmount: number;
+  nonOperationalAmount: number;
+}
+
+export interface CategoryDeviation {
+  categoryId: string | null;
+  categoryName: string;
+  categoryType: CategoryType | null;
+  plannedAmount: number;
+  realConfirmedAmount: number;
+  pendingPlannedAmount: number;
+  realUnplannedAmount: number;
+  difference: number;
+  executedPercent: number;
+  status: FinancialExecutionStatus;
+  plannedCount: number;
+  realCount: number;
+}
+
+export interface RealVsPlanned {
+  totalPlanned: number;
+  totalRealConfirmed: number;
+  totalDifference: number;
+  totalExecutedPercent: number;
+  pendingPlannedAmount: number;
+  realUnplannedAmount: number;
+  status: FinancialExecutionStatus;
+  categories: CategoryDeviation[];
+}
+
+export interface ClosingProjection {
+  realAccumulated: number;
+  pendingPlannedNet: number;
+  estimatedClosing: number;
+  plannedNet: number;
+  estimatedDifferenceVsPlan: number;
+}
+
+export interface DashboardAlert {
+  title: string;
+  message: string;
+  riskLevel: FinancialRiskLevel;
+}
+
 export interface MonthlyCashFlowSummary {
   grossCashOutflow: number;
   consumptionExpense: number;
@@ -307,6 +374,11 @@ export interface DashboardSummary {
   planningSummary: PlanningDashboardSummary | null;
   operationalSummary: DashboardOperationalSummary | null;
   monthlyCashFlowSummary: MonthlyCashFlowSummary | null;
+  realConfirmedSummary: RealConfirmedSummary | null;
+  realVsPlanned: RealVsPlanned | null;
+  closingProjection: ClosingProjection | null;
+  categoryDeviations: CategoryDeviation[];
+  alerts: DashboardAlert[];
 }
 
 // ============================================================

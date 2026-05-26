@@ -9,7 +9,12 @@ import type {
   Category,
   MoneyTransaction,
 } from "../../../domain/types";
-import { getDefaultClassificationStatus } from "../../../domain/transactionRules";
+import { sortTransactionsForLedger } from "../../../domain/sorting";
+import {
+  getDefaultClassificationStatus,
+  getSignedOperationalAmount,
+  shouldCountTransactionInOperationalBalance,
+} from "../../../domain/transactionRules";
 import { normalizeSearch } from "../utils/transactionUtils";
 import { ALL, WITHOUT_CATEGORY, type TransactionFilters } from "../types";
 
@@ -22,8 +27,7 @@ export function useTransactionFilters(
   const filteredTransactions = useMemo(() => {
     const search = normalizeSearch(filters.search);
 
-    return transactions
-      .filter((transaction) => {
+    const visibleTransactions = transactions.filter((transaction) => {
         const accountName = accountsById.get(transaction.accountId)?.name ?? "";
 
         const categoryName = transaction.categoryId
@@ -84,32 +88,22 @@ export function useTransactionFilters(
           matchesStatus &&
           matchesClassification
         );
-      })
-      .sort((a, b) => {
-        const byDate = b.realDate.localeCompare(a.realDate);
-        if (byDate !== 0) return byDate;
-
-        return (b.createdAt ?? "").localeCompare(a.createdAt ?? "");
       });
+
+    return sortTransactionsForLedger(visibleTransactions);
   }, [accountsById, categoriesById, filters, transactions]);
 
   const filteredTotal = useMemo(
     () =>
       filteredTransactions.reduce((acc, transaction) => {
-        if (transaction.status === "IGNORED") return acc;
-
-        if (transaction.movementType === "INCOME") {
-          return acc + Number(transaction.amount ?? 0);
-        }
-
         if (
-          transaction.movementType === "EXPENSE" ||
-          transaction.movementType === "SAVING"
+          transaction.status !== "CONFIRMED" ||
+          !shouldCountTransactionInOperationalBalance(transaction)
         ) {
-          return acc - Number(transaction.amount ?? 0);
+          return acc;
         }
 
-        return acc;
+        return acc + getSignedOperationalAmount(transaction);
       }, 0),
     [filteredTransactions],
   );

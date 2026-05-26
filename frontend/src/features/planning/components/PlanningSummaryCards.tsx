@@ -1,12 +1,19 @@
 import { MetricCard } from '../../../components/ui/MetricCard';
+import type { ClosingProjection, RealConfirmedSummary } from '../../../domain/financialSemantics';
 import { formatMoney } from '../../../domain/formatters';
 import type { MonthlyPlanSummary } from '../../../domain/types';
 
 type Props = {
   summary?: MonthlyPlanSummary;
+  realSummary?: RealConfirmedSummary;
+  closingProjection?: ClosingProjection;
 };
 
-export function PlanningSummaryCards({ summary }: Props) {
+export function PlanningSummaryCards({
+  summary,
+  realSummary,
+  closingProjection,
+}: Props) {
   const netMin = summary?.netMin ?? 0;
   const netMax = summary?.netMax ?? 0;
   const netTone = netMin >= 0 && netMax >= 0 ? 'success' : 'danger';
@@ -46,12 +53,30 @@ export function PlanningSummaryCards({ summary }: Props) {
         />
 
         <MetricCard
-          title="Neto proyectado"
+          title="Neto planificado"
           primary
           value={formatRange(summary?.netMin, summary?.netMax)}
-          helper="Resultado estimado del período."
+          helper="Resultado esperado antes de cruzar movimientos reales."
           tone={netTone}
         />
+
+        {realSummary ? (
+          <MetricCard
+            title="Real confirmado"
+            value={formatMoney(realSummary.operationalBalance)}
+            helper="Balance operativo desde movimientos confirmados."
+            tone={realSummary.operationalBalance >= 0 ? 'success' : 'danger'}
+          />
+        ) : null}
+
+        {closingProjection ? (
+          <MetricCard
+            title="Estimado de cierre"
+            value={formatMoney(closingProjection.estimatedClosing)}
+            helper="Real acumulado más pendientes planificados."
+            tone={closingProjection.estimatedClosing >= 0 ? 'success' : 'danger'}
+          />
+        ) : null}
       </div>
     </section>
   );

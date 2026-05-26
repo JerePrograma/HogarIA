@@ -8,6 +8,7 @@ import {
   monthlyPlanStatusLabels,
   monthlyPlanTypeLabels,
 } from '../../../domain/financeLabels';
+import { sortPlanningItemsByOperationalPriority } from '../../../domain/sorting';
 import type {
   Account,
   Category,
@@ -97,7 +98,7 @@ const typeOptions: Option[] = [
   { value: 'SAVING', label: 'Ahorros' },
   { value: 'TRANSFER', label: 'Transferencias' },
   { value: 'RECOVERY', label: 'Recuperos' },
-  { value: 'TODO', label: 'TODO' },
+  { value: 'TODO', label: 'Pendientes' },
 ];
 
 const statusOptions: Array<{ value: StatusFilterKey; label: string }> = [
@@ -180,14 +181,20 @@ export function MonthlyPlanItemsTable({
   const categoryById = useMemo(() => createLookup(categories), [categories]);
 
   const filtered = useMemo(
-    () =>
-      items
+    () => {
+      const matchingItems = items
         .filter((item) => matchesExternalFilter(item, externalFilterKey ?? filter))
         .filter((item) => matchesStatusFilter(item, statusFilter))
         .filter((item) => typeFilter === 'ALL' || item.type === typeFilter)
-        .filter((item) => matchesSearch(item, search, accountById, categoryById))
-        .sort((a, b) => sortPlanItems(a, b, sortBy)),
-    [items, filter, statusFilter, typeFilter, search, accountById, categoryById, sortBy],
+        .filter((item) => matchesSearch(item, search, accountById, categoryById));
+
+      if (sortBy === 'DATE') {
+        return sortPlanningItemsByOperationalPriority(matchingItems);
+      }
+
+      return [...matchingItems].sort((a, b) => sortPlanItems(a, b, sortBy));
+    },
+    [items, externalFilterKey, filter, statusFilter, typeFilter, search, accountById, categoryById, sortBy],
   );
 
   const visibleStats = useMemo(() => getVisibleStats(filtered), [filtered]);

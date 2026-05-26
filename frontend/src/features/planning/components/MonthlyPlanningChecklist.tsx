@@ -1,4 +1,8 @@
 import { memo, useMemo } from 'react';
+import type {
+  RealConfirmedSummary,
+  RealVsPlannedSummary,
+} from '../../../domain/financialSemantics';
 import { formatMoney } from '../../../domain/formatters';
 import type { MonthlyPlanItem, MonthlyPlanSummary } from '../../../domain/types';
 import { canConvertPlanItem } from '../planningUtils';
@@ -13,6 +17,8 @@ export type FilterKey =
 type Props = {
   summary?: MonthlyPlanSummary;
   items: MonthlyPlanItem[];
+  realSummary?: RealConfirmedSummary;
+  realVsPlanned?: RealVsPlannedSummary;
   onApply: (key: FilterKey) => void;
 };
 
@@ -55,7 +61,13 @@ type ChecklistModel = {
   primaryAction: ActionModel | null;
 };
 
-export function MonthlyPlanningChecklist({ summary, items, onApply }: Props) {
+export function MonthlyPlanningChecklist({
+  summary,
+  items,
+  realSummary,
+  realVsPlanned,
+  onApply,
+}: Props) {
   const model = useMemo(() => buildChecklistModel(summary, items), [summary, items]);
 
   return (
@@ -65,7 +77,7 @@ export function MonthlyPlanningChecklist({ summary, items, onApply }: Props) {
           <p className="eyebrow">Control operativo</p>
           <h2>Qué falta resolver</h2>
           <p className="muted">
-            Priorizá bloqueos y conversiones antes de confirmar movimientos reales.
+            Priorizá bloqueos, conversiones y desvíos contra movimientos confirmados.
           </p>
         </div>
 
@@ -109,6 +121,12 @@ export function MonthlyPlanningChecklist({ summary, items, onApply }: Props) {
 
       <div className="mpc-cash-row">
         <CashItem
+          label="Real confirmado"
+          value={formatMoney(realSummary?.operationalBalance ?? 0)}
+          tone={(realSummary?.operationalBalance ?? 0) < 0 ? 'danger' : 'success'}
+        />
+
+        <CashItem
           label="Pendiente de cobro"
           value={formatMoney(model.pendingIncome)}
           tone="info"
@@ -124,6 +142,12 @@ export function MonthlyPlanningChecklist({ summary, items, onApply }: Props) {
           label="Neto pendiente"
           value={formatMoney(model.projectedPendingNet)}
           tone={model.projectedPendingNet < 0 ? 'danger' : 'success'}
+        />
+
+        <CashItem
+          label="Real no planificado"
+          value={formatMoney(realVsPlanned?.realUnplannedAmount ?? 0)}
+          tone={(realVsPlanned?.realUnplannedAmount ?? 0) > 0 ? 'warning' : 'neutral'}
         />
       </div>
 

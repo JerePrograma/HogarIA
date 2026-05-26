@@ -7,6 +7,7 @@ import { EmptyState } from '../../components/ui/EmptyState';
 import { ErrorState } from '../../components/ui/ErrorState';
 import { MetricCard } from '../../components/ui/MetricCard';
 import { MonthSelector } from '../../components/ui/MonthSelector';
+import { financialRiskLevelLabels } from '../../domain/financeLabels';
 import { queryKeys } from '../../domain/queryKeys';
 import type { DashboardSummary } from '../../domain/types';
 import { useMonthlyPeriod } from '../../hooks/useMonthlyPeriod';
@@ -29,9 +30,13 @@ export function DashboardPage() {
   const summary = dashboardQuery.data;
   const planning = summary?.planningSummary;
   const operational = summary?.operationalSummary;
+  const realSummary = summary?.realConfirmedSummary;
+  const realVsPlanned = summary?.realVsPlanned;
+  const closingProjection = summary?.closingProjection;
+  const dashboardAlerts = summary?.alerts?.length ? summary.alerts : (operational?.alerts ?? []);
   const canRenderDashboard = Boolean(summary && planning && operational);
-  const alertCount = operational?.alerts?.length ?? 0;
-  const riskLabel = operational ? getRiskLabel(operational.financialRiskLevel) : null;
+  const alertCount = dashboardAlerts.length;
+  const riskLabel = operational ? financialRiskLevelLabels[operational.financialRiskLevel] : null;
 
   return (
     <AppLayout>
@@ -100,9 +105,9 @@ export function DashboardPage() {
             <DashboardSection
               eyebrow="Estado del mes"
               title="Resultado operativo"
-              description="Estos son los números principales del período. Si algo no cierra acá, el resto del panel pierde valor."
+              description="Lectura ejecutiva con datos reales confirmados y salud financiera del período."
             >
-              <OperationalSummaryCards summary={operational} />
+              <OperationalSummaryCards summary={operational} realSummary={realSummary} />
             </DashboardSection>
 
             <section className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
@@ -121,7 +126,7 @@ export function DashboardPage() {
                 description="Movimientos, desvíos o señales que conviene revisar."
                 compact
               >
-                <OperationalAlerts alerts={operational.alerts} />
+                <OperationalAlerts alerts={dashboardAlerts} />
               </DashboardSection>
             </section>
 
@@ -130,7 +135,13 @@ export function DashboardPage() {
               title="Planificado vs real"
               description="Comparación entre lo esperado y lo efectivamente confirmado en movimientos."
             >
-              <ConfirmedVsProjectedPanel planning={planning} operational={operational} cashFlow={summary.monthlyCashFlowSummary!} />
+              <ConfirmedVsProjectedPanel
+                planning={planning}
+                operational={operational}
+                cashFlow={summary.monthlyCashFlowSummary!}
+                realVsPlanned={realVsPlanned}
+                closingProjection={closingProjection}
+              />
             </DashboardSection>
 
             <DashboardSection
@@ -223,13 +234,3 @@ function DashboardIntroCard({
   );
 }
 
-function getRiskLabel(level: 'OK' | 'WATCH' | 'RISK' | 'CRITICAL') {
-  const labels = {
-    OK: 'Correcto',
-    WATCH: 'Atención',
-    RISK: 'Riesgo',
-    CRITICAL: 'Crítico',
-  } as const;
-
-  return labels[level];
-}

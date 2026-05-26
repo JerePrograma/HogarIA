@@ -17,25 +17,19 @@ import {
   categoryTypeLabels,
   labelOrValue,
 } from '../../domain/financeLabels';
+import {
+  categoryScopeOptions as allCategoryScopeOptions,
+  categoryTypeOptions,
+} from '../../domain/financeOptions';
 import type { Category, CategoryScope, CategoryType } from '../../domain/types';
 import { queryKeys } from '../../domain/queryKeys';
-
-const categoryTypeOptions: Array<{ value: CategoryType; label: string }> = [
-  { value: 'INCOME', label: 'Ingreso' },
-  { value: 'FIXED_EXPENSE', label: 'Gasto fijo' },
-  { value: 'VARIABLE_EXPENSE', label: 'Gasto variable' },
-  { value: 'SAVING', label: 'Ahorro' },
-  { value: 'DEBT', label: 'Deuda' },
-  { value: 'INVESTMENT', label: 'Inversión' },
-];
-
-const categoryScopeOptions: Array<{ value: Exclude<CategoryScope, 'GLOBAL'>; label: string }> = [
-  { value: 'PERSONAL', label: 'Personal' },
-  { value: 'FAMILY', label: 'Familiar' },
-  { value: 'BUSINESS', label: 'Negocio' },
-];
+import { sortByNameDesc } from '../../domain/sorting';
 
 type EditableScope = Exclude<CategoryScope, 'GLOBAL'>;
+
+const categoryScopeOptions = allCategoryScopeOptions.filter(
+  (option): option is { value: EditableScope; label: string } => option.value !== 'GLOBAL',
+);
 
 type EditForm = {
   id: string;
@@ -63,7 +57,7 @@ export function CategoriesPage() {
     enabled: Boolean(profileId),
   });
 
-  const categories = categoriesQuery.data ?? [];
+  const categories = sortByNameDesc(categoriesQuery.data ?? []);
   const activeCategories = categories.filter((category) => category.active);
   const globalCategories = categories.filter((category) => category.scope === 'GLOBAL');
 

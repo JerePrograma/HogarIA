@@ -10,6 +10,7 @@ type Props = {
 export function NextBestActionCard({ profileId, summary }: Props) {
   const planning = summary.planningSummary;
   const operational = summary.operationalSummary;
+  const alerts = summary.alerts?.length ? summary.alerts : [];
 
   if (!planning || !operational) {
     return null;
@@ -50,6 +51,13 @@ export function NextBestActionCard({ profileId, summary }: Props) {
     href = `/profiles/${profileId}/planning`;
     toneClass = 'panel';
     context = 'Confirmar cobros pendientes evita subestimar el resultado final.';
+  } else if (alerts.length > 0) {
+    title = 'Primera alerta operativa';
+    message = alerts[0].message;
+    cta = null;
+    href = null;
+    toneClass = 'panel';
+    context = 'Atendé esta alerta antes de definir nuevas decisiones del mes.';
   } else if (operational.alerts.length > 0) {
     title = 'Primera alerta operativa';
     message = operational.alerts[0];

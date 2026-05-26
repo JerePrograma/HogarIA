@@ -32,7 +32,7 @@ export function TransactionHero({
         <h1>Movimientos</h1>
         <p className="muted">
           Registrá ingresos, gastos, ahorros y ajustes. Esta información alimenta el
-          presupuesto, el dashboard y la comparación mensual.
+          presupuesto, el panel mensual y la comparación mensual.
         </p>
 
         <div className="transactions-period-summary">
@@ -41,10 +41,10 @@ export function TransactionHero({
             {transactionsCount} movimiento{transactionsCount === 1 ? '' : 's'}
           </span>
           <span className="badge badge-ok">
-            {totals.confirmedCount} confirmado(s)
+            {totals.confirmedCount} confirmado{totals.confirmedCount === 1 ? '' : 's'}
           </span>
           <span className="badge badge-warning">
-            {totals.pendingCount} pendiente(s)
+            {totals.pendingCount} pendiente{totals.pendingCount === 1 ? '' : 's'}
           </span>
           {totals.withoutCategoryCount > 0 ? (
             <span className="badge badge-warning">
@@ -53,12 +53,12 @@ export function TransactionHero({
           ) : null}
           {totals.technicalCount > 0 ? (
             <span className="badge badge-muted">
-              {totals.technicalCount} técnico(s)
+              {totals.technicalCount} técnico{totals.technicalCount === 1 ? '' : 's'}
             </span>
           ) : null}
           {totals.ignoredCount > 0 ? (
             <span className="badge badge-muted">
-              {totals.ignoredCount} ignorado(s)
+              {totals.ignoredCount} ignorado{totals.ignoredCount === 1 ? '' : 's'}
             </span>
           ) : null}
         </div>
