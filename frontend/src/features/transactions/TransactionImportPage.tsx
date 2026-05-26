@@ -96,6 +96,34 @@ function buildCommitPayload(
   };
 }
 
+function isCategoryCompatibleWithImportedMovement(
+  row: TransactionImportRow,
+  categoriesById: Map<string, { type: string }>,
+): boolean {
+  if (!row.suggestedCategoryId) return true;
+
+  const category = categoriesById.get(row.suggestedCategoryId);
+  if (!category) return true;
+
+  if (row.movementType === "INCOME") {
+    return category.type === "INCOME";
+  }
+
+  if (row.movementType === "SAVING") {
+    return category.type === "SAVING" || category.type === "INVESTMENT";
+  }
+
+  if (row.movementType === "EXPENSE") {
+    return (
+      category.type === "FIXED_EXPENSE" ||
+      category.type === "VARIABLE_EXPENSE" ||
+      category.type === "DEBT"
+    );
+  }
+
+  return true;
+}
+
 export function TransactionImportPage() {
   const { profileId = "" } = useParams();
   const qc = useQueryClient();
@@ -173,9 +201,13 @@ export function TransactionImportPage() {
     onSuccess: async () => {
       await Promise.all([
         qc.invalidateQueries({ queryKey: queryKeys.transactions(profileId) }),
-        qc.invalidateQueries({ queryKey: queryKeys.categories(profileId, true) }),
+        qc.invalidateQueries({
+          queryKey: queryKeys.categories(profileId, true),
+        }),
         qc.invalidateQueries({ queryKey: queryKeys.dashboard(profileId) }),
-        qc.invalidateQueries({ queryKey: queryKeys.budgetComparison(profileId) }),
+        qc.invalidateQueries({
+          queryKey: queryKeys.budgetComparison(profileId),
+        }),
       ]);
     },
   });
@@ -228,7 +260,14 @@ export function TransactionImportPage() {
 
   const invalidRows = rowCounters.ERROR ?? 0;
   const ignoredRows = rowCounters.SKIPPED ?? 0;
-  const duplicateRows = (rowCounters.DUPLICATE ?? 0) + (rowCounters.DUPLICATE_EXACT ?? 0) + (rowCounters.POSSIBLE_INTERNAL_TRANSFER ?? 0) + (rowCounters.INTERNAL_TRANSFER_MATCHED ?? 0) + (rowCounters.POSSIBLE_CROSS_SOURCE_DUPLICATE ?? 0) || preview?.duplicateRows || 0;
+  const duplicateRows =
+    (rowCounters.DUPLICATE ?? 0) +
+      (rowCounters.DUPLICATE_EXACT ?? 0) +
+      (rowCounters.POSSIBLE_INTERNAL_TRANSFER ?? 0) +
+      (rowCounters.INTERNAL_TRANSFER_MATCHED ?? 0) +
+      (rowCounters.POSSIBLE_CROSS_SOURCE_DUPLICATE ?? 0) ||
+    preview?.duplicateRows ||
+    0;
   const needsCategoryRows = rowCounters.NEEDS_CATEGORY ?? 0;
 
   const duplicateSuggestionGroups = useMemo(() => {
@@ -279,6 +318,16 @@ export function TransactionImportPage() {
     });
   }, [categoriesById, filters, rows]);
 
+  const incompatibleRows = useMemo(
+    () =>
+      rows.filter(
+        (row) =>
+          (row.status === "READY" || row.status === "NEEDS_CATEGORY") &&
+          !isCategoryCompatibleWithImportedMovement(row, categoriesById),
+      ).length,
+    [categoriesById, rows],
+  );
+
   const activeFilterCount = [
     filters.search,
     filters.status !== ALL,
@@ -291,6 +340,7 @@ export function TransactionImportPage() {
     preview?.batchId &&
     importableRows > 0 &&
     unresolvedRows === 0 &&
+    incompatibleRows === 0 &&
     !commitMutation.isPending,
   );
 
@@ -341,7 +391,8 @@ export function TransactionImportPage() {
     });
   };
 
-  const hasBlockingIssues = unresolvedRows > 0 || invalidRows > 0;
+  const hasBlockingIssues =
+    unresolvedRows > 0 || invalidRows > 0 || incompatibleRows > 0;
   const hasPreviewRows = rows.length > 0;
 
   return (
@@ -583,7 +634,18 @@ export function TransactionImportPage() {
                               : ""
                           }` +
                           `${first.suggestedCategoryName ? `&suggestedCategoryName=${encodeURIComponent(first.suggestedCategoryName)}` : ""}` +
-                          `${(() => { const ids=[...new Set(group.list.map((r)=>r.matchedTransactionId).filter(Boolean))]; return ids.length?`&transactionIds=${ids.join(",")}`:""; })()}`;
+                          `${(() => {
+                            const ids = [
+                              ...new Set(
+                                group.list
+                                  .map((r) => r.matchedTransactionId)
+                                  .filter(Boolean),
+                              ),
+                            ];
+                            return ids.length
+                              ? `&transactionIds=${ids.join(",")}`
+                              : "";
+                          })()}`;
 
                         return (
                           <article

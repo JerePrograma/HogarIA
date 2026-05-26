@@ -2,6 +2,8 @@ import { http } from "./http";
 import type {
   MoneyTransaction,
   MovementType,
+  PaymentChannel,
+  TransactionClassificationStatus,
   TransactionOrigin,
   TransactionStatus,
 } from "../domain/types";
@@ -18,6 +20,16 @@ export interface TransactionCreatePayload {
   description?: string | null;
   origin?: TransactionOrigin;
   status?: TransactionStatus;
+
+  source?: string | null;
+  sourceOperationId?: string | null;
+  sourceHash?: string | null;
+  paymentChannel?: PaymentChannel | null;
+  counterparty?: string | null;
+  classificationStatus?: TransactionClassificationStatus | null;
+  classificationReason?: string | null;
+  importBatchId?: string | null;
+  internalTransferGroupId?: string | null;
 }
 
 export type TransactionUpdatePayload = Partial<

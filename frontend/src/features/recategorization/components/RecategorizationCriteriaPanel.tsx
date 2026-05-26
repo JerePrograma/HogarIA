@@ -449,6 +449,9 @@ export function RecategorizationCriteriaPanel({
             <option value="MARK_IGNORED">Marcar ignorado</option>
             <option value="ADJUST_RECOVERABLE">Ajuste recuperable</option>
             <option value="CONFIRM_EXPENSE">Mantener como gasto</option>
+            <option value="CONFIRM_RECOVERY_INCOME">
+              Confirmar recupero como ingreso
+            </option>
           </select>
         </label>
 

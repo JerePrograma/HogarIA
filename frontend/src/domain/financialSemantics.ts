@@ -180,18 +180,26 @@ export function buildRealVsPlannedSummary(
   categories: Category[] = [],
 ): RealVsPlannedSummary {
   const categoryById = new Map(categories.map((category) => [category.id, category]));
+
+  const comparablePlanningItems = planningItems.filter((item) =>
+    shouldUsePlanItemForExecutionComparison(item),
+  );
+
   const convertedTransactionIds = new Set(
-    planningItems
+    comparablePlanningItems
       .map((item) => item.transactionId)
       .filter((id): id is string => Boolean(id)),
   );
 
   const rows = new Map<string, PlanExecutionCategorySummary>();
 
-  for (const item of planningItems) {
-    if (!shouldUsePlanItemForFinancialProjection(item)) continue;
+  for (const item of comparablePlanningItems) {
+    const row = getOrCreateCategoryRow(
+      rows,
+      item.categoryId ?? null,
+      categoryById,
+    );
 
-    const row = getOrCreateCategoryRow(rows, item.categoryId ?? null, categoryById);
     const amount = getPlannedComparableAmount(item);
 
     row.plannedAmount += amount;
@@ -203,10 +211,7 @@ export function buildRealVsPlannedSummary(
   }
 
   for (const transaction of transactions) {
-    if (
-      transaction.status !== "CONFIRMED" ||
-      !shouldCountTransactionInOperationalBalance(transaction)
-    ) {
+    if (!shouldUseTransactionForExecutionComparison(transaction)) {
       continue;
     }
 
@@ -215,6 +220,7 @@ export function buildRealVsPlannedSummary(
       transaction.categoryId ?? null,
       categoryById,
     );
+
     const amount = toFiniteNumber(transaction.amount);
 
     row.realConfirmedAmount += amount;
@@ -228,7 +234,10 @@ export function buildRealVsPlannedSummary(
   const categoriesSummary = [...rows.values()]
     .map((row) => finalizeCategoryRow(row))
     .sort((a, b) => {
-      const byStatus = getExecutionStatusPriority(a.status) - getExecutionStatusPriority(b.status);
+      const byStatus =
+        getExecutionStatusPriority(a.status) -
+        getExecutionStatusPriority(b.status);
+
       if (byStatus !== 0) return byStatus;
 
       const byDifference = Math.abs(b.difference) - Math.abs(a.difference);
@@ -239,17 +248,24 @@ export function buildRealVsPlannedSummary(
       });
     });
 
-  const totalPlanned = sumValues(categoriesSummary.map((item) => item.plannedAmount));
+  const totalPlanned = sumValues(
+    categoriesSummary.map((item) => item.plannedAmount),
+  );
+
   const totalRealConfirmed = sumValues(
     categoriesSummary.map((item) => item.realConfirmedAmount),
   );
+
   const pendingPlannedAmount = sumValues(
     categoriesSummary.map((item) => item.pendingPlannedAmount),
   );
+
   const realUnplannedAmount = sumValues(
     categoriesSummary.map((item) => item.realUnplannedAmount),
   );
+
   const totalDifference = totalRealConfirmed - totalPlanned;
+
   const totalExecutedPercent =
     totalPlanned > 0 ? (totalRealConfirmed * 100) / totalPlanned : 0;
 
@@ -471,4 +487,31 @@ function formatPlainAmount(value: number): string {
     currency: "ARS",
     maximumFractionDigits: 0,
   }).format(value);
+}
+
+function shouldUsePlanItemForExecutionComparison(
+  item: MonthlyPlanItem,
+): boolean {
+  if (!shouldUsePlanItemForFinancialProjection(item)) return false;
+
+  return isOutflowPlanItemType(item.type);
+}
+
+function shouldUseTransactionForExecutionComparison(
+  transaction: MoneyTransaction,
+): boolean {
+  if (transaction.status !== "CONFIRMED") return false;
+  if (!shouldCountTransactionInOperationalBalance(transaction)) return false;
+
+  return isOutflowMovementType(transaction.movementType);
+}
+
+function isOutflowPlanItemType(type: MonthlyPlanItemType): boolean {
+  return type === "EXPENSE" || type === "SAVING" || type === "DEBT";
+}
+
+function isOutflowMovementType(
+  movementType: MoneyTransaction["movementType"],
+): boolean {
+  return movementType === "EXPENSE" || movementType === "SAVING";
 }

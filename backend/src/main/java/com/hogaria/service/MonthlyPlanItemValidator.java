@@ -104,14 +104,7 @@ class MonthlyPlanItemValidator {
 
         item.setCurrency(item.getCurrency().trim().toUpperCase(Locale.ROOT));
 
-        if (item.getExpectedDate() != null) {
-            YearMonth expectedPeriod = YearMonth.from(item.getExpectedDate());
-            YearMonth itemPeriod = YearMonth.of(item.getPeriodYear(), item.getPeriodMonth());
-
-            if (!expectedPeriod.equals(itemPeriod)) {
-                throw new BadRequestException("Fecha esperada fuera del período");
-            }
-        }
+        validateExpectedDateNearOperationalPeriod(item);
     }
 
     void validateReferences(
@@ -142,6 +135,22 @@ class MonthlyPlanItemValidator {
 
         if (rejectTechnicalCategory && Boolean.TRUE.equals(category.getTechnical())) {
             throw new BadRequestException("Categoría técnica no permitida");
+        }
+    }
+
+    private void validateExpectedDateNearOperationalPeriod(MonthlyPlanItem item) {
+        if (item.getExpectedDate() == null) {
+            return;
+        }
+
+        YearMonth expectedPeriod = YearMonth.from(item.getExpectedDate());
+        YearMonth itemPeriod = YearMonth.of(item.getPeriodYear(), item.getPeriodMonth());
+
+        YearMonth minAllowedPeriod = itemPeriod.minusMonths(1);
+        YearMonth maxAllowedPeriod = itemPeriod.plusMonths(1);
+
+        if (expectedPeriod.isBefore(minAllowedPeriod) || expectedPeriod.isAfter(maxAllowedPeriod)) {
+            throw new BadRequestException("Fecha esperada demasiado alejada del período");
         }
     }
 }

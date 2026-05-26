@@ -12,7 +12,7 @@ import { getApiErrorMessage } from "../../api/http";
 import { AppLayout } from "../../components/layout/AppLayout";
 import { ErrorState } from "../../components/ui/ErrorState";
 import { queryKeys } from "../../domain/queryKeys";
-import type { CategoryType } from "../../domain/types";
+import type { Category, CategoryType, MovementType } from "../../domain/types";
 import { RecategorizationCriteriaPanel } from "./components/RecategorizationCriteriaPanel";
 import { RecategorizationHero } from "./components/RecategorizationHero";
 import { RecategorizationPreviewPanel } from "./components/RecategorizationPreviewPanel";
@@ -144,6 +144,21 @@ export function TransactionRecategorizationPage() {
 
   const isAutoTargetMode = form.targetMode === "AUTO_BY_IMPORT_RULES";
 
+  const inferredTargetMovementType = inferMovementTypeFromCategory(
+    selectedTargetCategory,
+  );
+
+  const effectiveTargetMovementType =
+    form.targetMovementType ?? inferredTargetMovementType;
+
+  const effectiveTargetClassificationStatus =
+    form.targetClassificationStatus ??
+    (selectedTargetCategory ? "CLASSIFIED" : null);
+
+  const effectiveTargetClassificationReason =
+    form.targetClassificationReason ??
+    buildClassificationReasonForManualRecategorization(selectedTargetCategory);
+
   const previewMutation = useMutation({
     mutationFn: () => previewBulkRecategorize(profileId, form),
     onSuccess: () => {
@@ -210,13 +225,27 @@ export function TransactionRecategorizationPage() {
     mutationFn: () =>
       applyBulkRecategorize(profileId, {
         targetMode: form.targetMode ?? "MANUAL",
+
         toCategoryId: isAutoTargetMode ? null : form.toCategoryId,
-        targetMovementType: form.targetMovementType,
+
+        targetMovementType: isAutoTargetMode
+          ? form.targetMovementType
+          : effectiveTargetMovementType,
+
         targetStatus: form.targetStatus,
-        targetClassificationStatus: form.targetClassificationStatus,
-        targetClassificationReason: form.targetClassificationReason,
+
+        targetClassificationStatus: isAutoTargetMode
+          ? form.targetClassificationStatus
+          : effectiveTargetClassificationStatus,
+
+        targetClassificationReason: isAutoTargetMode
+          ? form.targetClassificationReason
+          : effectiveTargetClassificationReason,
+
         transactionIds: isAutoTargetMode ? [] : readyIds,
+
         forceAmbiguous: false,
+
         updates: isAutoTargetMode
           ? readyCandidates
               .filter((candidate) => candidate.targetCategoryId)
@@ -288,8 +317,16 @@ export function TransactionRecategorizationPage() {
     form.targetClassificationReason,
   );
 
+  const hasValidManualTarget = Boolean(
+    form.toCategoryId ||
+    effectiveTargetMovementType ||
+    form.targetStatus ||
+    form.targetClassificationStatus ||
+    form.targetClassificationReason,
+  );
+
   const canPreview =
-    (isAutoTargetMode || Boolean(form.toCategoryId) || hasNonCategoryTarget) &&
+    (isAutoTargetMode || hasValidManualTarget) &&
     hasAnySearchCriteria &&
     !previewMutation.isPending;
 
@@ -453,4 +490,40 @@ export function TransactionRecategorizationPage() {
       </div>
     </AppLayout>
   );
+}
+
+function inferMovementTypeFromCategory(
+  category: Category | null | undefined,
+): MovementType | null {
+  if (!category) return null;
+
+  if (category.defaultMovementType) {
+    return category.defaultMovementType;
+  }
+
+  if (category.type === "INCOME") {
+    return "INCOME";
+  }
+
+  if (category.type === "SAVING" || category.type === "INVESTMENT") {
+    return "SAVING";
+  }
+
+  if (
+    category.type === "FIXED_EXPENSE" ||
+    category.type === "VARIABLE_EXPENSE" ||
+    category.type === "DEBT"
+  ) {
+    return "EXPENSE";
+  }
+
+  return null;
+}
+
+function buildClassificationReasonForManualRecategorization(
+  category: Category | null | undefined,
+): string | null {
+  if (!category) return null;
+
+  return `USER_RECATEGORIZED_TO_${category.type}`;
 }

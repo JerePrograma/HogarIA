@@ -22,7 +22,10 @@ export function PlanningRealityPanel({
   closingProjection,
 }: Props) {
   const statusRisk = getFinancialExecutionRiskLevel(realVsPlanned.status);
-
+  const comparableRealCount = realVsPlanned.categories.reduce(
+    (total, item) => total + item.realCount,
+    0,
+  );
   return (
     <section className="panel">
       <div className="section-title">
@@ -30,9 +33,10 @@ export function PlanningRealityPanel({
           <p className="eyebrow">Plan mensual + movimientos</p>
           <h2>Planificado, real, pendiente y estimado</h2>
           <p className="muted">
-            El real sale de movimientos confirmados. Lo pendiente sale de ítems
-            planificados todavía no convertidos. El estimado combina ambas
-            lecturas.
+            La comparación toma egresos, ahorros y deudas confirmadas contra el
+            plan. Ingresos, recuperos, transferencias y ajustes no se evalúan
+            como excesos. El estimado de cierre usa el balance operativo
+            completo.
           </p>
         </div>
 
@@ -51,10 +55,10 @@ export function PlanningRealityPanel({
         />
 
         <MetricCard
-          title="Real confirmado"
+          title="Egresos reales"
           value={formatMoney(realVsPlanned.totalRealConfirmed)}
-          helper={`${realSummary.confirmedCount} movimiento${realSummary.confirmedCount === 1 ? "" : "s"} confirmado${realSummary.confirmedCount === 1 ? "" : "s"}.`}
-          tone="success"
+          helper={`${comparableRealCount} egreso${comparableRealCount === 1 ? "" : "s"} comparable${comparableRealCount === 1 ? "" : "s"} contra el plan.`}
+          tone="warning"
         />
 
         <MetricCard
@@ -79,7 +83,7 @@ export function PlanningRealityPanel({
             <tr>
               <th>Categoría</th>
               <th className="amount-cell">Planificado</th>
-              <th className="amount-cell">Real confirmado</th>
+              <th className="amount-cell">Egreso real</th>
               <th className="amount-cell">Diferencia</th>
               <th>% ejecutado</th>
               <th>Pendiente</th>
@@ -97,15 +101,20 @@ export function PlanningRealityPanel({
                     <strong>{item.categoryName}</strong>
                     {item.realUnplannedAmount > 0 ? (
                       <p className="compact-muted">
-                        Real no planificado: {formatMoney(item.realUnplannedAmount)}
+                        Real no planificado:{" "}
+                        {formatMoney(item.realUnplannedAmount)}
                       </p>
                     ) : null}
                   </td>
-                  <td className="amount-cell">{formatMoney(item.plannedAmount)}</td>
+                  <td className="amount-cell">
+                    {formatMoney(item.plannedAmount)}
+                  </td>
                   <td className="amount-cell">
                     {formatMoney(item.realConfirmedAmount)}
                   </td>
-                  <td className="amount-cell">{formatMoney(item.difference)}</td>
+                  <td className="amount-cell">
+                    {formatMoney(item.difference)}
+                  </td>
                   <td>{formatPercent(item.executedPercent)}</td>
                   <td>{formatMoney(item.pendingPlannedAmount)}</td>
                   <td>

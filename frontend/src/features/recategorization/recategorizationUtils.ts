@@ -24,7 +24,8 @@ export type ReviewAction =
   | 'CONVERT_TRANSFER'
   | 'MARK_IGNORED'
   | 'ADJUST_RECOVERABLE'
-  | 'CONFIRM_EXPENSE';
+  | 'CONFIRM_EXPENSE'
+  | 'CONFIRM_RECOVERY_INCOME';
 
 export const MOVEMENT_LABELS: Record<MovementType, string> = {
   INCOME: 'Ingreso',
