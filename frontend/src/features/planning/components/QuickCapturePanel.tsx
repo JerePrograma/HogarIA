@@ -40,7 +40,7 @@ export function QuickCapturePanel({
           <p className="eyebrow">Entrada rápida</p>
           <h2>Cargar rápido</h2>
           <p className="secondary-text">
-            Escribí como lo anotarías en WhatsApp. Después podés revisar antes de guardar.
+            Escribí un solo compromiso como lo anotarías en WhatsApp. Para listas con varias líneas usá Cargar por texto.
           </p>
         </div>
       </div>

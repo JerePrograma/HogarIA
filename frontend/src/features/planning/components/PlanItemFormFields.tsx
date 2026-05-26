@@ -3,6 +3,7 @@ import {
   monthlyPlanStatusOptions,
   monthlyPlanTypeOptions,
 } from '../../../domain/financeOptions';
+import { monthLabels } from '../../../domain/financeLabels';
 import type {
   Account,
   Category,
@@ -38,6 +39,21 @@ export function PlanItemFormFields({
     setForm({
       ...form,
       [key]: toNullableNumber(value),
+    });
+  };
+
+  const setExpectedDate = (value: string) => {
+    const period = periodFromDate(value);
+
+    setForm({
+      ...form,
+      expectedDate: value || null,
+      ...(period
+        ? {
+            periodYear: period.year,
+            periodMonth: period.month,
+          }
+        : {}),
     });
   };
 
@@ -123,10 +139,44 @@ export function PlanItemFormFields({
               className="input-ui"
               type="date"
               value={form.expectedDate ?? ''}
-              onChange={(event) =>
-                setForm({ ...form, expectedDate: event.target.value || null })
-              }
+              onChange={(event) => setExpectedDate(event.target.value)}
             />
+          </label>
+
+          <label>
+            Período operativo
+            <div className="form-row">
+              <input
+                className="input-ui"
+                type="number"
+                min="2000"
+                max="2100"
+                value={form.periodYear}
+                onChange={(event) =>
+                  setForm({ ...form, periodYear: Number(event.target.value) })
+                }
+                aria-label="Año operativo"
+              />
+              <select
+                className="input-ui"
+                value={form.periodMonth}
+                onChange={(event) =>
+                  setForm({ ...form, periodMonth: Number(event.target.value) })
+                }
+                aria-label="Mes operativo"
+              >
+                {Object.entries(monthLabels).map(([month, label]) => (
+                  <option key={month} value={month}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {form.expectedDate ? (
+              <span className="compact-muted">
+                Por defecto se usa el período de la fecha esperada. Cambialo sólo si querés mantenerlo en otro período.
+              </span>
+            ) : null}
           </label>
 
           <label>
@@ -259,4 +309,15 @@ export function PlanItemFormFields({
       </section>
     </div>
   );
+}
+
+function periodFromDate(value: string): { year: number; month: number } | null {
+  const match = /^(\d{4})-(\d{2})-\d{2}$/.exec(value);
+
+  if (!match) return null;
+
+  return {
+    year: Number(match[1]),
+    month: Number(match[2]),
+  };
 }

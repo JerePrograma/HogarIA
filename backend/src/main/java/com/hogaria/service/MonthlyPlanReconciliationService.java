@@ -24,9 +24,9 @@ public class MonthlyPlanReconciliationService {
   public MonthlyPlanReconciliationSummary getSummary(UUID userId, UUID profileId, int year, int month){ ensureProfile(profileId,userId); var items=itemRepo.findByProfileIdAndPeriodYearAndPeriodMonth(profileId,year,month); var from=LocalDate.of(year,month,1); var txs=txRepo.findByProfileIdAndBudgetDateBetween(profileId,from,from.withDayOfMonth(from.lengthOfMonth()));
     var matches = findMatches(profileId, items, txs);
     var matchedTxIds = matches.stream().map(MonthlyPlanTransactionMatch::getMoneyTransactionId).collect(Collectors.toSet());
-    var unplanned = txs.stream().filter(tx->tx.getStatus()== MoneyTransaction.Status.CONFIRMED).filter(tx-> !matchedTxIds.contains(tx.getId())).toList();
+    var unplanned = txs.stream().filter(this::isOperationalUnplannedCandidate).filter(tx-> !matchedTxIds.contains(tx.getId())).toList();
     var dedupUnplanned = unplanned.stream().collect(Collectors.toMap(MoneyTransaction::getId, Function.identity(), (a,b)->a)).values();
-    var unplannedDtos=dedupUnplanned.stream().map(tx->new UnplannedTransaction(tx.getId(),tx.getBudgetDate(),tx.getDescription(),tx.getAccountId(),tx.getCategoryId(),tx.getMovementType().name(),tx.getAmount(),tx.getStatus().name())).toList();
+    var unplannedDtos=dedupUnplanned.stream().map(tx->new UnplannedTransaction(tx.getId(),tx.getRealDate(),tx.getBudgetDate(),tx.getDescription(),tx.getAccountId(),tx.getCategoryId(),tx.getMovementType().name(),tx.getAmount(),tx.getStatus().name(),tx.getClassificationStatus()==null?null:tx.getClassificationStatus().name(),operationalKind(tx))).toList();
     var unplannedTotal=dedupUnplanned.stream().map(MoneyTransaction::getAmount).reduce(BigDecimal.ZERO,BigDecimal::add);
     var suggestions = buildSuggestions(items, txs, matchedTxIds);
     var itemMap = items.stream().collect(Collectors.toMap(MonthlyPlanItem::getId, Function.identity()));
@@ -35,7 +35,7 @@ public class MonthlyPlanReconciliationService {
       var m=byItem.getOrDefault(item.getId(), List.of()); var matched = m.stream().map(MonthlyPlanTransactionMatch::getMatchedAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
       var planned = amountCalculator.plannedAmountForReconciliation(item); var remaining = planned.subtract(matched);
       var exec=remaining.signum()<=0?"MATCHED":matched.signum()>0?"PARTIAL":"PENDING";
-      return new PlanItemReconciliation(item.getId(), item.getTitle(), item.getType(), planned, matched, remaining, exec, m.stream().map(mm->new TransactionMatch(mm.getId(),mm.getMonthlyPlanItemId(),mm.getMoneyTransactionId(),mm.getMatchedAmount(),mm.getMatchType(),mm.getConfidence())).toList());
+      return new PlanItemReconciliation(item.getId(), item.getTitle(), item.getType(), item.getExpectedDate(), item.getPeriodYear(), item.getPeriodMonth(), item.getAccountId(), item.getCategoryId(), item.getStatus(), planned, matched, remaining, exec, m.stream().map(mm->new TransactionMatch(mm.getId(),mm.getMonthlyPlanItemId(),mm.getMoneyTransactionId(),mm.getMatchedAmount(),mm.getMatchType(),mm.getConfidence())).toList());
     }).toList();
     var plannedTotal=planItems.stream().map(PlanItemReconciliation::plannedAmount).reduce(BigDecimal.ZERO,BigDecimal::add);
     var matchedTotal=planItems.stream().map(PlanItemReconciliation::matchedAmount).reduce(BigDecimal.ZERO,BigDecimal::add);
@@ -50,12 +50,25 @@ public class MonthlyPlanReconciliationService {
   }
 
   private List<SuggestedPlanTransactionMatch> buildSuggestions(List<MonthlyPlanItem> items, List<MoneyTransaction> txs, Set<UUID> matchedTxIds){
-    var unmatched = txs.stream().filter(tx->tx.getStatus()==MoneyTransaction.Status.CONFIRMED).filter(tx->!matchedTxIds.contains(tx.getId())).toList();
+    var unmatched = txs.stream().filter(this::isOperationalUnplannedCandidate).filter(tx->!matchedTxIds.contains(tx.getId())).toList();
     var out = new ArrayList<SuggestedPlanTransactionMatch>();
-    for(var item: items){ if(item.getAmount()==null) continue; for(var tx: unmatched){ if(compatible(item,tx)&&item.getAmount().compareTo(tx.getAmount())==0){ out.add(new SuggestedPlanTransactionMatch(item.getId(), tx.getId(), tx.getAmount(), "HIGH", List.of("Tipo y monto coinciden"))); } } }
+    for(var item: items){ if(item.getAmount()==null) continue; for(var tx: unmatched){ if(compatible(item,tx)&&item.getAmount().compareTo(tx.getAmount())==0){ var planned=amountCalculator.plannedAmountForReconciliation(item); out.add(new SuggestedPlanTransactionMatch(item.getId(), item.getTitle(), item.getType(), item.getExpectedDate(), item.getPeriodYear(), item.getPeriodMonth(), planned, item.getAccountId(), item.getCategoryId(), tx.getId(), tx.getDescription(), tx.getRealDate(), tx.getBudgetDate(), tx.getMovementType().name(), tx.getAmount(), tx.getAccountId(), tx.getCategoryId(), tx.getAmount(), tx.getAmount().subtract(planned), "HIGH", List.of("Tipo y monto coinciden"))); } } }
     return out;
   }
   private boolean compatible(MonthlyPlanItem item, MoneyTransaction tx){ return switch (item.getType()){ case INCOME,RECOVERY -> tx.getMovementType()== MoneyTransaction.MovementType.INCOME; case EXPENSE,DEBT -> tx.getMovementType()== MoneyTransaction.MovementType.EXPENSE; case SAVING -> tx.getMovementType()== MoneyTransaction.MovementType.SAVING; default -> false;}; }
+  private boolean isOperationalUnplannedCandidate(MoneyTransaction tx){
+    if(tx.getStatus()!=MoneyTransaction.Status.CONFIRMED) return false;
+    if(tx.getClassificationStatus()==MoneyTransaction.ClassificationStatus.TECHNICAL||tx.getClassificationStatus()==MoneyTransaction.ClassificationStatus.IGNORED_BY_RULE) return false;
+    return tx.getMovementType()!=MoneyTransaction.MovementType.TRANSFER&&tx.getMovementType()!=MoneyTransaction.MovementType.ADJUSTMENT;
+  }
+  private String operationalKind(MoneyTransaction tx){
+    return switch(tx.getMovementType()){
+      case INCOME -> "INGRESO_NO_PLANIFICADO";
+      case EXPENSE -> "GASTO_NO_PLANIFICADO";
+      case SAVING -> "AHORRO_NO_PLANIFICADO";
+      default -> "EXCLUIDO";
+    };
+  }
 
   public TransactionMatch confirm(UUID userId, UUID profileId, ConfirmPlanTransactionMatchPayload p){ ensureProfile(profileId,userId);
     itemRepo.findByIdAndProfileId(p.monthlyPlanItemId(), profileId).orElseThrow(()->new ForbiddenException("Item no pertenece al perfil"));

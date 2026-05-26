@@ -30,6 +30,7 @@ const PENDING_STATUSES: MonthlyPlanStatus[] = ['DRAFT', 'ESTIMATED', 'SCHEDULED'
 const DONE_STATUSES: MonthlyPlanStatus[] = ['PAID', 'COLLECTED'];
 const MONEY_OUT_TYPES: MonthlyPlanItemType[] = ['EXPENSE', 'DEBT', 'SAVING', 'TRANSFER'];
 const MONEY_IN_TYPES: MonthlyPlanItemType[] = ['INCOME', 'RECOVERY'];
+const CONVERTIBLE_TYPES: MonthlyPlanItemType[] = ['INCOME', 'EXPENSE', 'DEBT', 'SAVING'];
 
 const priorityOrder: Record<MonthlyPlanPriority, number> = {
   ESSENTIAL: 1,
@@ -147,7 +148,7 @@ export function canConvertPlanItem(item: MonthlyPlanItem): boolean {
     hasExactAmount(item) &&
     Boolean(item.accountId) &&
     Boolean(item.categoryId) &&
-    item.type !== 'TODO' &&
+    CONVERTIBLE_TYPES.includes(item.type) &&
     !isCancelledPlanItem(item) &&
     !isConvertedPlanItem(item)
   );
@@ -187,6 +188,10 @@ export function getPlanItemMissingLabels(item: MonthlyPlanItem): string[] {
   }
 
   const labels: string[] = [];
+
+  if (!CONVERTIBLE_TYPES.includes(item.type)) {
+    labels.push('No convertible por tipo');
+  }
 
   if (isUnpricedPlanItem(item)) {
     labels.push('Sin monto');

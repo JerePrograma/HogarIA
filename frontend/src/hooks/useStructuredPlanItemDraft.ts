@@ -24,8 +24,8 @@ export function useStructuredPlanItemDraft(year: number, month: number) {
   useEffect(() => {
     setForm((current) => ({
       ...current,
-      periodYear: year,
-      periodMonth: month,
+      periodYear: current.expectedDate ? current.periodYear : year,
+      periodMonth: current.expectedDate ? current.periodMonth : month,
     }));
   }, [year, month]);
 

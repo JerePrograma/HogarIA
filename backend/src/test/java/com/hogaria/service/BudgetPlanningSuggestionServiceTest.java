@@ -43,6 +43,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -601,7 +602,7 @@ class BudgetPlanningSuggestionServiceTest {
     }
 
     @Test
-    void commitPlanificacionRechazaFechaEsperadaFueraDelPeriodo() {
+    void commitPlanificacionDerivaPeriodoDesdeFechaEsperada() {
         UUID categoryId = addCategory("Alquiler", Category.Type.FIXED_EXPENSE);
         var request = commitPlan(new ApplyMonthlyPlanSuggestion(
                 "Alquiler",
@@ -624,9 +625,12 @@ class BudgetPlanningSuggestionServiceTest {
 
         var response = service.commit(userId, profileId, request);
 
-        assertEquals(0, response.createdMonthlyPlanItems());
-        assertFalse(response.errors().isEmpty());
-        verify(monthlyPlanItemRepository, never()).save(any());
+        assertEquals(1, response.createdMonthlyPlanItems());
+        assertTrue(response.errors().isEmpty());
+        var captor = ArgumentCaptor.forClass(MonthlyPlanItem.class);
+        verify(monthlyPlanItemRepository).save(captor.capture());
+        assertEquals(2026, captor.getValue().getPeriodYear());
+        assertEquals(7, captor.getValue().getPeriodMonth());
     }
 
     @Test

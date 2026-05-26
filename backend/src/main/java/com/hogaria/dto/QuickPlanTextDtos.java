@@ -4,6 +4,7 @@ import com.hogaria.dto.MonthlyPlanDtos.MonthlyPlanItemResponse;
 import com.hogaria.entity.MonthlyPlanItem;
 import jakarta.validation.constraints.*;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
@@ -23,6 +24,9 @@ public class QuickPlanTextDtos {
       String title,
       MonthlyPlanItem.Type type,
       MonthlyPlanItem.Priority priority,
+      LocalDate expectedDate,
+      @Min(2000) @Max(2100) Integer periodYear,
+      @Min(1) @Max(12) Integer periodMonth,
       BigDecimal amount,
       BigDecimal minAmount,
       BigDecimal maxAmount,
@@ -41,8 +45,8 @@ public class QuickPlanTextDtos {
   public record QuickPlanTextPreviewResponse(List<QuickPlanTextCandidate> candidates, List<String> warnings) {}
 
   public record QuickPlanTextCommitRequest(
-      @NotNull @Min(2000) @Max(2100) Integer periodYear,
-      @NotNull @Min(1) @Max(12) Integer periodMonth,
+      @Min(2000) @Max(2100) Integer periodYear,
+      @Min(1) @Max(12) Integer periodMonth,
       @NotNull List<NormalizedCandidate> candidates,
       boolean skipDuplicates) {}
 

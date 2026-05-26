@@ -11,6 +11,7 @@ import com.hogaria.repository.CategoryRepository;
 import com.hogaria.repository.FinancialProfileRepository;
 import com.hogaria.repository.MonthlyPlanItemRepository;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
 import org.junit.jupiter.api.Test;
@@ -23,6 +24,25 @@ class QuickPlanTextServicesTest {
     assertEquals(new BigDecimal("430000.00"), p.parseLine("Seguro 430 mil", AmountScale.UNITS, null).amount());
     assertEquals(new BigDecimal("1500000.00"), p.parseLine("Viaje 1,5M", AmountScale.UNITS, null).amount());
     assertEquals(new BigDecimal("430000.00"), p.parseLine("Cochera 430k", AmountScale.UNITS, null).amount());
+  }
+
+  @Test void preview_derive_period_per_dated_line() {
+    FinancialProfileRepository profiles = mock(FinancialProfileRepository.class);
+    MonthlyPlanService monthlyPlanService = mock(MonthlyPlanService.class);
+    MonthlyPlanItemRepository repo = mock(MonthlyPlanItemRepository.class);
+    CategoryRepository categories = mock(CategoryRepository.class);
+    var service = new QuickPlanTextImportService(profiles, monthlyPlanService, repo, categories, new QuickPlanTextParserService(), new QuickPlanClassificationService());
+    UUID userId = UUID.randomUUID(), profileId = UUID.randomUUID();
+    when(profiles.findByIdAndUserId(profileId, userId)).thenReturn(Optional.of(new FinancialProfile()));
+    when(repo.findByProfileIdAndPeriodYearAndPeriodMonth(eq(profileId), anyInt(), anyInt())).thenReturn(List.of());
+
+    var res = service.preview(userId, profileId, new QuickPlanTextPreviewRequest("01/06 Hostal 100\nMegu 200", 2026, 5, AmountScale.THOUSANDS, null, "ARS"));
+
+    assertEquals(2, res.candidates().size());
+    assertEquals(LocalDate.of(2026, 6, 1), res.candidates().get(0).candidate().expectedDate());
+    assertEquals(6, res.candidates().get(0).candidate().periodMonth());
+    assertNull(res.candidates().get(1).candidate().expectedDate());
+    assertEquals(5, res.candidates().get(1).candidate().periodMonth());
   }
 
   @Test void classification_debt_health_travel() {
@@ -41,7 +61,7 @@ class QuickPlanTextServicesTest {
     UUID userId = UUID.randomUUID(), profileId = UUID.randomUUID();
     when(profiles.findByIdAndUserId(profileId, userId)).thenReturn(Optional.of(new FinancialProfile()));
     when(repo.findByProfileIdAndPeriodYearAndPeriodMonth(profileId, 2026, 5)).thenReturn(List.of());
-    var candidate = new NormalizedCandidate(1, "Hostal", MonthlyPlanItem.Type.EXPENSE, MonthlyPlanItem.Priority.IMPORTANT, new BigDecimal("100"), null, null, null, null);
+    var candidate = new NormalizedCandidate(1, "Hostal", MonthlyPlanItem.Type.EXPENSE, MonthlyPlanItem.Priority.IMPORTANT, null, 2026, 5, new BigDecimal("100"), null, null, null, null);
     when(monthlyPlanService.create(eq(userId), eq(profileId), any())).thenReturn(new MonthlyPlanItemResponse(UUID.randomUUID(), profileId, null, null, MonthlyPlanItem.Type.EXPENSE, "Hostal", null, null, 2026, 5, new BigDecimal("100"), null, null, "ARS", null, null, null, null, null, MonthlyPlanItem.Priority.IMPORTANT, MonthlyPlanItem.Status.ESTIMATED, MonthlyPlanItem.Source.QUICK_CAPTURE, null, new BigDecimal("100"), new BigDecimal("100"), BigDecimal.ZERO, BigDecimal.ZERO, new BigDecimal("100"), new BigDecimal("100"), LocalDateTime.now(), LocalDateTime.now()));
     var res = service.commit(userId, profileId, new QuickPlanTextCommitRequest(2026, 5, List.of(candidate), true));
     assertEquals(1, res.created().size());

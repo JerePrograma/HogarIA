@@ -290,6 +290,10 @@ public class BudgetPlanningSuggestionService {
                 continue;
             }
 
+            YearMonth operationalPeriod = suggestion.expectedDate() == null
+                    ? YearMonth.of(suggestion.periodYear(), suggestion.periodMonth())
+                    : YearMonth.from(suggestion.expectedDate());
+
             MonthlyPlanItem item = MonthlyPlanItem.builder()
                     .profileId(profileId)
                     .categoryId(suggestion.categoryId())
@@ -298,8 +302,8 @@ public class BudgetPlanningSuggestionService {
                     .title(suggestion.title())
                     .description(suggestion.description())
                     .expectedDate(suggestion.expectedDate())
-                    .periodYear(suggestion.periodYear())
-                    .periodMonth(suggestion.periodMonth())
+                    .periodYear(operationalPeriod.getYear())
+                    .periodMonth(operationalPeriod.getMonthValue())
                     .amount(suggestion.amount())
                     .minAmount(suggestion.minAmount())
                     .maxAmount(suggestion.maxAmount())

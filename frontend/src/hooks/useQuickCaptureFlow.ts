@@ -21,6 +21,10 @@ export function useQuickCaptureFlow({
   const [quickPreview, setQuickPreview] = useState<QuickCapturePreviewResponse | null>(null);
   const [quickForm, setQuickForm] = useState<MonthlyPlanItemCreatePayload | null>(null);
   const [quickError, setQuickError] = useState('');
+  const hasMultipleLines = quickText
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean).length > 1;
 
   const clearPreview = () => {
     setQuickPreview(null);
@@ -77,13 +81,21 @@ export function useQuickCaptureFlow({
     quickForm,
     setQuickForm,
 
-    quickError,
+    quickError: hasMultipleLines
+      ? 'Detecté varias líneas. Para listas tipo WhatsApp usá Cargar por texto; esta carga rápida es para un solo compromiso.'
+      : quickError,
     commitError: commitMutation.error ? getApiErrorMessage(commitMutation.error) : null,
 
     hasPreview: Boolean(quickPreview),
-    canAnalyze: Boolean(quickText.trim()),
+    canAnalyze: Boolean(quickText.trim()) && !hasMultipleLines,
 
-    analyze: () => previewMutation.mutate(),
+    analyze: () => {
+      if (hasMultipleLines) {
+        setQuickError('Detecté varias líneas. Para listas tipo WhatsApp usá Cargar por texto.');
+        return;
+      }
+      previewMutation.mutate();
+    },
     confirm: () => commitMutation.mutate(),
     discard: clearPreview,
     clear,

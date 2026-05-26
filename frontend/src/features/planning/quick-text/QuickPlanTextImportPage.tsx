@@ -5,11 +5,13 @@ import {
   commitQuickPlanText,
   previewQuickPlanText,
   type QuickPlanCandidate,
+  type QuickPlanCommitResponse,
 } from "../../../api/quickPlanTextImportApi";
 import { getApiErrorMessage } from "../../../api/http";
 import { ErrorState } from "../../../components/ui/ErrorState";
 import { EmptyState } from "../../../components/ui/EmptyState";
 import { queryKeys } from "../../../domain/queryKeys";
+import { monthLabels } from "../../../domain/financeLabels";
 import { useMonthlyPeriod } from "../../../hooks/useMonthlyPeriod";
 import { QuickPlanPreviewTable } from "./QuickPlanPreviewTable";
 import { QuickPlanSummaryPanel } from "./QuickPlanSummaryPanel";
@@ -37,6 +39,45 @@ function countRowsWithBlockingWarnings(rows: QuickPlanCandidate[]) {
   ).length;
 }
 
+type PeriodKey = `${number}-${number}`;
+
+function toPeriodKey(year: number, month: number): PeriodKey {
+  return `${year}-${month}`;
+}
+
+function parsePeriodKey(key: PeriodKey) {
+  const [year, month] = key.split("-").map(Number);
+  return { year, month };
+}
+
+function formatPeriod(year: number, month: number) {
+  return `${monthLabels[month] ?? `Mes ${month}`} ${year}`;
+}
+
+function collectAffectedPeriods(rows: QuickPlanCandidate[]) {
+  return new Set(
+    rows.map((row) =>
+      toPeriodKey(row.candidate.periodYear, row.candidate.periodMonth),
+    ),
+  );
+}
+
+function summarizeCreatedByPeriod(response: QuickPlanCommitResponse | null) {
+  if (!response) return [];
+
+  const result = new Map<PeriodKey, number>();
+
+  for (const item of response.created) {
+    const key = toPeriodKey(item.periodYear, item.periodMonth);
+    result.set(key, (result.get(key) ?? 0) + 1);
+  }
+
+  return [...result.entries()].map(([key, count]) => ({
+    ...parsePeriodKey(key),
+    count,
+  }));
+}
+
 export function QuickPlanTextImportPage() {
   const { profileId = "" } = useParams();
   const { year, month } = useMonthlyPeriod();
@@ -45,6 +86,7 @@ export function QuickPlanTextImportPage() {
   const [text, setText] = useState("");
   const [rows, setRows] = useState<QuickPlanCandidate[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [commitResult, setCommitResult] = useState<QuickPlanCommitResponse | null>(null);
 
   const importableRows = useMemo(() => countImportableRows(rows), [rows]);
 
@@ -58,6 +100,25 @@ export function QuickPlanTextImportPage() {
     [rows],
   );
 
+  const affectedPeriods = useMemo(
+    () => collectAffectedPeriods(rows.filter((row) => !row.duplicate)),
+    [rows],
+  );
+
+  const otherPeriodLabels = useMemo(
+    () =>
+      [...affectedPeriods]
+        .map(parsePeriodKey)
+        .filter((period) => period.year !== year || period.month !== month)
+        .map((period) => formatPeriod(period.year, period.month)),
+    [affectedPeriods, year, month],
+  );
+
+  const createdByPeriod = useMemo(
+    () => summarizeCreatedByPeriod(commitResult),
+    [commitResult],
+  );
+
   const preview = useMutation({
     mutationFn: () =>
       previewQuickPlanText(profileId, {
@@ -69,6 +130,7 @@ export function QuickPlanTextImportPage() {
     onSuccess: (data) => {
       setRows(data.candidates ?? []);
       setError(null);
+      setCommitResult(null);
     },
     onError: (error) => {
       setRows([]);
@@ -86,22 +148,33 @@ export function QuickPlanTextImportPage() {
           .map((row) => row.candidate),
         skipDuplicates: true,
       }),
-    onSuccess: async () => {
+    onSuccess: async (data) => {
+      const periods = collectAffectedPeriods(rows.filter((row) => !row.duplicate));
+      for (const item of data.created) {
+        periods.add(toPeriodKey(item.periodYear, item.periodMonth));
+      }
+
       setText("");
       setRows([]);
       setError(null);
+      setCommitResult(data);
 
-      await Promise.all([
-        qc.invalidateQueries({
-          queryKey: queryKeys.planning(profileId, year, month),
+      await Promise.all(
+        [...periods].flatMap((key) => {
+          const period = parsePeriodKey(key);
+          return [
+            qc.invalidateQueries({
+              queryKey: queryKeys.planning(profileId, period.year, period.month),
+            }),
+            qc.invalidateQueries({
+              queryKey: queryKeys.dashboard(profileId, period.year, period.month),
+            }),
+            qc.invalidateQueries({
+              queryKey: queryKeys.monthlyPlanReconciliation(profileId, period.year, period.month),
+            }),
+          ];
         }),
-        qc.invalidateQueries({
-          queryKey: queryKeys.dashboard(profileId, year, month),
-        }),
-        qc.invalidateQueries({
-          queryKey: queryKeys.monthlyPlanReconciliation(profileId, year, month),
-        }),
-      ]);
+      );
     },
     onError: (error) => setError(getApiErrorMessage(error)),
   });
@@ -114,6 +187,7 @@ export function QuickPlanTextImportPage() {
     setText("");
     setRows([]);
     setError(null);
+    setCommitResult(null);
     preview.reset();
     commit.reset();
   };
@@ -123,7 +197,7 @@ export function QuickPlanTextImportPage() {
       <div className="section-title">
         <div>
           <p className="eyebrow">Texto rápido</p>
-          <h2>Carga rápida por texto</h2>
+          <h2>Cargar por texto</h2>
           <p className="muted">
             Pegá una lista tipo WhatsApp. Cada línea se interpreta como un
             compromiso mensual independiente.
@@ -164,6 +238,39 @@ export function QuickPlanTextImportPage() {
 
       {error ? <ErrorState message={error} /> : null}
 
+      {commitResult ? (
+        <section className="surface-inset mt-4">
+          <p className="label-ui">Resultado de creación</p>
+          {createdByPeriod.length > 0 ? (
+            <ul className="mb-0 mt-2">
+              {createdByPeriod.map((period) => (
+                <li key={`${period.year}-${period.month}`}>
+                  {period.count} compromiso{period.count === 1 ? "" : "s"} creado
+                  {period.count === 1 ? "" : "s"} en{" "}
+                  {formatPeriod(period.year, period.month)}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+
+          {commitResult.skippedDuplicates > 0 ? (
+            <p className="mensaje-warning">
+              {commitResult.skippedDuplicates} candidato
+              {commitResult.skippedDuplicates === 1 ? "" : "s"} omitido
+              {commitResult.skippedDuplicates === 1 ? "" : "s"} por duplicado.
+            </p>
+          ) : null}
+
+          {commitResult.warnings.length > 0 ? (
+            <ul className="mb-0 mt-2">
+              {commitResult.warnings.map((warning, index) => (
+                <li key={`${warning}-${index}`}>{warning}</li>
+              ))}
+            </ul>
+          ) : null}
+        </section>
+      ) : null}
+
       {rows.length > 0 ? (
         <section className="stack-ui mt-4">
           <QuickPlanSummaryPanel rows={rows} />
@@ -194,6 +301,12 @@ export function QuickPlanTextImportPage() {
               </p>
             ) : null}
           </div>
+
+          {otherPeriodLabels.length > 0 ? (
+            <p className="mensaje-info">
+              Algunos compromisos se crearán en {otherPeriodLabels.join(", ")} porque su fecha esperada cae en ese período.
+            </p>
+          ) : null}
 
           <QuickPlanPreviewTable rows={rows} setRows={setRows} />
 

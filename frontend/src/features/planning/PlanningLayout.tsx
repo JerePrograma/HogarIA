@@ -12,13 +12,12 @@ export function PlanningLayout() {
   const tabs = [
     ['Inicio', planningRoutes.root(profileId)],
     ['Mensual', planningRoutes.monthly(profileId)],
-    ['Ítems', planningRoutes.items(profileId)],
+    ['Compromisos', planningRoutes.items(profileId)],
     ['Sugerencias', planningRoutes.suggestions(profileId)],
-    ['Importar', planningRoutes.import(profileId)],
-    ['Texto rápido', planningRoutes.quickText(profileId)],
+    ['Cargar por texto', planningRoutes.quickText(profileId)],
     ['Alertas', planningRoutes.alerts(profileId)],
-    ['Convertir', planningRoutes.convert(profileId)],
-    ['Conciliar', planningRoutes.reconciliation(profileId)],
+    ['Crear movimientos', planningRoutes.convert(profileId)],
+    ['Vincular reales', planningRoutes.reconciliation(profileId)],
   ] as const;
 
   return (

@@ -729,6 +729,12 @@ export interface PlanItemReconciliation {
   itemId: string;
   title: string;
   type: MonthlyPlanItemType | string;
+  expectedDate?: string | null;
+  periodYear: number;
+  periodMonth: number;
+  accountId?: string | null;
+  categoryId?: string | null;
+  status: MonthlyPlanStatus | string;
   plannedAmount: number;
   matchedAmount: number;
   remainingAmount: number;
@@ -738,6 +744,7 @@ export interface PlanItemReconciliation {
 
 export interface UnplannedTransaction {
   transactionId: string;
+  realDate?: string | null;
   budgetDate: string;
   description: string;
   accountId: string;
@@ -745,12 +752,30 @@ export interface UnplannedTransaction {
   movementType: MovementType | string;
   amount: number;
   status: TransactionStatus;
+  classificationStatus?: TransactionClassificationStatus | string | null;
+  operationalKind?: string | null;
 }
 
 export interface SuggestedPlanTransactionMatch {
   itemId: string;
+  itemTitle: string;
+  itemType: MonthlyPlanItemType | string;
+  expectedDate?: string | null;
+  periodYear: number;
+  periodMonth: number;
+  plannedAmount: number;
+  itemAccountId?: string | null;
+  itemCategoryId?: string | null;
   transactionId: string;
+  transactionDescription?: string | null;
+  transactionRealDate?: string | null;
+  transactionBudgetDate?: string | null;
+  transactionMovementType: MovementType | string;
+  transactionAmount: number;
+  transactionAccountId?: string | null;
+  transactionCategoryId?: string | null;
   suggestedAmount: number;
+  difference: number;
   confidence: SuggestedMatchConfidence;
   reasons: string[];
 }

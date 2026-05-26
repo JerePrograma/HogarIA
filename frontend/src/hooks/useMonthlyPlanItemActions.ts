@@ -22,12 +22,7 @@ export function useMonthlyPlanItemActions({
   invalidatePlanningViews,
 }: Params) {
   const createMutation = useMutation({
-    mutationFn: () =>
-      createMonthlyPlanItem(profileId, {
-        ...form,
-        periodYear: year,
-        periodMonth: month,
-      }),
+    mutationFn: () => createMonthlyPlanItem(profileId, form),
     onSuccess: () => {
       resetFormAfterCreate(form);
       invalidatePlanningViews();

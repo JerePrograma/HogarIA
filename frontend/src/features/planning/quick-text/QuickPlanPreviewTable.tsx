@@ -1,4 +1,5 @@
-import type { QuickPlanCandidate } from "../../../api/quickPlanTextImportApi";
+import type { NormalizedCandidate, QuickPlanCandidate } from "../../../api/quickPlanTextImportApi";
+import { monthLabels } from "../../../domain/financeLabels";
 
 type Props = {
   rows: QuickPlanCandidate[];
@@ -23,7 +24,7 @@ const priorityOptions = [
 export function QuickPlanPreviewTable({ rows, setRows }: Props) {
   const updateCandidate = (
     index: number,
-    key: string,
+    key: keyof NormalizedCandidate,
     value: string | number | null,
   ) => {
     setRows(
@@ -41,6 +42,30 @@ export function QuickPlanPreviewTable({ rows, setRows }: Props) {
     );
   };
 
+  const updateExpectedDate = (index: number, value: string) => {
+    setRows(
+      rows.map((row, currentIndex) => {
+        if (currentIndex !== index) return row;
+
+        const period = value ? periodFromDate(value) : null;
+
+        return {
+          ...row,
+          candidate: {
+            ...row.candidate,
+            expectedDate: value || null,
+            ...(period
+              ? {
+                  periodYear: period.year,
+                  periodMonth: period.month,
+                }
+              : {}),
+          },
+        };
+      }),
+    );
+  };
+
   const removeRow = (index: number) => {
     setRows(rows.filter((_, currentIndex) => currentIndex !== index));
   };
@@ -53,10 +78,13 @@ export function QuickPlanPreviewTable({ rows, setRows }: Props) {
             <th>Línea</th>
             <th>Título</th>
             <th>Tipo</th>
+            <th>Fecha esperada</th>
+            <th>Período operativo</th>
             <th className="amount-cell">Monto</th>
             <th>Rango</th>
             <th>Prioridad</th>
             <th>Categoría</th>
+            <th>Cuenta</th>
             <th>Estado</th>
             <th>Advertencias</th>
             <th></th>
@@ -100,6 +128,56 @@ export function QuickPlanPreviewTable({ rows, setRows }: Props) {
                   </select>
                 </td>
 
+                <td>
+                  <input
+                    className="input-ui"
+                    type="date"
+                    value={candidate.expectedDate ?? ""}
+                    onChange={(event) =>
+                      updateExpectedDate(index, event.target.value)
+                    }
+                  />
+                </td>
+
+                <td>
+                  <div className="form-row">
+                    <input
+                      className="input-ui"
+                      type="number"
+                      min="2000"
+                      max="2100"
+                      value={candidate.periodYear}
+                      onChange={(event) =>
+                        updateCandidate(
+                          index,
+                          "periodYear",
+                          Number(event.target.value),
+                        )
+                      }
+                      aria-label="Año operativo"
+                    />
+
+                    <select
+                      className="input-ui"
+                      value={candidate.periodMonth}
+                      onChange={(event) =>
+                        updateCandidate(
+                          index,
+                          "periodMonth",
+                          Number(event.target.value),
+                        )
+                      }
+                      aria-label="Mes operativo"
+                    >
+                      {Object.entries(monthLabels).map(([month, label]) => (
+                        <option key={month} value={month}>
+                          {label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </td>
+
                 <td className="amount-cell">
                   <input
                     className="input-ui"
@@ -117,14 +195,36 @@ export function QuickPlanPreviewTable({ rows, setRows }: Props) {
                 </td>
 
                 <td>
-                  {candidate.minAmount || candidate.maxAmount ? (
-                    <span>
-                      {candidate.minAmount ?? "-"} -{" "}
-                      {candidate.maxAmount ?? "-"}
-                    </span>
-                  ) : (
-                    <span className="muted">-</span>
-                  )}
+                  <div className="form-row">
+                    <input
+                      className="input-ui"
+                      type="number"
+                      step="0.01"
+                      value={candidate.minAmount ?? ""}
+                      onChange={(event) =>
+                        updateCandidate(
+                          index,
+                          "minAmount",
+                          event.target.value ? Number(event.target.value) : null,
+                        )
+                      }
+                      placeholder="Mín."
+                    />
+                    <input
+                      className="input-ui"
+                      type="number"
+                      step="0.01"
+                      value={candidate.maxAmount ?? ""}
+                      onChange={(event) =>
+                        updateCandidate(
+                          index,
+                          "maxAmount",
+                          event.target.value ? Number(event.target.value) : null,
+                        )
+                      }
+                      placeholder="Máx."
+                    />
+                  </div>
                 </td>
 
                 <td>
@@ -148,6 +248,14 @@ export function QuickPlanPreviewTable({ rows, setRows }: Props) {
                     <span>{row.suggestedCategoryName}</span>
                   ) : (
                     <span className="muted">Sin categoría</span>
+                  )}
+                </td>
+
+                <td>
+                  {candidate.accountId ? (
+                    <span className="compact-muted">{candidate.accountId}</span>
+                  ) : (
+                    <span className="muted">Sin cuenta</span>
                   )}
                 </td>
 
@@ -187,4 +295,15 @@ export function QuickPlanPreviewTable({ rows, setRows }: Props) {
       </table>
     </div>
   );
+}
+
+function periodFromDate(value: string): { year: number; month: number } | null {
+  const match = /^(\d{4})-(\d{2})-\d{2}$/.exec(value);
+
+  if (!match) return null;
+
+  return {
+    year: Number(match[1]),
+    month: Number(match[2]),
+  };
 }

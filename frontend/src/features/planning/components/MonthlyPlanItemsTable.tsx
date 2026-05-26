@@ -4,6 +4,7 @@ import { getMonthlyPlanSuggestions } from '../../../api/monthlyPlanSuggestionsAp
 import { StatusBadge } from '../../../components/ui/StatusBadge';
 import {
   labelOrValue,
+  monthLabels,
   monthlyPlanPriorityLabels,
   monthlyPlanStatusLabels,
   monthlyPlanTypeLabels,
@@ -66,6 +67,8 @@ type EditMode = 'FULL' | 'AMOUNT' | 'CONVERT';
 type EditForm = {
   title: string;
   expectedDate: string;
+  periodYear: number;
+  periodMonth: number;
   amount: string;
   minAmount: string;
   maxAmount: string;
@@ -125,6 +128,8 @@ const externalFilterLabels: Record<TableFilterKey, string> = {
 const toForm = (item: MonthlyPlanItem): EditForm => ({
   title: item.title,
   expectedDate: item.expectedDate ?? '',
+  periodYear: item.periodYear,
+  periodMonth: item.periodMonth,
   amount: item.amount == null ? '' : String(item.amount),
   minAmount: item.minAmount == null ? '' : String(item.minAmount),
   maxAmount: item.maxAmount == null ? '' : String(item.maxAmount),
@@ -1036,6 +1041,7 @@ function EditPanel({
               value={form.expectedDate}
               onChange={(event) => setForm({ ...form, expectedDate: event.target.value })}
             />
+            <ExpectedDatePeriodHint item={item} form={form} />
           </label>
         ) : null}
 
@@ -1082,6 +1088,56 @@ function EditPanel({
           </>
         ) : null}
       </div>
+
+      {editMode === 'FULL' ? (
+        <div className="form-row">
+          <label>
+            Período operativo
+            <div className="form-row">
+              <input
+                className="input-ui"
+                type="number"
+                min="2000"
+                max="2100"
+                value={form.periodYear}
+                onChange={(event) =>
+                  setForm({ ...form, periodYear: Number(event.target.value) })
+                }
+                aria-label="Año operativo"
+              />
+
+              <select
+                className="input-ui"
+                value={form.periodMonth}
+                onChange={(event) =>
+                  setForm({ ...form, periodMonth: Number(event.target.value) })
+                }
+                aria-label="Mes operativo"
+              >
+                {Object.entries(monthLabels).map(([month, label]) => (
+                  <option key={month} value={month}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </label>
+
+          {form.expectedDate ? (
+            <button
+              type="button"
+              className="boton-secundario"
+              onClick={() => {
+                const period = periodFromDate(form.expectedDate);
+                if (!period) return;
+                setForm({ ...form, periodYear: period.year, periodMonth: period.month });
+              }}
+            >
+              Mover a período de la fecha
+            </button>
+          ) : null}
+        </div>
+      ) : null}
 
       {editMode === 'FULL' ? (
         <>
@@ -1270,6 +1326,43 @@ function EditPanel({
   );
 }
 
+function ExpectedDatePeriodHint({ item, form }: { item: MonthlyPlanItem; form: EditForm }) {
+  if (!form.expectedDate) {
+    return null;
+  }
+
+  const expectedPeriod = periodFromDate(form.expectedDate);
+
+  if (!expectedPeriod) {
+    return <span className="compact-muted">La fecha no tiene un formato válido.</span>;
+  }
+
+  const selectedPeriod = { year: form.periodYear, month: form.periodMonth };
+  const originalPeriod = { year: item.periodYear, month: item.periodMonth };
+
+  if (samePeriod(expectedPeriod, selectedPeriod)) {
+    return (
+      <span className="compact-muted">
+        La fecha esperada y el período operativo coinciden.
+      </span>
+    );
+  }
+
+  if (isAdjacentOrSamePeriod(expectedPeriod, selectedPeriod)) {
+    return (
+      <span className="compact-muted">
+        La fecha cae en {formatPeriod(expectedPeriod.year, expectedPeriod.month)}, pero el ítem seguirá en {formatPeriod(selectedPeriod.year, selectedPeriod.month)}. Para moverlo, usá la acción explícita.
+      </span>
+    );
+  }
+
+  return (
+    <span className="mensaje-warning">
+      La fecha queda demasiado alejada de {formatPeriod(originalPeriod.year, originalPeriod.month)}. Elegí una fecha del mes anterior, actual o siguiente, o mové el período operativo.
+    </span>
+  );
+}
+
 function SuggestionBox({
   suggestion,
   onApplySuggestion,
@@ -1318,6 +1411,29 @@ function validateEditForm(form: EditForm): string | null {
 
   if (!form.title.trim()) {
     return 'El título no puede quedar vacío.';
+  }
+
+  if (
+    !Number.isInteger(form.periodYear) ||
+    form.periodYear < 2000 ||
+    form.periodYear > 2100 ||
+    !Number.isInteger(form.periodMonth) ||
+    form.periodMonth < 1 ||
+    form.periodMonth > 12
+  ) {
+    return 'El período operativo debe tener año y mes válidos.';
+  }
+
+  if (form.expectedDate) {
+    const expectedPeriod = periodFromDate(form.expectedDate);
+
+    if (!expectedPeriod) {
+      return 'La fecha esperada no tiene un formato válido.';
+    }
+
+    if (!isAdjacentOrSamePeriod(expectedPeriod, { year: form.periodYear, month: form.periodMonth })) {
+      return 'La fecha esperada sólo puede caer en el mes anterior, actual o siguiente al período operativo.';
+    }
   }
 
   if (amount != null && amount < 0) {
@@ -1394,6 +1510,8 @@ function buildUpdatePayload(
     title: form.title.trim(),
     status: form.status,
     priority: form.priority,
+    periodYear: form.periodYear,
+    periodMonth: form.periodMonth,
 
     amount,
     minAmount: hasExactAmount ? null : minAmount,
@@ -1425,6 +1543,38 @@ function buildUpdatePayload(
     clearCategory: form.categoryId.trim() === '' && Boolean(item.categoryId),
     ...(clearInstallment ? { clearInstallment: true } : {}),
   };
+}
+
+function periodFromDate(value: string): { year: number; month: number } | null {
+  const match = /^(\d{4})-(\d{2})-\d{2}$/.exec(value);
+
+  if (!match) return null;
+
+  return {
+    year: Number(match[1]),
+    month: Number(match[2]),
+  };
+}
+
+function samePeriod(
+  left: { year: number; month: number },
+  right: { year: number; month: number },
+): boolean {
+  return left.year === right.year && left.month === right.month;
+}
+
+function isAdjacentOrSamePeriod(
+  expected: { year: number; month: number },
+  period: { year: number; month: number },
+): boolean {
+  const expectedIndex = expected.year * 12 + expected.month;
+  const periodIndex = period.year * 12 + period.month;
+
+  return Math.abs(expectedIndex - periodIndex) <= 1;
+}
+
+function formatPeriod(year: number, month: number): string {
+  return `${monthLabels[month] ?? `Mes ${month}`} ${year}`;
 }
 
 function parseNullableNumber(value: string): number | null {
