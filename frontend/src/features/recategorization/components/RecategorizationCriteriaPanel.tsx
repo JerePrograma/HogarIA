@@ -78,6 +78,8 @@ export function RecategorizationCriteriaPanel({
   onClearCriteria,
   onPreview,
 }: Props) {
+  const activeTransactionIdsCount = form.transactionIds?.length ?? 0;
+
   return (
     <section className="panel recategorization-filter-panel">
       <div className="section-title">
@@ -98,6 +100,28 @@ export function RecategorizationCriteriaPanel({
           Limpiar criterios
         </button>
       </div>
+
+      {activeTransactionIdsCount > 0 ? (
+        <div className="mensaje-warning recategorization-id-filter-warning">
+          <div>
+            <strong>Filtro por movimientos específicos activo.</strong>
+            <p>
+              Esta previsualización está limitada a {activeTransactionIdsCount}{" "}
+              movimiento(s) recibidos desde otra pantalla. Si querés buscar por
+              criterios generales, quitá este filtro.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            className="boton-secundario"
+            onClick={() => onFormChange({ transactionIds: null })}
+            disabled={previewPending || applyPending}
+          >
+            Quitar filtro por IDs
+          </button>
+        </div>
+      ) : null}
 
       <div className="form-grid">
         <label>
@@ -310,7 +334,7 @@ export function RecategorizationCriteriaPanel({
         </label>
 
         <label>
-          Revisión
+          Caso a revisar
           <select
             className="input-ui"
             value={form.reviewFilter ?? ""}

@@ -238,12 +238,13 @@ export function RecategorizationPreviewPanel({
 
                     <td>
                       {candidate.targetCategoryName ?? "Sin sugerencia"}
-                      {candidate.targetMovementType ? (
+                      {candidate.targetCategoryId &&
+                      candidate.targetMovementType ? (
                         <p className="muted">
                           Tipo destino:{" "}
                           {getMovementLabel(candidate.targetMovementType)}
                         </p>
-                      ) : null}
+                      ) : null}{" "}
                     </td>
 
                     <td>
