@@ -1,27 +1,69 @@
 # Sugerencias de presupuesto y planificación mensual
 
-## Conceptos
+## Conceptos base
 
 - Movimiento real: operación importada o cargada manualmente que representa algo que ya ocurrió. Debe estar confirmado para alimentar sugerencias.
-- Presupuesto: límite o referencia mensual por categoría. No representa una obligación concreta ni crea movimientos.
+- Presupuesto: límite o referencia mensual por categoría. No representa una obligación concreta y no crea movimientos.
 - Planificación mensual: compromisos esperados para un período, como ingresos recurrentes, cuotas, deudas, alquiler, salud, suscripciones o recuperos esperados.
 
-El motor de sugerencias nunca crea presupuesto ni planificación desde el preview. El flujo correcto es:
+El flujo separa estrictamente preview y commit:
 
-1. Generar preview.
-2. Revisar y editar importes, títulos, fechas, cuentas y categorías.
-3. Aplicar explícitamente al presupuesto, a la planificación o a ambos.
+1. El preview calcula sugerencias y totales, pero no crea ni modifica datos persistentes.
+2. El usuario revisa, edita, activa o desactiva cada fila.
+3. El commit aplica sólo las filas activas y sólo puede crear o actualizar `BudgetCategoryItem` y crear `MonthlyPlanItem`.
+4. Este flujo nunca crea `MoneyTransaction`.
 
-## Qué se incluye
+## Preview
 
-Para presupuesto se toman movimientos reales confirmados y clasificados:
+El preview lee movimientos del perfil y genera sugerencias según el mes seleccionado, el modo histórico y los filtros enviados. Es una operación de sólo lectura (`readOnly`) y no asegura estructuras de presupuesto ni planificación.
 
+Para presupuesto, el período destino siempre es el mes seleccionado (`year`/`month`).
+
+Para planificación, el período destino es:
+
+- el mes seleccionado si `nextMonth=false`;
+- el mes siguiente si `nextMonth=true`.
+
+La pantalla muestra el período destino de planificación junto a los totales para evitar confundir presupuesto del mes elegido con planificación del mes siguiente.
+
+## Commit
+
+El commit es transaccional y procesa únicamente filas activas. Si una fila desactivada contiene datos incompletos, no debe bloquear el commit.
+
+Presupuesto:
+
+- valida primero todas las sugerencias activas;
+- no crea `BudgetYear` ni `BudgetMonth` si todas las sugerencias activas son inválidas;
+- valida que la categoría exista, pertenezca al perfil o sea global permitida, esté activa, sea presupuestable y no sea técnica;
+- crea la estructura presupuestaria sólo cuando existe al menos una sugerencia válida;
+- crea o actualiza `BudgetCategoryItem` según `overwriteExistingBudgetItems`.
+
+Planificación:
+
+- crea `MonthlyPlanItem` con `status=ESTIMATED`;
+- usa `source=SYSTEM` si no se informa source;
+- valida con las mismas reglas base de `MonthlyPlanService`;
+- no crea movimientos reales.
+
+La respuesta puede ser completa o parcial:
+
+- sin errores: cambios aplicados;
+- con cambios y errores: aplicación parcial;
+- sin cambios y con errores: no se aplicaron cambios.
+
+Warnings y errores se muestran separados.
+
+## Inclusión
+
+Para presupuesto se incluyen:
+
+- movimientos reales confirmados;
 - gastos de consumo real;
 - ahorro o inversión presupuestable;
 - deuda cuando la categoría corresponde;
 - categorías activas con `budgetable=true` y `technical=false`.
 
-Para planificación se toman patrones que puedan representar compromisos:
+Para planificación se incluyen patrones que puedan representar compromisos:
 
 - ingresos recurrentes;
 - gastos fijos o recurrentes;
@@ -30,56 +72,71 @@ Para planificación se toman patrones que puedan representar compromisos:
 - Banco Provincia préstamos importados como deuda estimada;
 - Mercado Crédito cuando aparece como deuda o compromiso.
 
-## Qué se excluye
+## Exclusión
 
-Se excluyen:
+Se excluyen siempre:
 
-- transferencias internas;
+- transferencias internas o posibles transferencias internas;
 - movimientos no confirmados;
-- movimientos sin categoría o ignorados por regla;
-- movimientos en revisión, salvo inclusión explícita;
-- posibles transferencias internas;
+- movimientos sin categoría;
+- movimientos ignorados por regla;
+- movimientos técnicos;
 - duplicados cross-source;
 - desembolsos o recuperables de CJPrestamos;
 - capital CJ ya ejecutado o recuperado;
-- categorías técnicas o no presupuestables;
-- fondeos y gastos aislados pequeños que no forman patrón recurrente.
+- categorías técnicas;
+- categorías inactivas;
+- categorías no presupuestables para presupuesto;
+- fondeos;
+- gastos aislados pequeños sin patrón recurrente.
 
-## Cálculo
+La selección explícita por `selectedTransactionIds` no permite saltarse estas reglas duras. Sí permite incluir un movimiento en `REVIEW` aunque `includeReview=false`, siempre que cumpla el resto de condiciones.
 
-Modos disponibles:
+## Filtros
 
-- Mes actual: suma del mes seleccionado.
-- Promedio últimos 3 meses: promedio de los meses con datos dentro de la ventana.
-- Promedio últimos 6 meses: promedio de los meses con datos dentro de la ventana.
+`includeImportedOnly=true` significa sólo importados. Tiene prioridad sobre `includeManual`; si ambos vienen en `true`, los manuales se ignoran.
 
-El importe sugerido se redondea al múltiplo configurado en el preview, por defecto 1.000. Si se detecta un gasto muy alto de una sola vez frente al historial cercano, se marca como `outlier` y queda sin aplicación automática.
+`includeImportedOnly=false` y `includeManual=false` también significa sólo importados. Es la forma explícita de apagar manuales sin forzar el modo "sólo importados".
 
-## Confianza
+`includeImportedOnly=false` y `includeManual=true` incluye importados y manuales.
 
-- Alta: hay varios meses consistentes.
-- Media: hay más de un movimiento, un compromiso claro o una deuda reconocible.
-- Baja: hay poca historia, posible duplicado u outlier.
-- Ninguna: no hay base suficiente para sugerir.
+`includeReview=true` incluye movimientos en revisión, salvo que violen una regla dura.
 
-La confianza no reemplaza la revisión del usuario. Sólo ayuda a priorizar qué revisar primero.
+`selectedTransactionIds` trae sólo movimientos existentes del perfil. IDs inexistentes o de otro perfil no participan.
 
-## Revisión y commit
+## Outliers
 
-En la pantalla de sugerencias se puede:
+El motor separa tres conceptos:
 
-- activar o desactivar cada fila;
-- editar importes sugeridos del presupuesto;
-- editar título, tipo, fecha, monto, categoría y cuenta de planificación;
-- omitir duplicados;
-- decidir si un presupuesto existente se conserva o se reemplaza.
+- `outlierDetected`: se detectó un gasto atípico de una sola vez frente al resto de la ventana.
+- `outlierAffectsSuggestedAmount`: ese mes atípico se excluyó del cálculo del importe sugerido.
+- `applyByDefault`: la fila queda activa por defecto sólo si la sugerencia es confiable y el outlier no afecta el importe.
 
-El commit sólo crea o actualiza:
+En promedios de 3 o 6 meses, un mes excepcional anterior también se excluye para que no contamine el promedio. Un patrón alto pero recurrente no se trata como outlier.
 
-- `BudgetCategoryItem`;
-- `MonthlyPlanItem`.
+## Duplicados de planificación
 
-No crea `MoneyTransaction`.
+Antes de crear `MonthlyPlanItem`, el commit revisa el período destino. Un ítem existente bloquea la creación cuando:
+
+- no está `CANCELLED`;
+- tiene la misma categoría;
+- el monto exacto o rango es similar dentro de la tolerancia;
+- y el título es igual o comparte tokens significativos.
+
+La source distinta no evita el dedupe si el compromiso parece el mismo. Una categoría distinta o un monto fuera de tolerancia no bloquean una creación legítima.
+
+Si `skipDuplicates=true`, los duplicados se omiten con warning. Si es `false`, el usuario puede forzar la creación.
+
+## Revisión y edición en UI
+
+La pantalla permite:
+
+- activar o desactivar cada sugerencia;
+- editar importes de presupuesto;
+- editar título, tipo, prioridad, fecha, monto exacto, rango, categoría y cuenta de planificación tanto en desktop como en mobile;
+- ver confianza, duplicados y gastos atípicos en español;
+- impedir aplicar una planificación activa sin monto exacto ni rango válido;
+- decidir si se omiten duplicados y si se reemplaza presupuesto existente.
 
 ## Corrección o reversión
 
@@ -89,4 +146,4 @@ Si se aplicó una sugerencia incorrecta:
 - planificación: editar, cancelar o eliminar el `MonthlyPlanItem`;
 - movimientos reales: corregir clasificación, categoría o estado desde movimientos/importación y volver a generar preview.
 
-Cuando se corrige el origen, el siguiente preview usa las reglas actualizadas y evita arrastrar errores clasificados como transferencias, duplicados o recuperables.
+Si el commit devolvió errores, revisar primero las filas indicadas. Si fue parcial, las filas válidas ya quedaron aplicadas y las inválidas pueden corregirse y volver a enviarse.

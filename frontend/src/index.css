@@ -531,7 +531,7 @@
 }
 
 .suggestion-table-desktop table {
-  min-width: 1080px;
+  min-width: 1280px;
 }
 
 .suggestion-table-desktop td {
@@ -549,6 +549,29 @@
 
 .suggestion-title-input {
   min-width: 14rem;
+}
+
+.suggestion-range-inputs,
+.suggestion-badge-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.suggestion-range-inputs .suggestion-amount-input {
+  min-width: 7.5rem;
+}
+
+.compact-error {
+  display: block;
+  margin-top: 0.35rem;
+  color: var(--app-error-text);
+  font-size: 0.78rem;
+  font-weight: 750;
+}
+
+.compact-message {
+  margin: 0;
 }
 
 .suggestion-mobile-list {

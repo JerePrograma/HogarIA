@@ -12,6 +12,7 @@ public record BulkRecategorizeApplyRequest(
         MoneyTransaction.ClassificationStatus targetClassificationStatus,
         String targetClassificationReason,
         List<UUID> transactionIds,
-        List<BulkRecategorizeApplyItem> updates
+        List<BulkRecategorizeApplyItem> updates,
+        Boolean forceAmbiguous
 ) {
 }

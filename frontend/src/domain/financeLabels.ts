@@ -17,6 +17,7 @@ import type {
   MovementType,
   PaymentChannel,
   ProfileType,
+  SuggestionConfidence,
   TransactionClassificationStatus,
   TransactionOrigin,
   TransactionStatus,
@@ -272,6 +273,13 @@ export const monthlyPlanSourceLabels: Record<MonthlyPlanSource, string> = {
   IMPORT: "Importado",
   QUICK_CAPTURE: "Captura rápida",
   SYSTEM: "Sistema",
+};
+
+export const suggestionConfidenceLabels: Record<SuggestionConfidence, string> = {
+  HIGH: "Alta",
+  MEDIUM: "Media",
+  LOW: "Baja",
+  NONE: "Sin confianza",
 };
 
 // ============================================================

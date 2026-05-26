@@ -22,6 +22,7 @@ import {
 } from './BudgetSuggestionsTable';
 import {
   MonthlyPlanSuggestionsTable,
+  getMonthlyPlanSuggestionValidationMessage,
   toMonthlyPlanDrafts,
   type MonthlyPlanSuggestionDraft,
 } from './MonthlyPlanSuggestionsTable';
@@ -29,6 +30,11 @@ import { SuggestionModeSelector } from './SuggestionModeSelector';
 import { SuggestionSummaryPanel } from './SuggestionSummaryPanel';
 
 type CommitScope = 'BUDGET' | 'MONTHLY_PLAN' | 'BOTH';
+
+function periodLabelForOffset(year: number, month: number, offsetMonths: number) {
+  const date = new Date(year, month - 1 + offsetMonths, 1);
+  return `${date.getMonth() + 1}/${date.getFullYear()}`;
+}
 
 export function BudgetPlanningSuggestionsPage() {
   const { profileId = '' } = useParams();
@@ -97,17 +103,49 @@ export function BudgetPlanningSuggestionsPage() {
 
   const hasBudgetSelection = budgetRows.some((row) => row.apply);
   const hasPlanSelection = planRows.some((row) => row.apply);
+  const invalidPlanSelectionCount = planRows.filter(
+    (row) => row.apply && getMonthlyPlanSuggestionValidationMessage(row),
+  ).length;
+  const hasInvalidPlanSelection = invalidPlanSelectionCount > 0;
+  const planningPeriods = new Set(
+    planRows
+      .filter((row) => row.apply)
+      .map((row) => `${row.periodMonth}/${row.periodYear}`),
+  );
+  const planningPeriodLabel =
+    planningPeriods.size === 0
+      ? nextMonth
+        ? periodLabelForOffset(year, month, 1)
+        : `${month}/${year}`
+      : Array.from(planningPeriods).join(', ');
 
   const buildCommitPayload = (scope: CommitScope): BudgetPlanningSuggestionCommitRequest => ({
     year,
     month,
     applyBudgetSuggestions:
       scope === 'BUDGET' || scope === 'BOTH'
-        ? budgetRows.map(({ categoryName: _categoryName, realAmount: _realAmount, transactionCount: _transactionCount, confidence: _confidence, ...row }) => row)
+        ? budgetRows
+            .filter((row) => row.apply)
+            .map(({
+              categoryName: _categoryName,
+              realAmount: _realAmount,
+              transactionCount: _transactionCount,
+              confidence: _confidence,
+              sourceTransactionIds: _sourceTransactionIds,
+              ...row
+            }) => row)
         : [],
     applyMonthlyPlanSuggestions:
       scope === 'MONTHLY_PLAN' || scope === 'BOTH'
-        ? planRows.map(({ categoryName: _categoryName, accountName: _accountName, confidence: _confidence, reason: _reason, ...row }) => row)
+        ? planRows
+            .filter((row) => row.apply)
+            .map(({
+              categoryName: _categoryName,
+              accountName: _accountName,
+              confidence: _confidence,
+              reason: _reason,
+              ...row
+            }) => row)
         : [],
     skipDuplicates,
     overwriteExistingBudgetItems,
@@ -234,6 +272,7 @@ export function BudgetPlanningSuggestionsPage() {
         totals={previewMutation.data?.totals}
         warnings={warnings}
         result={result}
+        planningPeriodLabel={planningPeriodLabel}
       />
 
       {budgetRows.length > 0 || planRows.length > 0 ? (
@@ -258,6 +297,12 @@ export function BudgetPlanningSuggestionsPage() {
             </label>
           </div>
 
+          {hasInvalidPlanSelection ? (
+            <p className="mensaje-error compact-message">
+              Hay {invalidPlanSelectionCount} sugerencia{invalidPlanSelectionCount === 1 ? '' : 's'} de planificación activa{invalidPlanSelectionCount === 1 ? '' : 's'} con datos incompletos.
+            </p>
+          ) : null}
+
           <div className="page-actions">
             <button
               type="button"
@@ -270,7 +315,7 @@ export function BudgetPlanningSuggestionsPage() {
             <button
               type="button"
               className="boton-secundario"
-              disabled={!hasPlanSelection || commitMutation.isPending}
+              disabled={!hasPlanSelection || hasInvalidPlanSelection || commitMutation.isPending}
               onClick={() => commitMutation.mutate('MONTHLY_PLAN')}
             >
               Crear planificación
@@ -278,7 +323,7 @@ export function BudgetPlanningSuggestionsPage() {
             <button
               type="button"
               className="boton-principal"
-              disabled={(!hasBudgetSelection && !hasPlanSelection) || commitMutation.isPending}
+              disabled={(!hasBudgetSelection && !hasPlanSelection) || hasInvalidPlanSelection || commitMutation.isPending}
               onClick={() => commitMutation.mutate('BOTH')}
             >
               Aplicar ambos

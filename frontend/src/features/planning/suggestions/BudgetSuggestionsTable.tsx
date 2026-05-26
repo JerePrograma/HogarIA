@@ -1,5 +1,6 @@
 import { StatusBadge } from '../../../components/ui/StatusBadge';
 import { formatMoney } from '../../../domain/formatters';
+import { suggestionConfidenceLabels } from '../../../domain/financeLabels';
 import type { ApplyBudgetSuggestion, BudgetSuggestion, SuggestionConfidence } from '../../../domain/types';
 
 export type BudgetSuggestionDraft = ApplyBudgetSuggestion & {
@@ -7,6 +8,9 @@ export type BudgetSuggestionDraft = ApplyBudgetSuggestion & {
   realAmount: number;
   transactionCount: number;
   confidence: SuggestionConfidence;
+  outlierDetected: boolean;
+  outlierAffectsSuggestedAmount: boolean;
+  sourceTransactionIds: string[];
 };
 
 type Props = {
@@ -23,8 +27,10 @@ export const toBudgetDrafts = (suggestions: BudgetSuggestion[]): BudgetSuggestio
     transactionCount: suggestion.transactionCount,
     confidence: suggestion.confidence,
     reason: suggestion.reason,
-    outlier: suggestion.outlier,
+    outlierDetected: suggestion.outlierDetected,
+    outlierAffectsSuggestedAmount: suggestion.outlierAffectsSuggestedAmount,
     apply: suggestion.applyByDefault,
+    sourceTransactionIds: suggestion.sourceTransactionIds,
   }));
 
 export function BudgetSuggestionsTable({ rows, onRowsChange }: Props) {
@@ -90,7 +96,10 @@ export function BudgetSuggestionsTable({ rows, onRowsChange }: Props) {
                 </td>
                 <td>
                   <span>{row.reason}</span>
-                  {row.outlier ? <StatusBadge label="Outlier" tone="watch" /> : null}
+                  {row.outlierDetected ? <StatusBadge label="Atípico" tone="watch" /> : null}
+                  {row.outlierAffectsSuggestedAmount ? (
+                    <StatusBadge label="Importe ajustado" tone="watch" />
+                  ) : null}
                 </td>
               </tr>
             ))}
@@ -130,7 +139,12 @@ export function BudgetSuggestionsTable({ rows, onRowsChange }: Props) {
             </div>
             <ConfidenceBadge confidence={row.confidence} />
             <p className="secondary-text">{row.reason}</p>
-            {row.outlier ? <StatusBadge label="Outlier" tone="watch" /> : null}
+            <div className="suggestion-badge-row">
+              {row.outlierDetected ? <StatusBadge label="Atípico" tone="watch" /> : null}
+              {row.outlierAffectsSuggestedAmount ? (
+                <StatusBadge label="Importe ajustado" tone="watch" />
+              ) : null}
+            </div>
           </article>
         ))}
       </div>
@@ -140,7 +154,7 @@ export function BudgetSuggestionsTable({ rows, onRowsChange }: Props) {
 
 function ConfidenceBadge({ confidence }: { confidence: SuggestionConfidence }) {
   const tone = confidence === 'HIGH' ? 'ok' : confidence === 'MEDIUM' ? 'watch' : 'risk';
-  return <StatusBadge label={confidence} tone={tone} />;
+  return <StatusBadge label={suggestionConfidenceLabels[confidence]} tone={tone} />;
 }
 
 function parseAmount(value: string): number {

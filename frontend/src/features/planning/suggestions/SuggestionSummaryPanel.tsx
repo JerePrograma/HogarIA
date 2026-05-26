@@ -8,12 +8,32 @@ type Props = {
   totals?: BudgetPlanningSuggestionTotals;
   warnings: string[];
   result?: BudgetPlanningSuggestionCommitResponse | null;
+  planningPeriodLabel?: string;
 };
 
-export function SuggestionSummaryPanel({ totals, warnings, result }: Props) {
+export function SuggestionSummaryPanel({ totals, warnings, result, planningPeriodLabel }: Props) {
   if (!totals && warnings.length === 0 && !result) {
     return null;
   }
+
+  const appliedCount = result
+    ? result.createdBudgetItems + result.updatedBudgetItems + result.createdMonthlyPlanItems
+    : 0;
+  const hasErrors = Boolean(result?.errors.length);
+  const resultTitle = !result
+    ? null
+    : hasErrors && appliedCount === 0
+      ? 'No se aplicaron cambios'
+      : hasErrors
+        ? 'Aplicación parcial'
+        : 'Cambios aplicados';
+  const resultClassName = !result
+    ? ''
+    : hasErrors && appliedCount === 0
+      ? 'mensaje-error'
+      : hasErrors
+        ? 'mensaje-warning'
+        : 'mensaje-exito';
 
   return (
     <section className="panel-muted suggestion-summary-panel">
@@ -32,10 +52,10 @@ export function SuggestionSummaryPanel({ totals, warnings, result }: Props) {
           <SummaryItem
             label="Planificación"
             value={formatMoney(totals.totalMonthlyPlanAmount)}
-            detail={`${totals.monthlyPlanSuggestionCount} ítems`}
+            detail={`${totals.monthlyPlanSuggestionCount} ítems · destino ${planningPeriodLabel ?? '-'}`}
           />
           <SummaryItem
-            label="Outliers"
+            label="Atípicos"
             value={String(totals.outlierCount)}
             detail="Requieren revisión"
           />
@@ -43,8 +63,8 @@ export function SuggestionSummaryPanel({ totals, warnings, result }: Props) {
       ) : null}
 
       {result ? (
-        <div className="mensaje-exito">
-          <strong>Commit aplicado</strong>
+        <div className={resultClassName}>
+          <strong>{resultTitle}</strong>
           <span>
             Presupuesto: {result.createdBudgetItems} creados, {result.updatedBudgetItems} actualizados.
             Planificación: {result.createdMonthlyPlanItems} ítems creados. Omitidos: {result.skippedDuplicates}.
@@ -54,6 +74,7 @@ export function SuggestionSummaryPanel({ totals, warnings, result }: Props) {
 
       {warnings.length > 0 || (result?.warnings.length ?? 0) > 0 ? (
         <div className="mensaje-warning">
+          <strong>Advertencias</strong>
           {[...warnings, ...(result?.warnings ?? [])].map((warning, index) => (
             <span key={`${warning}-${index}`}>{warning}</span>
           ))}
@@ -62,6 +83,7 @@ export function SuggestionSummaryPanel({ totals, warnings, result }: Props) {
 
       {result?.errors.length ? (
         <div className="mensaje-error">
+          <strong>Errores</strong>
           {result.errors.map((error, index) => (
             <span key={`${error}-${index}`}>{error}</span>
           ))}

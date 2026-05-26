@@ -73,7 +73,26 @@ public class BudgetPlanningSuggestionService {
             "CJPRESTAMOS_DISBURSEMENT",
             "RECOVERABLE_OUTFLOW",
             "CJPRESTAMOS_RECOVERABLE_OUTFLOW",
-            "CJPRESTAMOS_PAYMENT_PRINCIPAL_RECOVERY"
+            "CJPRESTAMOS_PAYMENT_PRINCIPAL_RECOVERY",
+            "CJPRESTAMOS_PAYMENT_INTEREST_INCOME"
+    );
+
+    private static final Set<MonthlyPlanItem.Type> SUGGESTION_ALLOWED_PLAN_TYPES = Set.of(
+            MonthlyPlanItem.Type.INCOME,
+            MonthlyPlanItem.Type.EXPENSE,
+            MonthlyPlanItem.Type.SAVING,
+            MonthlyPlanItem.Type.DEBT,
+            MonthlyPlanItem.Type.RECOVERY
+    );
+
+    private static final Set<String> GENERIC_DUPLICATE_TOKENS = Set.of(
+            "pago",
+            "cuota",
+            "mensual",
+            "debito",
+            "credito",
+            "tarjeta",
+            "compra"
     );
 
     private static final Set<String> COMMITMENT_KEYWORDS = Set.of(
@@ -109,6 +128,7 @@ public class BudgetPlanningSuggestionService {
     private final BudgetMonthRepository budgetMonthRepository;
     private final BudgetCategoryItemRepository budgetItemRepository;
     private final MonthlyPlanItemRepository monthlyPlanItemRepository;
+    private final MonthlyPlanItemValidator monthlyPlanItemValidator;
 
     public BudgetPlanningSuggestionService(
             FinancialProfileRepository profileRepository,
@@ -128,6 +148,7 @@ public class BudgetPlanningSuggestionService {
         this.budgetMonthRepository = budgetMonthRepository;
         this.budgetItemRepository = budgetItemRepository;
         this.monthlyPlanItemRepository = monthlyPlanItemRepository;
+        this.monthlyPlanItemValidator = new MonthlyPlanItemValidator(categoryRepository, accountRepository);
     }
 
     @Transactional(readOnly = true)
@@ -207,46 +228,52 @@ public class BudgetPlanningSuggestionService {
                 : request.applyBudgetSuggestions();
 
         List<ApplyBudgetSuggestion> selectedBudgetItems = budgetItems.stream()
+                .filter(Objects::nonNull)
                 .filter(item -> !Boolean.FALSE.equals(item.apply()))
                 .toList();
 
-        BudgetMonth budgetMonth = selectedBudgetItems.isEmpty()
-                ? null
-                : ensureBudgetMonth(profileId, request.year(), request.month());
+        List<ValidatedBudgetSuggestion> validBudgetItems = new ArrayList<>();
 
         for (ApplyBudgetSuggestion suggestion : selectedBudgetItems) {
-            Optional<Category> category = findCategoryForProfile(suggestion.categoryId(), profileId);
-
-            if (category.isEmpty() || !isBudgetableCategory(category.get())) {
-                errors.add("Categoría no válida para presupuesto: " + suggestion.categoryId());
-                continue;
+            try {
+                validBudgetItems.add(validateBudgetSuggestion(profileId, suggestion));
+            } catch (RuntimeException ex) {
+                errors.add("Presupuesto: " + ex.getMessage());
             }
+        }
 
-            var existing = budgetItemRepository.findByBudgetMonthIdAndCategoryId(
-                    budgetMonth.getId(),
-                    suggestion.categoryId()
-            );
+        if (!validBudgetItems.isEmpty()) {
+            BudgetMonth budgetMonth = ensureBudgetMonth(profileId, request.year(), request.month());
 
-            if (existing.isPresent() && !Boolean.TRUE.equals(request.overwriteExistingBudgetItems())) {
-                skippedDuplicates++;
-                warnings.add("Presupuesto existente no modificado para " + category.get().getName() + ".");
-                continue;
-            }
+            for (ValidatedBudgetSuggestion validated : validBudgetItems) {
+                ApplyBudgetSuggestion suggestion = validated.suggestion();
+                Category category = validated.category();
+                var existing = budgetItemRepository.findByBudgetMonthIdAndCategoryId(
+                        budgetMonth.getId(),
+                        suggestion.categoryId()
+                );
 
-            BudgetCategoryItem item = existing.orElseGet(() ->
-                    BudgetCategoryItem.builder()
-                            .budgetMonthId(budgetMonth.getId())
-                            .categoryId(suggestion.categoryId())
-                            .build()
-            );
+                if (existing.isPresent() && !Boolean.TRUE.equals(request.overwriteExistingBudgetItems())) {
+                    skippedDuplicates++;
+                    warnings.add("Presupuesto existente no modificado para " + category.getName() + ".");
+                    continue;
+                }
 
-            item.setBudgetAmount(nonNegative(suggestion.suggestedBudgetAmount()));
-            budgetItemRepository.save(item);
+                BudgetCategoryItem item = existing.orElseGet(() ->
+                        BudgetCategoryItem.builder()
+                                .budgetMonthId(budgetMonth.getId())
+                                .categoryId(suggestion.categoryId())
+                                .build()
+                );
 
-            if (existing.isPresent()) {
-                updatedBudgetItems++;
-            } else {
-                createdBudgetItems++;
+                item.setBudgetAmount(nonNegative(suggestion.suggestedBudgetAmount()));
+                budgetItemRepository.save(item);
+
+                if (existing.isPresent()) {
+                    updatedBudgetItems++;
+                } else {
+                    createdBudgetItems++;
+                }
             }
         }
 
@@ -255,32 +282,11 @@ public class BudgetPlanningSuggestionService {
                 : request.applyMonthlyPlanSuggestions();
 
         for (ApplyMonthlyPlanSuggestion suggestion : planItems) {
+            if (suggestion == null) {
+                continue;
+            }
+
             if (Boolean.FALSE.equals(suggestion.apply())) {
-                continue;
-            }
-
-            try {
-                validatePlanSuggestion(profileId, suggestion);
-            } catch (RuntimeException ex) {
-                errors.add("Planificación '" + suggestion.title() + "': " + ex.getMessage());
-                continue;
-            }
-
-            boolean duplicate = isDuplicatePlanItem(
-                    profileId,
-                    suggestion.periodYear(),
-                    suggestion.periodMonth(),
-                    suggestion.title(),
-                    suggestion.amount(),
-                    suggestion.minAmount(),
-                    suggestion.maxAmount(),
-                    suggestion.categoryId(),
-                    suggestion.source() == null ? MonthlyPlanItem.Source.SYSTEM : suggestion.source()
-            );
-
-            if (duplicate && Boolean.TRUE.equals(request.skipDuplicates())) {
-                skippedDuplicates++;
-                warnings.add("Planificación duplicada omitida: " + suggestion.title() + ".");
                 continue;
             }
 
@@ -289,14 +295,14 @@ public class BudgetPlanningSuggestionService {
                     .categoryId(suggestion.categoryId())
                     .accountId(suggestion.accountId())
                     .type(suggestion.type())
-                    .title(suggestion.title().trim())
+                    .title(suggestion.title())
                     .description(suggestion.description())
                     .expectedDate(suggestion.expectedDate())
                     .periodYear(suggestion.periodYear())
                     .periodMonth(suggestion.periodMonth())
-                    .amount(nonNegativeOrNull(suggestion.amount()))
-                    .minAmount(nonNegativeOrNull(suggestion.minAmount()))
-                    .maxAmount(nonNegativeOrNull(suggestion.maxAmount()))
+                    .amount(suggestion.amount())
+                    .minAmount(suggestion.minAmount())
+                    .maxAmount(suggestion.maxAmount())
                     .currency("ARS")
                     .priority(suggestion.priority() == null
                             ? MonthlyPlanItem.Priority.IMPORTANT
@@ -306,6 +312,35 @@ public class BudgetPlanningSuggestionService {
                             ? MonthlyPlanItem.Source.SYSTEM
                             : suggestion.source())
                     .build();
+
+            try {
+                validateSuggestedPlanItem(profileId, item);
+            } catch (RuntimeException ex) {
+                errors.add("Planificación '" + suggestion.title() + "': " + ex.getMessage());
+                continue;
+            }
+
+            boolean duplicate = isDuplicatePlanItem(
+                    profileId,
+                    item.getPeriodYear(),
+                    item.getPeriodMonth(),
+                    item.getTitle(),
+                    item.getAmount(),
+                    item.getMinAmount(),
+                    item.getMaxAmount(),
+                    item.getCategoryId(),
+                    item.getSource()
+            );
+
+            if (duplicate && Boolean.TRUE.equals(request.skipDuplicates())) {
+                skippedDuplicates++;
+                warnings.add("Planificación duplicada omitida: " + item.getTitle() + ".");
+                continue;
+            }
+
+            item.setAmount(nonNegativeOrNull(item.getAmount()));
+            item.setMinAmount(nonNegativeOrNull(item.getMinAmount()));
+            item.setMaxAmount(nonNegativeOrNull(item.getMaxAmount()));
 
             monthlyPlanItemRepository.save(item);
             createdMonthlyPlanItems++;
@@ -346,10 +381,21 @@ public class BudgetPlanningSuggestionService {
             Category category = categoriesById.get(entry.getKey());
             List<MoneyTransaction> categoryTransactions = entry.getValue();
             Map<YearMonth, BigDecimal> sumsByMonth = sumsByMonth(categoryTransactions);
-            OutlierResult outlier = detectOutlier(categoryTransactions, sumsByMonth, targetMonth);
+            OutlierResult detectedOutlier = detectOutlier(categoryTransactions, sumsByMonth, targetMonth);
+            boolean outlierAffectsSuggestedAmount = detectedOutlier.outlierDetected()
+                    && (request.mode() != SuggestionMode.CURRENT_MONTH_ONLY
+                    || targetMonth.equals(detectedOutlier.outlierMonth()));
+            OutlierResult outlier = new OutlierResult(
+                    detectedOutlier.outlierDetected(),
+                    outlierAffectsSuggestedAmount,
+                    detectedOutlier.outlierMonth()
+            );
+            YearMonth excludedOutlierMonth = outlier.outlierAffectsSuggestedAmount()
+                    ? outlier.outlierMonth()
+                    : null;
 
             BigDecimal realAmount = sumsByMonth.getOrDefault(targetMonth, BigDecimal.ZERO);
-            BigDecimal basis = calculateBudgetBasis(sumsByMonth, request.mode(), window, targetMonth, outlier.outlierMonth());
+            BigDecimal basis = calculateBudgetBasis(sumsByMonth, request.mode(), window, targetMonth, excludedOutlierMonth);
             BigDecimal suggestedAmount = roundMoney(basis, roundingMultiple);
 
             int transactionCount = categoryTransactions.size();
@@ -357,7 +403,12 @@ public class BudgetPlanningSuggestionService {
                     .filter(amount -> amount.signum() > 0)
                     .count();
 
-            SuggestionConfidence confidence = budgetConfidence(request.mode(), monthsWithData, transactionCount, outlier.outlier());
+            SuggestionConfidence confidence = budgetConfidence(
+                    request.mode(),
+                    monthsWithData,
+                    transactionCount,
+                    outlier.outlierDetected()
+            );
 
             suggestions.add(new BudgetSuggestion(
                     category.getId(),
@@ -367,9 +418,10 @@ public class BudgetPlanningSuggestionService {
                     suggestedAmount,
                     transactionCount,
                     confidence,
-                    budgetReason(request.mode(), monthsWithData, outlier.outlier()),
-                    outlier.outlier(),
-                    !outlier.outlier() && confidence != SuggestionConfidence.NONE,
+                    budgetReason(request.mode(), monthsWithData, outlier),
+                    outlier.outlierDetected(),
+                    outlier.outlierAffectsSuggestedAmount(),
+                    !outlier.outlierAffectsSuggestedAmount() && confidence != SuggestionConfidence.NONE,
                     categoryTransactions.stream().map(MoneyTransaction::getId).filter(Objects::nonNull).toList()
             ));
         }
@@ -531,7 +583,7 @@ public class BudgetPlanningSuggestionService {
                 .filter(Objects::nonNull)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         int outliers = (int) budgetSuggestions.stream()
-                .filter(suggestion -> Boolean.TRUE.equals(suggestion.outlier()))
+                .filter(suggestion -> Boolean.TRUE.equals(suggestion.outlierDetected()))
                 .count();
 
         return new BudgetPlanningSuggestionTotals(
@@ -631,7 +683,7 @@ public class BudgetPlanningSuggestionService {
             return false;
         }
 
-        if (Boolean.TRUE.equals(category.getTechnical())) {
+        if (!isPlanCategoryAllowed(category)) {
             return false;
         }
 
@@ -659,10 +711,16 @@ public class BudgetPlanningSuggestionService {
             return false;
         }
 
+        if (tx.getPaymentChannel() == MoneyTransaction.PaymentChannel.INTERNAL_TRANSFER
+                || tx.getInternalTransferGroupId() != null) {
+            return false;
+        }
+
         MoneyTransaction.ClassificationStatus classificationStatus = tx.getClassificationStatus();
 
         if (classificationStatus == MoneyTransaction.ClassificationStatus.NEEDS_CATEGORY
-                || classificationStatus == MoneyTransaction.ClassificationStatus.IGNORED_BY_RULE) {
+                || classificationStatus == MoneyTransaction.ClassificationStatus.IGNORED_BY_RULE
+                || classificationStatus == MoneyTransaction.ClassificationStatus.TECHNICAL) {
             return false;
         }
 
@@ -720,6 +778,12 @@ public class BudgetPlanningSuggestionService {
                 || category.getType() == Category.Type.SAVING
                 || category.getType() == Category.Type.DEBT
                 || category.getType() == Category.Type.INVESTMENT);
+    }
+
+    private boolean isPlanCategoryAllowed(Category category) {
+        return category != null
+                && Boolean.TRUE.equals(category.getActive())
+                && !Boolean.TRUE.equals(category.getTechnical());
     }
 
     private Map<YearMonth, BigDecimal> sumsByMonth(List<MoneyTransaction> transactions) {
@@ -822,10 +886,13 @@ public class BudgetPlanningSuggestionService {
             }
         }
 
-        boolean outlier = outlierMonth != null
-                && (outlierMonth.equals(targetMonth) || sumsByMonth.size() <= 3);
+        boolean affectsSuggestedAmount = outlierMonth != null;
 
-        return new OutlierResult(outlier, outlier ? outlierMonth : null);
+        return new OutlierResult(
+                outlierMonth != null,
+                affectsSuggestedAmount,
+                outlierMonth
+        );
     }
 
     private SuggestionConfidence budgetConfidence(
@@ -849,15 +916,19 @@ public class BudgetPlanningSuggestionService {
         return SuggestionConfidence.LOW;
     }
 
-    private String budgetReason(SuggestionMode mode, int monthsWithData, boolean outlier) {
+    private String budgetReason(SuggestionMode mode, int monthsWithData, OutlierResult outlier) {
         String base = switch (mode) {
             case CURRENT_MONTH_ONLY -> "Suma del mes seleccionado.";
             case LAST_3_MONTHS_AVERAGE -> "Promedio de los últimos 3 meses disponibles.";
             case LAST_6_MONTHS_AVERAGE -> "Promedio de los últimos 6 meses disponibles.";
         };
 
-        if (outlier) {
-            return base + " Se detectó un gasto atípico de una sola vez y queda sin aplicación automática.";
+        if (outlier.outlierAffectsSuggestedAmount()) {
+            return base + " Se detectó un gasto atípico de una sola vez y se excluyó del importe sugerido.";
+        }
+
+        if (outlier.outlierDetected()) {
+            return base + " Se detectó un gasto atípico que no modifica el importe sugerido.";
         }
 
         return base + " Meses con movimientos: " + monthsWithData + ".";
@@ -1092,32 +1163,41 @@ public class BudgetPlanningSuggestionService {
         return strict || similar;
     }
 
-    private void validatePlanSuggestion(UUID profileId, ApplyMonthlyPlanSuggestion suggestion) {
-        if (suggestion.title() == null || suggestion.title().trim().isBlank()) {
-            throw new BadRequestException("Título requerido");
+    private ValidatedBudgetSuggestion validateBudgetSuggestion(
+            UUID profileId,
+            ApplyBudgetSuggestion suggestion
+    ) {
+        if (suggestion.categoryId() == null) {
+            throw new BadRequestException("Categoría requerida");
         }
 
-        validatePeriod(suggestion.periodYear(), suggestion.periodMonth());
-
-        if (suggestion.amount() == null && suggestion.minAmount() == null && suggestion.maxAmount() == null) {
-            throw new BadRequestException("Debe tener monto o rango");
+        if (suggestion.suggestedBudgetAmount() == null) {
+            throw new BadRequestException("Monto requerido para " + suggestion.categoryId());
         }
 
-        if (suggestion.minAmount() != null
-                && suggestion.maxAmount() != null
-                && suggestion.minAmount().compareTo(suggestion.maxAmount()) > 0) {
-            throw new BadRequestException("Mínimo no puede superar máximo");
+        if (suggestion.suggestedBudgetAmount().signum() < 0) {
+            throw new BadRequestException("Monto negativo para " + suggestion.categoryId());
         }
 
-        if (suggestion.categoryId() != null
-                && findCategoryForProfile(suggestion.categoryId(), profileId).isEmpty()) {
-            throw new BadRequestException("Categoría inválida para perfil");
+        Category category = findCategoryForProfile(suggestion.categoryId(), profileId)
+                .orElseThrow(() -> new BadRequestException("Categoría no válida para presupuesto: " + suggestion.categoryId()));
+
+        if (!isBudgetableCategory(category)) {
+            throw new BadRequestException("Categoría no válida para presupuesto: " + category.getName());
         }
 
-        if (suggestion.accountId() != null
-                && !accountRepository.existsByIdAndProfileId(suggestion.accountId(), profileId)) {
-            throw new BadRequestException("Cuenta inválida para perfil");
-        }
+        return new ValidatedBudgetSuggestion(suggestion, category);
+    }
+
+    private void validateSuggestedPlanItem(UUID profileId, MonthlyPlanItem item) {
+        monthlyPlanItemValidator.validate(item, SUGGESTION_ALLOWED_PLAN_TYPES, true);
+        monthlyPlanItemValidator.validateReferences(
+                profileId,
+                item.getAccountId(),
+                item.getCategoryId(),
+                true,
+                true
+        );
     }
 
     private Optional<Category> findCategoryForProfile(UUID categoryId, UUID profileId) {
@@ -1302,6 +1382,7 @@ public class BudgetPlanningSuggestionService {
         return java.util.Arrays.stream(value.split(" "))
                 .filter(token -> token.length() > 2)
                 .filter(token -> !token.chars().allMatch(Character::isDigit))
+                .filter(token -> !GENERIC_DUPLICATE_TOKENS.contains(token))
                 .collect(Collectors.toCollection(HashSet::new));
     }
 
@@ -1312,7 +1393,17 @@ public class BudgetPlanningSuggestionService {
     private record SuggestionWindow(YearMonth start, YearMonth end, int months) {
     }
 
-    private record OutlierResult(boolean outlier, YearMonth outlierMonth) {
+    private record OutlierResult(
+            boolean outlierDetected,
+            boolean outlierAffectsSuggestedAmount,
+            YearMonth outlierMonth
+    ) {
+    }
+
+    private record ValidatedBudgetSuggestion(
+            ApplyBudgetSuggestion suggestion,
+            Category category
+    ) {
     }
 
     private record PlanGroupKey(

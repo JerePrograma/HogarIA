@@ -193,6 +193,127 @@ class BudgetPlanningSuggestionServiceTest {
     }
 
     @Test
+    void incluyeCategoriasGlobalesActivasYPresupuestables() {
+        UUID globalId = addGlobalCategory("Salud global", Category.Type.VARIABLE_EXPENSE);
+        stubTransactions(List.of(tx(globalId, MoneyTransaction.MovementType.EXPENSE, 2026, 5, "25000", "Farmacia")));
+
+        var response = service.preview(userId, profileId, preview(SuggestionMode.CURRENT_MONTH_ONLY, SuggestionTarget.BUDGET));
+
+        assertEquals(1, response.budgetSuggestions().size());
+        assertEquals(globalId, response.budgetSuggestions().get(0).categoryId());
+    }
+
+    @Test
+    void includeImportedOnlyIgnoraManualesAunqueIncludeManualSeaTrue() {
+        UUID categoryId = addCategory("Supermercado", Category.Type.VARIABLE_EXPENSE);
+        MoneyTransaction imported = tx(categoryId, MoneyTransaction.MovementType.EXPENSE, 2026, 5, "1000", "Coto");
+        MoneyTransaction manual = tx(categoryId, MoneyTransaction.MovementType.EXPENSE, 2026, 5, "5000", "Manual");
+        manual.setOrigin(MoneyTransaction.Origin.MANUAL);
+        manual.setSource(null);
+        stubTransactions(List.of(imported, manual));
+
+        var response = service.preview(userId, profileId, preview(
+                SuggestionMode.CURRENT_MONTH_ONLY,
+                SuggestionTarget.BUDGET,
+                true,
+                true,
+                false,
+                true,
+                null
+        ));
+
+        assertEquals(new BigDecimal("1000.00"), response.budgetSuggestions().get(0).realAmount());
+        assertEquals(1, response.budgetSuggestions().get(0).transactionCount());
+    }
+
+    @Test
+    void includeImportedOnlyFalseConIncludeManualFalseSignificaSoloImportados() {
+        UUID categoryId = addCategory("Supermercado", Category.Type.VARIABLE_EXPENSE);
+        MoneyTransaction imported = tx(categoryId, MoneyTransaction.MovementType.EXPENSE, 2026, 5, "1000", "Coto");
+        MoneyTransaction manual = tx(categoryId, MoneyTransaction.MovementType.EXPENSE, 2026, 5, "5000", "Manual");
+        manual.setOrigin(MoneyTransaction.Origin.MANUAL);
+        manual.setSource(null);
+        stubTransactions(List.of(imported, manual));
+
+        var response = service.preview(userId, profileId, preview(
+                SuggestionMode.CURRENT_MONTH_ONLY,
+                SuggestionTarget.BUDGET,
+                false,
+                false,
+                false,
+                true,
+                null
+        ));
+
+        assertEquals(new BigDecimal("1000.00"), response.budgetSuggestions().get(0).realAmount());
+        assertEquals(1, response.budgetSuggestions().get(0).transactionCount());
+    }
+
+    @Test
+    void includeReviewIncluyeMovimientosEnRevision() {
+        UUID categoryId = addCategory("Servicios", Category.Type.FIXED_EXPENSE);
+        MoneyTransaction review = tx(categoryId, MoneyTransaction.MovementType.EXPENSE, 2026, 5, "15000", "Internet");
+        review.setClassificationStatus(MoneyTransaction.ClassificationStatus.REVIEW);
+        stubTransactions(List.of(review));
+
+        var response = service.preview(userId, profileId, preview(
+                SuggestionMode.CURRENT_MONTH_ONLY,
+                SuggestionTarget.BUDGET,
+                true,
+                false,
+                true,
+                true,
+                null
+        ));
+
+        assertEquals(1, response.budgetSuggestions().size());
+    }
+
+    @Test
+    void selectedTransactionIdsIncluyeReviewSeleccionadoYExcluyeIdsInexistentes() {
+        UUID categoryId = addCategory("Servicios", Category.Type.FIXED_EXPENSE);
+        MoneyTransaction review = tx(categoryId, MoneyTransaction.MovementType.EXPENSE, 2026, 5, "15000", "Internet");
+        review.setClassificationStatus(MoneyTransaction.ClassificationStatus.REVIEW);
+        stubTransactions(List.of(review));
+
+        var response = service.preview(userId, profileId, preview(
+                SuggestionMode.CURRENT_MONTH_ONLY,
+                SuggestionTarget.BUDGET,
+                true,
+                false,
+                false,
+                true,
+                List.of(review.getId(), UUID.randomUUID())
+        ));
+
+        assertEquals(1, response.budgetSuggestions().size());
+        assertEquals(List.of(review.getId()), response.budgetSuggestions().get(0).sourceTransactionIds());
+    }
+
+    @Test
+    void selectedTransactionIdsNoSalteaReglasDuras() {
+        UUID categoryId = addCategory("Transferencias", Category.Type.VARIABLE_EXPENSE);
+        MoneyTransaction transfer = tx(categoryId, MoneyTransaction.MovementType.TRANSFER, 2026, 5, "15000", "Fondeo");
+        MoneyTransaction pending = tx(categoryId, MoneyTransaction.MovementType.EXPENSE, 2026, 5, "12000", "Pendiente");
+        pending.setStatus(MoneyTransaction.Status.PENDING);
+        MoneyTransaction noCategory = tx(categoryId, MoneyTransaction.MovementType.EXPENSE, 2026, 5, "10000", "Sin categoría");
+        noCategory.setCategoryId(null);
+        stubTransactions(List.of(transfer, pending, noCategory));
+
+        var response = service.preview(userId, profileId, preview(
+                SuggestionMode.CURRENT_MONTH_ONLY,
+                SuggestionTarget.BUDGET,
+                true,
+                false,
+                false,
+                true,
+                List.of(transfer.getId(), pending.getId(), noCategory.getId())
+        ));
+
+        assertTrue(response.budgetSuggestions().isEmpty());
+    }
+
+    @Test
     void promedioUltimosTresMesesCalculaBien() {
         UUID categoryId = addCategory("Servicios", Category.Type.FIXED_EXPENSE);
         stubTransactions(List.of(
@@ -217,9 +338,73 @@ class BudgetPlanningSuggestionServiceTest {
 
         var response = service.preview(userId, profileId, preview(SuggestionMode.LAST_3_MONTHS_AVERAGE, SuggestionTarget.BUDGET));
 
-        assertTrue(response.budgetSuggestions().get(0).outlier());
+        assertTrue(response.budgetSuggestions().get(0).outlierDetected());
+        assertTrue(response.budgetSuggestions().get(0).outlierAffectsSuggestedAmount());
         assertFalse(response.budgetSuggestions().get(0).applyByDefault());
         assertEquals(new BigDecimal("10000.00"), response.budgetSuggestions().get(0).suggestedBudgetAmount());
+    }
+
+    @Test
+    void outlierDeMesAnteriorNoContaminaPromedioTresMeses() {
+        UUID categoryId = addCategory("Viajes", Category.Type.VARIABLE_EXPENSE);
+        stubTransactions(List.of(
+                tx(categoryId, MoneyTransaction.MovementType.EXPENSE, 2026, 3, "100000", "Viaje excepcional"),
+                tx(categoryId, MoneyTransaction.MovementType.EXPENSE, 2026, 4, "10000", "Transporte"),
+                tx(categoryId, MoneyTransaction.MovementType.EXPENSE, 2026, 5, "10000", "Transporte")
+        ));
+
+        var response = service.preview(userId, profileId, preview(SuggestionMode.LAST_3_MONTHS_AVERAGE, SuggestionTarget.BUDGET));
+
+        assertTrue(response.budgetSuggestions().get(0).outlierDetected());
+        assertTrue(response.budgetSuggestions().get(0).outlierAffectsSuggestedAmount());
+        assertFalse(response.budgetSuggestions().get(0).applyByDefault());
+        assertEquals(new BigDecimal("10000.00"), response.budgetSuggestions().get(0).suggestedBudgetAmount());
+    }
+
+    @Test
+    void outlierEnVentanaSeisMesesConCuatroMesesDeDatosSeExcluyeDelPromedio() {
+        UUID categoryId = addCategory("Salud", Category.Type.VARIABLE_EXPENSE);
+        stubTransactions(List.of(
+                tx(categoryId, MoneyTransaction.MovementType.EXPENSE, 2026, 2, "10000", "Farmacia"),
+                tx(categoryId, MoneyTransaction.MovementType.EXPENSE, 2026, 3, "10000", "Farmacia"),
+                tx(categoryId, MoneyTransaction.MovementType.EXPENSE, 2026, 4, "100000", "Cirugía excepcional"),
+                tx(categoryId, MoneyTransaction.MovementType.EXPENSE, 2026, 5, "10000", "Farmacia")
+        ));
+
+        var response = service.preview(userId, profileId, preview(SuggestionMode.LAST_6_MONTHS_AVERAGE, SuggestionTarget.BUDGET));
+
+        assertTrue(response.budgetSuggestions().get(0).outlierDetected());
+        assertTrue(response.budgetSuggestions().get(0).outlierAffectsSuggestedAmount());
+        assertEquals(new BigDecimal("10000.00"), response.budgetSuggestions().get(0).suggestedBudgetAmount());
+    }
+
+    @Test
+    void noMarcaComoOutlierUnPatronRecurrenteAlto() {
+        UUID categoryId = addCategory("Colegio", Category.Type.FIXED_EXPENSE);
+        stubTransactions(List.of(
+                tx(categoryId, MoneyTransaction.MovementType.EXPENSE, 2026, 2, "100000", "Colegio"),
+                tx(categoryId, MoneyTransaction.MovementType.EXPENSE, 2026, 3, "105000", "Colegio"),
+                tx(categoryId, MoneyTransaction.MovementType.EXPENSE, 2026, 4, "98000", "Colegio"),
+                tx(categoryId, MoneyTransaction.MovementType.EXPENSE, 2026, 5, "102000", "Colegio")
+        ));
+
+        var response = service.preview(userId, profileId, preview(SuggestionMode.LAST_6_MONTHS_AVERAGE, SuggestionTarget.BUDGET));
+
+        assertFalse(response.budgetSuggestions().get(0).outlierDetected());
+        assertTrue(response.budgetSuggestions().get(0).applyByDefault());
+    }
+
+    @Test
+    void commitNoCreaEstructuraPresupuestariaSiTodasLasSugerenciasSonInvalidas() {
+        UUID missingCategoryId = UUID.randomUUID();
+
+        var response = service.commit(userId, profileId, commitBudget(missingCategoryId, "100000", false));
+
+        assertEquals(0, response.createdBudgetItems());
+        assertFalse(response.errors().isEmpty());
+        verify(budgetYearRepository, never()).save(any(BudgetYear.class));
+        verify(budgetMonthRepository, never()).save(any(BudgetMonth.class));
+        verify(budgetItemRepository, never()).save(any(BudgetCategoryItem.class));
     }
 
     @Test
@@ -303,6 +488,50 @@ class BudgetPlanningSuggestionServiceTest {
     }
 
     @Test
+    void planificacionPuedeApuntarAlMesSeleccionadoSiNextMonthEsFalse() {
+        UUID categoryId = addCategory("Alquiler", Category.Type.FIXED_EXPENSE);
+        stubTransactions(List.of(tx(categoryId, MoneyTransaction.MovementType.EXPENSE, 2026, 4, "100000", "Alquiler")));
+        when(monthlyPlanItemRepository.findByProfileIdAndPeriodYearAndPeriodMonth(profileId, 2026, 5))
+                .thenReturn(List.of());
+
+        var response = service.preview(userId, profileId, preview(
+                SuggestionMode.LAST_3_MONTHS_AVERAGE,
+                SuggestionTarget.MONTHLY_PLAN,
+                true,
+                false,
+                false,
+                false,
+                null
+        ));
+
+        assertEquals(1, response.monthlyPlanSuggestions().size());
+        assertEquals(2026, response.monthlyPlanSuggestions().get(0).periodYear());
+        assertEquals(5, response.monthlyPlanSuggestions().get(0).periodMonth());
+        assertEquals(LocalDate.of(2026, 5, 5), response.monthlyPlanSuggestions().get(0).expectedDate());
+    }
+
+    @Test
+    void planificacionExcluyeCategoriasTecnicasEInactivas() {
+        UUID goodId = addCategory("Alquiler", Category.Type.FIXED_EXPENSE);
+        UUID technicalId = addCategory("Fondeo técnico", Category.Type.FIXED_EXPENSE);
+        categories.get(technicalId).setTechnical(true);
+        UUID inactiveId = addCategory("Inactiva", Category.Type.FIXED_EXPENSE);
+        categories.get(inactiveId).setActive(false);
+        stubTransactions(List.of(
+                tx(goodId, MoneyTransaction.MovementType.EXPENSE, 2026, 5, "100000", "Alquiler"),
+                tx(technicalId, MoneyTransaction.MovementType.EXPENSE, 2026, 5, "50000", "Fondeo"),
+                tx(inactiveId, MoneyTransaction.MovementType.EXPENSE, 2026, 5, "60000", "Viejo")
+        ));
+        when(monthlyPlanItemRepository.findByProfileIdAndPeriodYearAndPeriodMonth(profileId, 2026, 6))
+                .thenReturn(List.of());
+
+        var response = service.preview(userId, profileId, preview(SuggestionMode.CURRENT_MONTH_ONLY, SuggestionTarget.MONTHLY_PLAN));
+
+        assertEquals(1, response.monthlyPlanSuggestions().size());
+        assertEquals(goodId, response.monthlyPlanSuggestions().get(0).categoryId());
+    }
+
+    @Test
     void tarjetaCreditoGeneraTypeDebt() {
         UUID categoryId = addCategory("Tarjeta", Category.Type.DEBT);
         MoneyTransaction tx = tx(categoryId, MoneyTransaction.MovementType.EXPENSE, 2026, 5, "45000", "Pago VISA");
@@ -372,6 +601,35 @@ class BudgetPlanningSuggestionServiceTest {
     }
 
     @Test
+    void commitPlanificacionRechazaFechaEsperadaFueraDelPeriodo() {
+        UUID categoryId = addCategory("Alquiler", Category.Type.FIXED_EXPENSE);
+        var request = commitPlan(new ApplyMonthlyPlanSuggestion(
+                "Alquiler",
+                null,
+                LocalDate.of(2026, 7, 5),
+                2026,
+                6,
+                new BigDecimal("100000.00"),
+                null,
+                null,
+                categoryId,
+                accountId,
+                MonthlyPlanItem.Type.EXPENSE,
+                MonthlyPlanItem.Priority.ESSENTIAL,
+                MonthlyPlanItem.Source.SYSTEM,
+                true,
+                false,
+                List.of()
+        ));
+
+        var response = service.commit(userId, profileId, request);
+
+        assertEquals(0, response.createdMonthlyPlanItems());
+        assertFalse(response.errors().isEmpty());
+        verify(monthlyPlanItemRepository, never()).save(any());
+    }
+
+    @Test
     void dedupeEvitaCrearMonthlyPlanItemRepetido() {
         UUID categoryId = addCategory("Alquiler", Category.Type.FIXED_EXPENSE);
         MonthlyPlanItem existing = MonthlyPlanItem.builder()
@@ -421,6 +679,79 @@ class BudgetPlanningSuggestionServiceTest {
         verify(monthlyPlanItemRepository, never()).save(any());
     }
 
+    @Test
+    void dedupeDetectaMismoTituloCategoriaYMontoAunqueCambieSource() {
+        UUID categoryId = addCategory("Alquiler", Category.Type.FIXED_EXPENSE);
+        when(monthlyPlanItemRepository.findByProfileIdAndPeriodYearAndPeriodMonth(profileId, 2026, 6))
+                .thenReturn(List.of(existingPlan(categoryId, "Alquiler", "100000.00", MonthlyPlanItem.Source.IMPORT, MonthlyPlanItem.Status.ESTIMATED)));
+
+        var response = service.commit(userId, profileId, commitPlan(planSuggestion(categoryId, "Alquiler", "100000.00", MonthlyPlanItem.Source.SYSTEM)));
+
+        assertEquals(0, response.createdMonthlyPlanItems());
+        assertEquals(1, response.skippedDuplicates());
+    }
+
+    @Test
+    void dedupeDetectaTituloParecidoConTokensCompartidos() {
+        UUID categoryId = addCategory("Alquiler", Category.Type.FIXED_EXPENSE);
+        when(monthlyPlanItemRepository.findByProfileIdAndPeriodYearAndPeriodMonth(profileId, 2026, 6))
+                .thenReturn(List.of(existingPlan(categoryId, "Alquiler departamento", "100000.00", MonthlyPlanItem.Source.SYSTEM, MonthlyPlanItem.Status.ESTIMATED)));
+
+        var response = service.commit(userId, profileId, commitPlan(planSuggestion(categoryId, "Alquiler vivienda", "100000.00", MonthlyPlanItem.Source.SYSTEM)));
+
+        assertEquals(0, response.createdMonthlyPlanItems());
+        assertEquals(1, response.skippedDuplicates());
+    }
+
+    @Test
+    void dedupeNoBloqueaMismoTituloConCategoriaDistinta() {
+        UUID categoryId = addCategory("Alquiler", Category.Type.FIXED_EXPENSE);
+        UUID otherCategoryId = addCategory("Servicios", Category.Type.FIXED_EXPENSE);
+        when(monthlyPlanItemRepository.findByProfileIdAndPeriodYearAndPeriodMonth(profileId, 2026, 6))
+                .thenReturn(List.of(existingPlan(otherCategoryId, "Alquiler", "100000.00", MonthlyPlanItem.Source.SYSTEM, MonthlyPlanItem.Status.ESTIMATED)));
+
+        var response = service.commit(userId, profileId, commitPlan(planSuggestion(categoryId, "Alquiler", "100000.00", MonthlyPlanItem.Source.SYSTEM)));
+
+        assertEquals(1, response.createdMonthlyPlanItems());
+        assertEquals(0, response.skippedDuplicates());
+    }
+
+    @Test
+    void dedupeDetectaMontoSimilarDentroDeTolerancia() {
+        UUID categoryId = addCategory("Alquiler", Category.Type.FIXED_EXPENSE);
+        when(monthlyPlanItemRepository.findByProfileIdAndPeriodYearAndPeriodMonth(profileId, 2026, 6))
+                .thenReturn(List.of(existingPlan(categoryId, "Alquiler", "100000.00", MonthlyPlanItem.Source.SYSTEM, MonthlyPlanItem.Status.ESTIMATED)));
+
+        var response = service.commit(userId, profileId, commitPlan(planSuggestion(categoryId, "Alquiler", "109000.00", MonthlyPlanItem.Source.SYSTEM)));
+
+        assertEquals(0, response.createdMonthlyPlanItems());
+        assertEquals(1, response.skippedDuplicates());
+    }
+
+    @Test
+    void dedupeNoBloqueaMontoFueraDeTolerancia() {
+        UUID categoryId = addCategory("Alquiler", Category.Type.FIXED_EXPENSE);
+        when(monthlyPlanItemRepository.findByProfileIdAndPeriodYearAndPeriodMonth(profileId, 2026, 6))
+                .thenReturn(List.of(existingPlan(categoryId, "Alquiler", "100000.00", MonthlyPlanItem.Source.SYSTEM, MonthlyPlanItem.Status.ESTIMATED)));
+
+        var response = service.commit(userId, profileId, commitPlan(planSuggestion(categoryId, "Alquiler", "125000.00", MonthlyPlanItem.Source.SYSTEM)));
+
+        assertEquals(1, response.createdMonthlyPlanItems());
+        assertEquals(0, response.skippedDuplicates());
+    }
+
+    @Test
+    void dedupeNoBloqueaItemCancelado() {
+        UUID categoryId = addCategory("Alquiler", Category.Type.FIXED_EXPENSE);
+        when(monthlyPlanItemRepository.findByProfileIdAndPeriodYearAndPeriodMonth(profileId, 2026, 6))
+                .thenReturn(List.of(existingPlan(categoryId, "Alquiler", "100000.00", MonthlyPlanItem.Source.SYSTEM, MonthlyPlanItem.Status.CANCELLED)));
+
+        var response = service.commit(userId, profileId, commitPlan(planSuggestion(categoryId, "Alquiler", "100000.00", MonthlyPlanItem.Source.SYSTEM)));
+
+        assertEquals(1, response.createdMonthlyPlanItems());
+        assertEquals(0, response.skippedDuplicates());
+    }
+
     private UUID addCategory(String name, Category.Type type) {
         UUID id = UUID.randomUUID();
         categories.put(id, Category.builder()
@@ -429,6 +760,21 @@ class BudgetPlanningSuggestionServiceTest {
                 .name(name)
                 .type(type)
                 .scope(Category.Scope.PERSONAL)
+                .active(true)
+                .budgetable(true)
+                .technical(false)
+                .build());
+        return id;
+    }
+
+    private UUID addGlobalCategory(String name, Category.Type type) {
+        UUID id = UUID.randomUUID();
+        categories.put(id, Category.builder()
+                .id(id)
+                .profileId(null)
+                .name(name)
+                .type(type)
+                .scope(Category.Scope.GLOBAL)
                 .active(true)
                 .budgetable(true)
                 .technical(false)
@@ -488,16 +834,28 @@ class BudgetPlanningSuggestionServiceTest {
             SuggestionMode mode,
             SuggestionTarget target
     ) {
+        return preview(mode, target, true, false, false, true, null);
+    }
+
+    private BudgetPlanningSuggestionPreviewRequest preview(
+            SuggestionMode mode,
+            SuggestionTarget target,
+            boolean includeImportedOnly,
+            boolean includeManual,
+            boolean includeReview,
+            boolean nextMonth,
+            List<UUID> selectedTransactionIds
+    ) {
         return new BudgetPlanningSuggestionPreviewRequest(
                 2026,
                 5,
                 mode,
-                true,
-                false,
-                false,
+                includeImportedOnly,
+                includeManual,
+                includeReview,
                 target,
-                true,
-                null,
+                nextMonth,
+                selectedTransactionIds,
                 new BigDecimal("100")
         );
     }
@@ -515,11 +873,69 @@ class BudgetPlanningSuggestionServiceTest {
                         new BigDecimal(amount),
                         true,
                         false,
+                        false,
                         null
                 )),
                 List.of(),
                 true,
                 overwrite
         );
+    }
+
+    private ApplyMonthlyPlanSuggestion planSuggestion(
+            UUID categoryId,
+            String title,
+            String amount,
+            MonthlyPlanItem.Source source
+    ) {
+        return new ApplyMonthlyPlanSuggestion(
+                title,
+                null,
+                LocalDate.of(2026, 6, 5),
+                2026,
+                6,
+                new BigDecimal(amount),
+                null,
+                null,
+                categoryId,
+                accountId,
+                MonthlyPlanItem.Type.EXPENSE,
+                MonthlyPlanItem.Priority.ESSENTIAL,
+                source,
+                true,
+                false,
+                List.of()
+        );
+    }
+
+    private BudgetPlanningSuggestionCommitRequest commitPlan(ApplyMonthlyPlanSuggestion suggestion) {
+        return new BudgetPlanningSuggestionCommitRequest(
+                2026,
+                5,
+                List.of(),
+                List.of(suggestion),
+                true,
+                false
+        );
+    }
+
+    private MonthlyPlanItem existingPlan(
+            UUID categoryId,
+            String title,
+            String amount,
+            MonthlyPlanItem.Source source,
+            MonthlyPlanItem.Status status
+    ) {
+        return MonthlyPlanItem.builder()
+                .profileId(profileId)
+                .categoryId(categoryId)
+                .title(title)
+                .periodYear(2026)
+                .periodMonth(6)
+                .amount(new BigDecimal(amount))
+                .type(MonthlyPlanItem.Type.EXPENSE)
+                .source(source)
+                .status(status)
+                .build();
     }
 }

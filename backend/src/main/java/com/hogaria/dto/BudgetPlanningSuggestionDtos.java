@@ -6,7 +6,6 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -57,7 +56,8 @@ public class BudgetPlanningSuggestionDtos {
             Integer transactionCount,
             SuggestionConfidence confidence,
             String reason,
-            Boolean outlier,
+            Boolean outlierDetected,
+            Boolean outlierAffectsSuggestedAmount,
             Boolean applyByDefault,
             List<UUID> sourceTransactionIds
     ) {
@@ -116,26 +116,27 @@ public class BudgetPlanningSuggestionDtos {
     }
 
     public record ApplyBudgetSuggestion(
-            @NotNull UUID categoryId,
-            @NotNull @DecimalMin("0.00") BigDecimal suggestedBudgetAmount,
+            UUID categoryId,
+            BigDecimal suggestedBudgetAmount,
             Boolean apply,
-            Boolean outlier,
+            Boolean outlierDetected,
+            Boolean outlierAffectsSuggestedAmount,
             String reason
     ) {
     }
 
     public record ApplyMonthlyPlanSuggestion(
-            @NotBlank String title,
+            String title,
             String description,
             LocalDate expectedDate,
-            @NotNull @Min(2000) @Max(2100) Integer periodYear,
-            @NotNull @Min(1) @Max(12) Integer periodMonth,
-            @DecimalMin("0.00") BigDecimal amount,
-            @DecimalMin("0.00") BigDecimal minAmount,
-            @DecimalMin("0.00") BigDecimal maxAmount,
+            Integer periodYear,
+            Integer periodMonth,
+            BigDecimal amount,
+            BigDecimal minAmount,
+            BigDecimal maxAmount,
             UUID categoryId,
             UUID accountId,
-            @NotNull MonthlyPlanItem.Type type,
+            MonthlyPlanItem.Type type,
             MonthlyPlanItem.Priority priority,
             MonthlyPlanItem.Source source,
             Boolean apply,

@@ -10,7 +10,7 @@ export function PlanningLayout() {
   const query = `?${searchParams.toString()}`;
 
   const tabs = [
-    ['Workspace', planningRoutes.root(profileId)],
+    ['Inicio', planningRoutes.root(profileId)],
     ['Mensual', planningRoutes.monthly(profileId)],
     ['Ítems', planningRoutes.items(profileId)],
     ['Sugerencias', planningRoutes.suggestions(profileId)],
@@ -25,7 +25,7 @@ export function PlanningLayout() {
     <AppLayout>
       <div className="page-stack monthly-planning-page">
         <section className="page-header planning-hero">
-          <div><p className="eyebrow">Planificación</p><h1>Workspace mensual</h1></div>
+          <div><p className="eyebrow">Planificación</p><h1>Espacio mensual</h1></div>
           <MonthSelector year={year} month={month} onYearChange={setYear} onMonthChange={setMonth} />
         </section>
         <nav className="planning-filter-row">

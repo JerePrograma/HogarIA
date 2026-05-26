@@ -736,7 +736,8 @@ export interface BudgetSuggestion {
   transactionCount: number;
   confidence: SuggestionConfidence;
   reason: string;
-  outlier: boolean;
+  outlierDetected: boolean;
+  outlierAffectsSuggestedAmount: boolean;
   applyByDefault: boolean;
   sourceTransactionIds: string[];
 }
@@ -784,7 +785,8 @@ export interface ApplyBudgetSuggestion {
   categoryId: string;
   suggestedBudgetAmount: number;
   apply: boolean;
-  outlier?: boolean;
+  outlierDetected?: boolean;
+  outlierAffectsSuggestedAmount?: boolean;
   reason?: string | null;
 }
 

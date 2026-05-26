@@ -5,6 +5,7 @@ import {
   monthlyPlanPriorityLabels,
   monthlyPlanSourceLabels,
   monthlyPlanTypeLabels,
+  suggestionConfidenceLabels,
 } from '../../../domain/financeLabels';
 import type {
   Account,
@@ -32,6 +33,26 @@ type Props = {
 
 const typeOptions: MonthlyPlanItemType[] = ['INCOME', 'EXPENSE', 'DEBT', 'SAVING', 'RECOVERY'];
 const priorityOptions: MonthlyPlanPriority[] = ['ESSENTIAL', 'IMPORTANT', 'OPTIONAL'];
+
+export function getMonthlyPlanSuggestionValidationMessage(row: MonthlyPlanSuggestionDraft): string | null {
+  if (!row.title.trim()) {
+    return 'El título es obligatorio.';
+  }
+
+  if (row.amount == null && row.minAmount == null && row.maxAmount == null) {
+    return 'Debe tener monto exacto o rango.';
+  }
+
+  if (row.minAmount != null && row.maxAmount != null && row.minAmount > row.maxAmount) {
+    return 'El mínimo no puede superar al máximo.';
+  }
+
+  if (row.expectedDate && !isDateInPeriod(row.expectedDate, row.periodYear, row.periodMonth)) {
+    return 'La fecha esperada debe pertenecer al período destino.';
+  }
+
+  return null;
+}
 
 export const toMonthlyPlanDrafts = (
   suggestions: MonthlyPlanSuggestion[],
@@ -89,8 +110,10 @@ export function MonthlyPlanSuggestionsTable({
               <th>Aplicar</th>
               <th>Título</th>
               <th>Tipo</th>
+              <th>Prioridad</th>
               <th>Fecha</th>
-              <th>Monto</th>
+              <th>Monto exacto</th>
+              <th>Rango</th>
               <th>Categoría</th>
               <th>Cuenta</th>
               <th>Confianza</th>
@@ -98,7 +121,10 @@ export function MonthlyPlanSuggestionsTable({
             </tr>
           </thead>
           <tbody>
-            {rows.map((row, index) => (
+            {rows.map((row, index) => {
+              const validationMessage = row.apply ? getMonthlyPlanSuggestionValidationMessage(row) : null;
+
+              return (
               <tr key={`${row.title}-${row.periodYear}-${row.periodMonth}-${index}`}>
                 <td>
                   <input
@@ -132,6 +158,21 @@ export function MonthlyPlanSuggestionsTable({
                   </select>
                 </td>
                 <td>
+                  <select
+                    className="input-ui"
+                    value={row.priority ?? 'IMPORTANT'}
+                    onChange={(event) =>
+                      updateRow(index, { priority: event.target.value as MonthlyPlanPriority })
+                    }
+                  >
+                    {priorityOptions.map((priority) => (
+                      <option key={priority} value={priority}>
+                        {monthlyPlanPriorityLabels[priority]}
+                      </option>
+                    ))}
+                  </select>
+                </td>
+                <td>
                   <input
                     className="input-ui"
                     type="date"
@@ -148,6 +189,31 @@ export function MonthlyPlanSuggestionsTable({
                     value={row.amount ?? ''}
                     onChange={(event) => updateRow(index, { amount: parseNullableAmount(event.target.value) })}
                   />
+                </td>
+                <td>
+                  <div className="suggestion-range-inputs">
+                    <input
+                      className="input-ui suggestion-amount-input"
+                      type="number"
+                      min="0"
+                      inputMode="decimal"
+                      value={row.minAmount ?? ''}
+                      aria-label={`Monto mínimo para ${row.title}`}
+                      onChange={(event) => updateRow(index, { minAmount: parseNullableAmount(event.target.value) })}
+                    />
+                    <input
+                      className="input-ui suggestion-amount-input"
+                      type="number"
+                      min="0"
+                      inputMode="decimal"
+                      value={row.maxAmount ?? ''}
+                      aria-label={`Monto máximo para ${row.title}`}
+                      onChange={(event) => updateRow(index, { maxAmount: parseNullableAmount(event.target.value) })}
+                    />
+                  </div>
+                  {validationMessage ? (
+                    <span className="compact-error">{validationMessage}</span>
+                  ) : null}
                 </td>
                 <td>
                   <select
@@ -185,19 +251,23 @@ export function MonthlyPlanSuggestionsTable({
                   {row.duplicate ? <StatusBadge label="Duplicado" tone="watch" /> : null}
                 </td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </div>
 
       <div className="suggestion-mobile-list">
-        {rows.map((row, index) => (
+        {rows.map((row, index) => {
+          const validationMessage = row.apply ? getMonthlyPlanSuggestionValidationMessage(row) : null;
+
+          return (
           <article key={`${row.title}-${index}`} className="suggestion-mobile-card">
             <header>
               <div>
                 <strong>{row.title}</strong>
                 <span className="compact-muted">
-                  {labelOrValue(monthlyPlanTypeLabels, row.type)} · {formatMoney(row.amount)}
+                  {labelOrValue(monthlyPlanTypeLabels, row.type)} · {formatMoney(row.amount ?? row.minAmount ?? row.maxAmount)}
                 </span>
               </div>
               <input
@@ -234,13 +304,33 @@ export function MonthlyPlanSuggestionsTable({
                 />
               </label>
               <label>
-                Monto
+                Monto exacto
                 <input
                   type="number"
                   min="0"
                   inputMode="decimal"
                   value={row.amount ?? ''}
                   onChange={(event) => updateRow(index, { amount: parseNullableAmount(event.target.value) })}
+                />
+              </label>
+              <label>
+                Mínimo
+                <input
+                  type="number"
+                  min="0"
+                  inputMode="decimal"
+                  value={row.minAmount ?? ''}
+                  onChange={(event) => updateRow(index, { minAmount: parseNullableAmount(event.target.value) })}
+                />
+              </label>
+              <label>
+                Máximo
+                <input
+                  type="number"
+                  min="0"
+                  inputMode="decimal"
+                  value={row.maxAmount ?? ''}
+                  onChange={(event) => updateRow(index, { maxAmount: parseNullableAmount(event.target.value) })}
                 />
               </label>
               <label>
@@ -288,10 +378,12 @@ export function MonthlyPlanSuggestionsTable({
               </label>
             </div>
             <ConfidenceBadge confidence={row.confidence} />
+            {validationMessage ? <p className="mensaje-error compact-message">{validationMessage}</p> : null}
             <p className="secondary-text">{row.reason}</p>
             {row.duplicate ? <StatusBadge label="Duplicado" tone="watch" /> : null}
           </article>
-        ))}
+          );
+        })}
       </div>
     </section>
   );
@@ -299,7 +391,7 @@ export function MonthlyPlanSuggestionsTable({
 
 function ConfidenceBadge({ confidence }: { confidence: SuggestionConfidence }) {
   const tone = confidence === 'HIGH' ? 'ok' : confidence === 'MEDIUM' ? 'watch' : 'risk';
-  return <StatusBadge label={confidence} tone={tone} />;
+  return <StatusBadge label={suggestionConfidenceLabels[confidence]} tone={tone} />;
 }
 
 function parseNullableAmount(value: string): number | null {
@@ -309,4 +401,9 @@ function parseNullableAmount(value: string): number | null {
 
   const parsed = Number(value.replace(',', '.'));
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+}
+
+function isDateInPeriod(value: string, year: number, month: number): boolean {
+  const [dateYear, dateMonth] = value.split('-').map(Number);
+  return dateYear === year && dateMonth === month;
 }

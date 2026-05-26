@@ -25,6 +25,11 @@ public record BulkRecategorizePreviewRequest(
         MoneyTransaction.Status targetStatus,
         MoneyTransaction.ClassificationStatus targetClassificationStatus,
         String targetClassificationReason,
-        List<UUID> transactionIds
+        List<UUID> transactionIds,
+
+        MoneyTransaction.ClassificationStatus classificationStatus,
+        MoneyTransaction.PaymentChannel paymentChannel,
+        String source,
+        String counterpartyContains
 ) {
 }
