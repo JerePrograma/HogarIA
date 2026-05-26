@@ -1,0 +1,7 @@
+/*
+ * Tokens visuales de HogarIA.
+ *
+ * Compatibilidad temporal: los custom properties activos viven todavía en
+ * src/index.css para evitar un cambio masivo de cascade en esta iteración.
+ * Este archivo deja explícito el destino final del sistema de estilos.
+ */

@@ -3,6 +3,8 @@
 export const queryKeys = {
   profiles: ["profiles"] as const,
 
+  devUsers: ["dev-users"] as const,
+
   profile: (profileId: string) => ["profiles", profileId] as const,
 
   dashboard: (profileId: string, year?: number, month?: number) =>
@@ -73,6 +75,11 @@ export const queryKeys = {
 
   inflation: (profileId: string) => ["inflation", profileId] as const,
 
+  inflationYear: (year: number) => ["inflation", "year", year] as const,
+
+  inflationAccumulatedYear: (year: number) =>
+    ["inflation", "year", year, "accumulated"] as const,
+
   inflationAccumulated: (profileId: string, from?: string, to?: string) =>
     from && to
       ? (["inflation", profileId, "accumulated", from, to] as const)
@@ -105,4 +112,7 @@ export const queryKeys = {
     ["planning-reconciliation", profileId, year, month] as const,
 
   externalLoans: (profileId: string) => ["external-loans", profileId] as const,
+
+  externalLoanSyncConfig: (profileId: string) =>
+    ["external-loans", profileId, "sync-config"] as const,
 };

@@ -4,7 +4,7 @@ import type {
   ExternalLoanSyncConfig,
   ExternalLoanSyncConfigPayload,
   ExternalLoansSummaryResponse,
-} from '../features/external-loans/types';
+} from '../domains/external-loans/types';
 
 export const getExternalLoansSummary = async (profileId: string): Promise<ExternalLoansSummaryResponse> => {
   const response = await http.get<ExternalLoansSummaryResponse>(`/profiles/${profileId}/external-loans/summary`);

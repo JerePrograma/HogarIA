@@ -1,5 +1,5 @@
 import { http } from './http';
-import type { TransactionImportCommitPayload, TransactionImportCommitResult, TransactionImportPreview, TransactionImportSource } from '../features/imports/types';
+import type { TransactionImportCommitPayload, TransactionImportCommitResult, TransactionImportPreview, TransactionImportSource } from '../domains/transaction-import/types';
 
 export const previewTransactionImport = (
   profileId: string,

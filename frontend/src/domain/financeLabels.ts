@@ -48,6 +48,15 @@ export function labelOrValue<T extends string>(
   return labels[value] ?? value;
 }
 
+export function labelOrFallback<T extends string>(
+  labels: Partial<Record<T, string>>,
+  value: T | null | undefined,
+  fallback = "Valor no reconocido",
+) {
+  if (!value) return "-";
+  return labels[value] ?? fallback;
+}
+
 // ============================================================
 // Core labels
 // ============================================================
