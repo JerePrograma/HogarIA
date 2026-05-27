@@ -3,12 +3,14 @@ import type {
   Category,
   MoneyTransaction,
   MovementType,
+  PaymentChannel,
   TransactionClassificationStatus,
   TransactionStatus,
 } from "../../../domain/types";
 import {
   classificationStatusOptions,
   movementTypeOptions,
+  paymentChannelOptions,
   transactionStatusOptions,
 } from "../../../domain/financeOptions";
 import { EmptyState } from "../../../shared/ui/EmptyState";
@@ -200,6 +202,108 @@ export function TransactionListPanel({
                 </option>
               ))}
             </select>
+          </label>
+
+          <label>
+            Canal
+            <select
+              className="input-ui"
+              value={filters.paymentChannel}
+              onChange={(event) =>
+                onFiltersChange({
+                  paymentChannel: event.target.value as
+                    | PaymentChannel
+                    | typeof ALL,
+                })
+              }
+            >
+              <option value={ALL}>Todos</option>
+              {paymentChannelOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label>
+            Source
+            <input
+              className="input-ui"
+              value={filters.source}
+              placeholder="BANCO_PROVINCIA, MERCADO_PAGO"
+              onChange={(event) => onFiltersChange({ source: event.target.value })}
+            />
+          </label>
+
+          <label>
+            Desde
+            <input
+              className="input-ui"
+              type="date"
+              value={filters.dateFrom}
+              onChange={(event) => onFiltersChange({ dateFrom: event.target.value })}
+            />
+          </label>
+
+          <label>
+            Hasta
+            <input
+              className="input-ui"
+              type="date"
+              value={filters.dateTo}
+              onChange={(event) => onFiltersChange({ dateTo: event.target.value })}
+            />
+          </label>
+
+          <label>
+            Monto exacto
+            <input
+              className="input-ui"
+              type="number"
+              step="0.01"
+              value={filters.exactAmount}
+              onChange={(event) =>
+                onFiltersChange({ exactAmount: event.target.value })
+              }
+            />
+          </label>
+        </div>
+
+        <div className="transactions-filter-grid">
+          <label>
+            <input
+              type="checkbox"
+              checked={filters.onlyDuplicates}
+              onChange={(event) =>
+                onFiltersChange({ onlyDuplicates: event.target.checked })
+              }
+            />{" "}
+            Solo duplicados
+          </label>
+
+          <label>
+            <input
+              type="checkbox"
+              checked={filters.onlyInternalTransfers}
+              onChange={(event) =>
+                onFiltersChange({
+                  onlyInternalTransfers: event.target.checked,
+                })
+              }
+            />{" "}
+            Solo transferencias internas
+          </label>
+
+          <label>
+            <input
+              type="checkbox"
+              checked={filters.onlyImported}
+              onChange={(event) =>
+                onFiltersChange({ onlyImported: event.target.checked })
+              }
+            />{" "}
+            Solo importados
           </label>
         </div>
       </div>

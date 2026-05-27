@@ -57,6 +57,25 @@ export type TransactionClassificationStatus =
 
 export type TransactionDeletionMode = "PHYSICAL_DELETE" | "SOFT_IGNORE";
 
+export type OperationDateTimePrecision = "DATE_ONLY" | "DATE_TIME";
+
+export type BalanceImpact =
+  | "OPERATING_INCOME"
+  | "CONSUMPTION_EXPENSE"
+  | "SAVING_OUTFLOW"
+  | "INVESTMENT_OUTFLOW"
+  | "DEBT_OUTFLOW"
+  | "RECOVERABLE_OUTFLOW"
+  | "PRINCIPAL_RECOVERY"
+  | "INTEREST_INCOME"
+  | "REFUND_OR_REIMBURSEMENT"
+  | "INTERNAL_TRANSFER"
+  | "EXTERNAL_TRANSFER"
+  | "NEUTRAL_ADJUSTMENT"
+  | "IGNORED"
+  | "TECHNICAL"
+  | "UNKNOWN";
+
 export interface DevUser {
   id: string;
   email: string;
@@ -79,6 +98,7 @@ export interface Account {
   id: string;
   profileId: string;
   name: string;
+  accountKey?: string | null;
   accountType: AccountType;
   currency: string;
   creditLimit: number | null;
@@ -117,15 +137,20 @@ export interface MoneyTransaction {
   movementType: MovementType;
   realDate: string;
   budgetDate: string;
+  operationDateTime?: string | null;
+  operationDateTimePrecision?: OperationDateTimePrecision | null;
   amount: number;
   currency: string;
   description?: string | null;
+  normalizedDescription?: string | null;
   origin: TransactionOrigin;
   status: TransactionStatus;
 
   source?: string | null;
   sourceOperationId?: string | null;
   sourceHash?: string | null;
+  duplicateFingerprint?: string | null;
+  balanceImpact?: BalanceImpact | null;
   paymentChannel?: PaymentChannel | null;
   counterparty?: string | null;
   classificationStatus?: TransactionClassificationStatus | null;
@@ -135,6 +160,80 @@ export interface MoneyTransaction {
 
   createdAt: string;
   updatedAt: string;
+}
+
+export interface TransactionReviewItem {
+  id: string;
+  accountId: string;
+  categoryId: string | null;
+  movementType: MovementType;
+  realDate: string;
+  operationDateTime?: string | null;
+  amount: number;
+  currency: string;
+  description?: string | null;
+  normalizedDescription?: string | null;
+  source?: string | null;
+  sourceOperationId?: string | null;
+  sourceHash?: string | null;
+  duplicateFingerprint?: string | null;
+  status: TransactionStatus;
+  classificationStatus?: TransactionClassificationStatus | null;
+  classificationReason?: string | null;
+  internalTransferGroupId?: string | null;
+  balanceImpact?: BalanceImpact | null;
+}
+
+export interface DuplicateGroup {
+  groupType: "EXACT_DUPLICATE" | "POSSIBLE_CROSS_SOURCE_DUPLICATE" | string;
+  key: string;
+  amount: number;
+  currency: string;
+  transactions: TransactionReviewItem[];
+}
+
+export interface DuplicatePreviewResponse {
+  exactDuplicateGroups: number;
+  possibleCrossSourceGroups: number;
+  groups: DuplicateGroup[];
+}
+
+export interface InternalTransferCandidate {
+  debitLeg: TransactionReviewItem;
+  creditLeg: TransactionReviewItem;
+  amountDifference: number;
+  dayDistance: number;
+  reason: string;
+}
+
+export interface InternalTransferPreviewResponse {
+  candidateCount: number;
+  candidates: InternalTransferCandidate[];
+}
+
+export interface InternalTransferLinkPayload {
+  debitTransactionId: string;
+  creditTransactionId: string;
+  toleranceAmount?: number;
+  toleranceDays?: number;
+}
+
+export interface InternalTransferLinkResponse {
+  internalTransferGroupId: string;
+  debitLeg: TransactionReviewItem;
+  creditLeg: TransactionReviewItem;
+}
+
+export interface DuplicateResolvePayload {
+  keepTransactionId: string;
+  duplicateTransactionIds: string[];
+  note?: string;
+}
+
+export interface DuplicateResolveResponse {
+  keepTransactionId: string;
+  ignoredCount: number;
+  ignoredTransactionIds: string[];
 }
 
 export interface TransactionDeletionResponse {

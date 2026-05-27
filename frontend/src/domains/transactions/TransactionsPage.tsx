@@ -50,6 +50,14 @@ export function TransactionsPage() {
     movementType: ALL,
     status: ALL,
     classificationStatus: ALL,
+    paymentChannel: ALL,
+    source: "",
+    dateFrom: "",
+    dateTo: "",
+    exactAmount: "",
+    onlyDuplicates: false,
+    onlyInternalTransfers: false,
+    onlyImported: false,
   });
   const [deletionMessage, setDeletionMessage] = useState<string | null>(null);
 
@@ -111,6 +119,14 @@ export function TransactionsPage() {
       movementType: ALL,
       status: ALL,
       classificationStatus: ALL,
+      paymentChannel: ALL,
+      source: "",
+      dateFrom: "",
+      dateTo: "",
+      exactAmount: "",
+      onlyDuplicates: false,
+      onlyInternalTransfers: false,
+      onlyImported: false,
     });
   };
 

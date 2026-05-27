@@ -1,3 +1,32 @@
 package com.hogaria.dto;
 import com.hogaria.entity.MoneyTransaction;import java.math.BigDecimal;import java.time.*;import java.util.UUID;
-public record TransactionResponse(UUID id, UUID profileId, UUID accountId, UUID categoryId, MoneyTransaction.MovementType movementType, LocalDate realDate, LocalDate budgetDate, BigDecimal amount, String currency, String description, MoneyTransaction.Origin origin, MoneyTransaction.Status status, String source, String sourceOperationId, String sourceHash, MoneyTransaction.PaymentChannel paymentChannel, String counterparty, MoneyTransaction.ClassificationStatus classificationStatus, String classificationReason, UUID importBatchId, UUID internalTransferGroupId, LocalDateTime createdAt, LocalDateTime updatedAt) {}
+public record TransactionResponse(
+        UUID id,
+        UUID profileId,
+        UUID accountId,
+        UUID categoryId,
+        MoneyTransaction.MovementType movementType,
+        LocalDate realDate,
+        LocalDate budgetDate,
+        LocalDateTime operationDateTime,
+        MoneyTransaction.OperationDateTimePrecision operationDateTimePrecision,
+        BigDecimal amount,
+        String currency,
+        String description,
+        String normalizedDescription,
+        MoneyTransaction.Origin origin,
+        MoneyTransaction.Status status,
+        String source,
+        String sourceOperationId,
+        String sourceHash,
+        String duplicateFingerprint,
+        MoneyTransaction.BalanceImpact balanceImpact,
+        MoneyTransaction.PaymentChannel paymentChannel,
+        String counterparty,
+        MoneyTransaction.ClassificationStatus classificationStatus,
+        String classificationReason,
+        UUID importBatchId,
+        UUID internalTransferGroupId,
+        LocalDateTime createdAt,
+        LocalDateTime updatedAt
+) {}

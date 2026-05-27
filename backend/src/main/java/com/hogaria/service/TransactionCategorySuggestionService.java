@@ -511,8 +511,7 @@ public class TransactionCategorySuggestionService {
   private String normalizeKey(String value) {
     return normalize(value)
             .toLowerCase(Locale.ROOT)
-            .replaceAll("[^a-z0-9]+", "_")
-            .replaceAll("^_+|_+$", "");
+            .replaceAll("[^a-z0-9]+", "");
   }
 
   private String normalize(String value) {

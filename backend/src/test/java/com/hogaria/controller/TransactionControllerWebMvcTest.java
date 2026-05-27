@@ -15,6 +15,9 @@ import com.hogaria.exception.ErrorResponse;
 import com.hogaria.security.CurrentUserResolver;
 import com.hogaria.security.JwtAuthenticationFilter;
 import com.hogaria.security.JwtService;
+import com.hogaria.service.InternalTransferMatcherService;
+import com.hogaria.service.InternalTransferResolutionService;
+import com.hogaria.service.TransactionDuplicateReviewService;
 import com.hogaria.service.TransactionService;
 import java.util.List;
 import java.util.UUID;
@@ -37,6 +40,9 @@ class TransactionControllerWebMvcTest {
     @Autowired private JwtService jwtService;
 
     @MockBean private TransactionService transactionService;
+    @MockBean private TransactionDuplicateReviewService duplicateReviewService;
+    @MockBean private InternalTransferMatcherService internalTransferMatcherService;
+    @MockBean private InternalTransferResolutionService internalTransferResolutionService;
 
     @Test
     void deleteReturnsExplicitSoftIgnoreContract() throws Exception {

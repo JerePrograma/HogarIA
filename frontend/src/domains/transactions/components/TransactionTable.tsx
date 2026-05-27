@@ -15,6 +15,7 @@ import { formatMoney } from "../../../domain/formatters";
 import {
   getCategoryDisplayName,
   getDefaultClassificationStatus,
+  shouldCountTransactionInOperationalBalance,
 } from "../../../domain/transactionRules";
 import type {
   Account,
@@ -112,6 +113,22 @@ export function TransactionTable({
                       Contraparte: {transaction.counterparty}
                     </p>
                   ) : null}
+
+                  <div className="row-actions mt-2">
+                    <StatusBadge
+                      tone={transaction.origin === "IMPORT" ? "watch" : "neutral"}
+                      label={transaction.origin === "IMPORT" ? "Importado" : "Manual"}
+                    />
+                    {transaction.internalTransferGroupId ? (
+                      <StatusBadge tone="watch" label="Transferencia interna" />
+                    ) : null}
+                    {!transaction.categoryId ? (
+                      <StatusBadge tone="watch" label="Sin categoría" />
+                    ) : null}
+                    {!shouldCountTransactionInOperationalBalance(transaction) ? (
+                      <StatusBadge tone="neutral" label="No impacta balance" />
+                    ) : null}
+                  </div>
                 </td>
 
                 <td>{accountName}</td>
@@ -139,6 +156,22 @@ export function TransactionTable({
                   {transaction.classificationReason ? (
                     <p className="compact-muted">
                       {transaction.classificationReason}
+                    </p>
+                  ) : null}
+
+                  {transaction.source ? (
+                    <p className="compact-muted">Source: {transaction.source}</p>
+                  ) : null}
+
+                  {transaction.duplicateFingerprint ? (
+                    <p className="compact-muted">
+                      FP: {transaction.duplicateFingerprint.slice(0, 10)}
+                    </p>
+                  ) : null}
+
+                  {transaction.normalizedDescription ? (
+                    <p className="compact-muted">
+                      Normalizada: {transaction.normalizedDescription}
                     </p>
                   ) : null}
                 </td>

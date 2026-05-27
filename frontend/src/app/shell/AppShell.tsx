@@ -53,6 +53,11 @@ export function AppShell({ children }: { children: ReactNode }) {
             description: 'Lectura ejecutiva del mes',
             to: routePaths.dashboard(profileId),
           },
+          {
+            label: 'Centro de control',
+            description: 'Calidad y revisión',
+            to: routePaths.controlCenter(profileId),
+          },
         ],
       },
       {

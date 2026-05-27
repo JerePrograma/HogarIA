@@ -51,7 +51,7 @@ public class DashboardService {
   private final BudgetCategoryItemRepository budgetCategoryItemRepository;
   private final MonthlyPlanItemRepository monthlyPlanItemRepository;
   private final ExternalSyncMappingRepository externalSyncMappingRepository;
-  private final FinancialCashFlowClassifier classifier;
+  private final TransactionFinancialImpactService impactService;
   private final MonthlyPlanAmountCalculator monthlyPlanAmountCalculator;
 
   public DashboardService(
@@ -63,7 +63,7 @@ public class DashboardService {
       BudgetCategoryItemRepository budgetCategoryItemRepository,
       MonthlyPlanItemRepository monthlyPlanItemRepository,
       ExternalSyncMappingRepository externalSyncMappingRepository,
-      FinancialCashFlowClassifier classifier,
+      TransactionFinancialImpactService impactService,
       MonthlyPlanAmountCalculator monthlyPlanAmountCalculator) {
     this.profileRepository = profileRepository;
     this.transactionRepository = transactionRepository;
@@ -73,7 +73,7 @@ public class DashboardService {
     this.budgetCategoryItemRepository = budgetCategoryItemRepository;
     this.monthlyPlanItemRepository = monthlyPlanItemRepository;
     this.externalSyncMappingRepository = externalSyncMappingRepository;
-    this.classifier = classifier;
+    this.impactService = impactService;
     this.monthlyPlanAmountCalculator = monthlyPlanAmountCalculator;
   }
 
@@ -102,10 +102,11 @@ public class DashboardService {
         categoryRepository.findAllById(categoryIds).stream()
             .collect(Collectors.toMap(Category::getId, Function.identity()));
 
+    var mappingByTx = loadExternalEventTypeByTransaction(profileId);
     var planning = buildPlanning(planningItems);
-    var cashFlowSummary = buildCashFlowSummary(profileId, txs, categories);
-    var realConfirmedSummary = buildRealConfirmedSummary(allTransactions);
-    var realVsPlanned = buildRealVsPlanned(allTransactions, planningItems, categories);
+    var cashFlowSummary = buildCashFlowSummary(txs, categories, mappingByTx);
+    var realConfirmedSummary = buildRealConfirmedSummary(allTransactions, categories, mappingByTx);
+    var realVsPlanned = buildRealVsPlanned(allTransactions, planningItems, categories, mappingByTx);
     var closingProjection = buildClosingProjection(realConfirmedSummary, planningItems);
 
     BigDecimal income = cashFlowSummary.totalIncome();
@@ -324,7 +325,10 @@ public class DashboardService {
         cashFlow.netCashFlowIncludingRecoverables());
   }
 
-  private RealConfirmedSummaryResponse buildRealConfirmedSummary(List<MoneyTransaction> transactions) {
+  private RealConfirmedSummaryResponse buildRealConfirmedSummary(
+      List<MoneyTransaction> transactions,
+      Map<UUID, Category> categories,
+      Map<UUID, String> externalEventTypeByTx) {
     BigDecimal confirmedIncome = BigDecimal.ZERO;
     BigDecimal confirmedExpenses = BigDecimal.ZERO;
     BigDecimal confirmedSavings = BigDecimal.ZERO;
@@ -373,7 +377,8 @@ public class DashboardService {
 
       if (tx.getStatus() != MoneyTransaction.Status.CONFIRMED) continue;
 
-      if (!countsInRealOperationalBalance(tx)) {
+      var impact = impactService.analyze(tx, categories.get(tx.getCategoryId()), externalEventTypeByTx.get(tx.getId()));
+      if (!impact.impactsOperationalBalance()) {
         nonOperationalCount++;
         nonOperationalAmount = nonOperationalAmount.add(amount);
         continue;
@@ -413,7 +418,10 @@ public class DashboardService {
   }
 
   private RealVsPlannedResponse buildRealVsPlanned(
-      List<MoneyTransaction> allTransactions, List<MonthlyPlanItem> planItems, Map<UUID, Category> categories) {
+      List<MoneyTransaction> allTransactions,
+      List<MonthlyPlanItem> planItems,
+      Map<UUID, Category> categories,
+      Map<UUID, String> externalEventTypeByTx) {
     Map<UUID, CategoryDeviationAccumulator> byCategory = new LinkedHashMap<>();
     var convertedTransactionIds =
         planItems.stream()
@@ -441,7 +449,8 @@ public class DashboardService {
     }
 
     for (var tx : allTransactions) {
-      if (!countsInRealOperationalBalance(tx)) continue;
+      var impact = impactService.analyze(tx, categories.get(tx.getCategoryId()), externalEventTypeByTx.get(tx.getId()));
+      if (!impact.impactsOperationalBalance()) continue;
 
       var row = accumulatorFor(byCategory, tx.getCategoryId(), categories);
       var amount = tx.getAmount() == null ? BigDecimal.ZERO : tx.getAmount();
@@ -582,11 +591,7 @@ public class DashboardService {
   }
 
   private MonthlyCashFlowSummaryResponse buildCashFlowSummary(
-      UUID profileId, List<MoneyTransaction> txs, Map<UUID, Category> categories) {
-    var mappingByTx =
-        externalSyncMappingRepository.findByProfileId(profileId).stream()
-            .filter(m -> m.getMoneyTransactionId() != null)
-            .collect(Collectors.toMap(ExternalSyncMapping::getMoneyTransactionId, ExternalSyncMapping::getExternalEventType, (a, b) -> a));
+      List<MoneyTransaction> txs, Map<UUID, Category> categories, Map<UUID, String> externalEventTypeByTx) {
     BigDecimal gross = BigDecimal.ZERO, consumption = BigDecimal.ZERO, fixed = BigDecimal.ZERO, variable = BigDecimal.ZERO;
     BigDecimal debt = BigDecimal.ZERO, saving = BigDecimal.ZERO, investment = BigDecimal.ZERO, recoverableOut = BigDecimal.ZERO;
     BigDecimal principal = BigDecimal.ZERO, refund = BigDecimal.ZERO, earned = BigDecimal.ZERO, interest = BigDecimal.ZERO;
@@ -594,7 +599,7 @@ public class DashboardService {
     List<String> alerts = new ArrayList<>();
 
     for (var tx : txs) {
-      var treatment = classifier.classify(tx, categories.get(tx.getCategoryId()), mappingByTx.get(tx.getId()));
+      var treatment = impactService.analyze(tx, categories.get(tx.getCategoryId()), externalEventTypeByTx.get(tx.getId())).treatment();
       var amount = tx.getAmount();
       switch (treatment) {
         case FIXED_CONSUMPTION_EXPENSE -> {
@@ -670,6 +675,15 @@ public class DashboardService {
         principal,
         operationalExcludingRecoverables,
         netCashIncludingRecoverables);
+  }
+
+  private Map<UUID, String> loadExternalEventTypeByTransaction(UUID profileId) {
+    return externalSyncMappingRepository.findByProfileId(profileId).stream()
+        .filter(m -> m.getMoneyTransactionId() != null)
+        .collect(Collectors.toMap(
+            ExternalSyncMapping::getMoneyTransactionId,
+            ExternalSyncMapping::getExternalEventType,
+            (a, b) -> a));
   }
 
   private CategoryDeviationAccumulator accumulatorFor(

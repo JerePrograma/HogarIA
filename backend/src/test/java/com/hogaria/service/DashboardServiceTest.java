@@ -41,7 +41,7 @@ class DashboardServiceTest {
   @Mock BudgetCategoryItemRepository budgetCategoryItemRepository;
   @Mock MonthlyPlanItemRepository monthlyPlanItemRepository;
   @Mock ExternalSyncMappingRepository externalSyncMappingRepository;
-  @Mock FinancialCashFlowClassifier classifier;
+  @Mock TransactionFinancialImpactService impactService;
   @Mock MonthlyPlanAmountCalculator monthlyPlanAmountCalculator;
   @InjectMocks DashboardService service;
 
@@ -57,7 +57,7 @@ class DashboardServiceTest {
     when(categoryRepository.findAllById(any()))
         .thenReturn(List.of(Category.builder().id(incomeCat).type(Category.Type.INCOME).name("Ingreso").build()));
     when(externalSyncMappingRepository.findByProfileId(profileId)).thenReturn(List.of());
-    when(classifier.classify(any(), any(), any())).thenReturn(CashFlowTreatment.EARNED_INCOME);
+    when(impactService.analyze(any(), any(), any())).thenReturn(impact(CashFlowTreatment.EARNED_INCOME));
     when(monthlyPlanAmountCalculator.calculate(any()))
         .thenReturn(new MonthlyPlanAmountCalculator.AmountBreakdown(
             BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO));
@@ -92,7 +92,6 @@ class DashboardServiceTest {
     var disbursement = tx(profileId, cjCat, MoneyTransaction.MovementType.ADJUSTMENT, "300", "Préstamo CJ #5");
     var recovery = tx(profileId, cjCat, MoneyTransaction.MovementType.ADJUSTMENT, "50", "Recupero capital CJ");
 
-    var realClassifier = new FinancialCashFlowClassifier();
     var localService = new DashboardService(
         profileRepository,
         transactionRepository,
@@ -102,7 +101,7 @@ class DashboardServiceTest {
         budgetCategoryItemRepository,
         monthlyPlanItemRepository,
         externalSyncMappingRepository,
-        realClassifier,
+        new TransactionFinancialImpactService(),
         monthlyPlanAmountCalculator);
 
     when(profileRepository.findByIdAndUserId(profileId, userId)).thenReturn(Optional.of(new FinancialProfile()));
@@ -211,8 +210,31 @@ class DashboardServiceTest {
         budgetCategoryItemRepository,
         monthlyPlanItemRepository,
         externalSyncMappingRepository,
-        new FinancialCashFlowClassifier(),
+        new TransactionFinancialImpactService(),
         monthlyPlanAmountCalculator);
+  }
+
+  private TransactionFinancialImpact impact(CashFlowTreatment treatment) {
+    return new TransactionFinancialImpact(
+        treatment,
+        MoneyTransaction.BalanceImpact.OPERATING_INCOME,
+        true,
+        treatment == CashFlowTreatment.EARNED_INCOME,
+        treatment == CashFlowTreatment.CONSUMPTION_EXPENSE
+            || treatment == CashFlowTreatment.FIXED_CONSUMPTION_EXPENSE
+            || treatment == CashFlowTreatment.VARIABLE_CONSUMPTION_EXPENSE,
+        treatment == CashFlowTreatment.SAVING_OUTFLOW,
+        treatment == CashFlowTreatment.INVESTMENT_OUTFLOW,
+        treatment == CashFlowTreatment.DEBT_OUTFLOW,
+        treatment == CashFlowTreatment.INTERNAL_TRANSFER,
+        treatment == CashFlowTreatment.EXTERNAL_TRANSFER,
+        treatment == CashFlowTreatment.NEUTRAL_ADJUSTMENT,
+        treatment == CashFlowTreatment.RECOVERABLE_OUTFLOW,
+        treatment == CashFlowTreatment.PRINCIPAL_RECOVERY,
+        treatment == CashFlowTreatment.REFUND_OR_REIMBURSEMENT,
+        treatment == CashFlowTreatment.INTEREST_INCOME,
+        false,
+        false);
   }
 
   private MoneyTransaction tx(

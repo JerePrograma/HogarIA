@@ -503,11 +503,21 @@ public class TransactionImportService {
                       movementType,
                       previewRow.realDate(),
                       previewRow.budgetDate(),
+                      null,
                       amount,
                       firstNonBlank(previewRow.currency(), DEFAULT_CURRENCY).toUpperCase(Locale.ROOT),
                       description,
                       MoneyTransaction.Origin.IMPORT,
-                      MoneyTransaction.Status.CONFIRMED
+                      MoneyTransaction.Status.CONFIRMED,
+                      previewRow.source().name(),
+                      previewRow.sourceOperationId(),
+                      previewRow.sourceHash(),
+                      inferPaymentChannel(previewRow.source(), description),
+                      null,
+                      inferClassificationStatus(previewRow, categoryId),
+                      inferClassificationReason(previewRow),
+                      batchId,
+                      null
               ),
               userId,
               new TransactionService.TransactionMetadata(

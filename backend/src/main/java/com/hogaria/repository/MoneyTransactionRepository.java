@@ -2,10 +2,13 @@ package com.hogaria.repository;
 
 import com.hogaria.entity.MoneyTransaction;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 public interface MoneyTransactionRepository extends JpaRepository<MoneyTransaction, UUID> {
 
@@ -73,4 +76,44 @@ public interface MoneyTransactionRepository extends JpaRepository<MoneyTransacti
     );
 
     List<MoneyTransaction> findByProfileIdAndIdIn(UUID profileId, List<UUID> ids);
+
+    List<MoneyTransaction> findByProfileIdAndInternalTransferGroupId(UUID profileId, UUID internalTransferGroupId);
+
+    List<MoneyTransaction> findByProfileIdAndOperationDateTimeBetween(
+            UUID profileId,
+            LocalDateTime from,
+            LocalDateTime to
+    );
+
+    @Query("""
+            select t from MoneyTransaction t
+            where t.profileId = :profileId
+              and t.accountId = :accountId
+              and t.duplicateFingerprint = :fingerprint
+              and t.status <> :ignoredStatus
+              and t.classificationStatus <> :ignoredClassification
+              and (:excludeId is null or t.id <> :excludeId)
+            """)
+    List<MoneyTransaction> findActiveDuplicatesByFingerprint(
+            @Param("profileId") UUID profileId,
+            @Param("accountId") UUID accountId,
+            @Param("fingerprint") String fingerprint,
+            @Param("ignoredStatus") MoneyTransaction.Status ignoredStatus,
+            @Param("ignoredClassification") MoneyTransaction.ClassificationStatus ignoredClassification,
+            @Param("excludeId") UUID excludeId
+    );
+
+    @Query("""
+            select t from MoneyTransaction t
+            where t.profileId = :profileId
+              and t.source = :source
+              and t.sourceOperationId = :sourceOperationId
+              and (:excludeId is null or t.id <> :excludeId)
+            """)
+    List<MoneyTransaction> findByStrongSourceOperation(
+            @Param("profileId") UUID profileId,
+            @Param("source") String source,
+            @Param("sourceOperationId") String sourceOperationId,
+            @Param("excludeId") UUID excludeId
+    );
 }

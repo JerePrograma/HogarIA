@@ -1,5 +1,6 @@
 import type {
   MovementType,
+  PaymentChannel,
   TransactionClassificationStatus,
   TransactionStatus,
 } from "../../domain/types";
@@ -29,4 +30,12 @@ export interface TransactionFilters {
   movementType: MovementType | AllOption;
   status: TransactionStatus | AllOption;
   classificationStatus: TransactionClassificationStatus | AllOption;
+  paymentChannel: PaymentChannel | AllOption;
+  source: string;
+  dateFrom: string;
+  dateTo: string;
+  exactAmount: string;
+  onlyDuplicates: boolean;
+  onlyInternalTransfers: boolean;
+  onlyImported: boolean;
 }

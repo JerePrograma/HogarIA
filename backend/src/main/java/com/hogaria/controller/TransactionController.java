@@ -6,9 +6,22 @@ import com.hogaria.dto.BulkRecategorizePreviewRequest;
 import com.hogaria.dto.BulkRecategorizePreviewResponse;
 import com.hogaria.dto.TransactionCreateRequest;
 import com.hogaria.dto.TransactionDeletionResponse;
+import com.hogaria.dto.TransactionReviewDtos.DuplicatePreviewRequest;
+import com.hogaria.dto.TransactionReviewDtos.DuplicatePreviewResponse;
+import com.hogaria.dto.TransactionReviewDtos.DuplicateResolveRequest;
+import com.hogaria.dto.TransactionReviewDtos.DuplicateResolveResponse;
+import com.hogaria.dto.TransactionReviewDtos.InternalTransferLinkRequest;
+import com.hogaria.dto.TransactionReviewDtos.InternalTransferLinkResponse;
+import com.hogaria.dto.TransactionReviewDtos.InternalTransferPreviewRequest;
+import com.hogaria.dto.TransactionReviewDtos.InternalTransferPreviewResponse;
+import com.hogaria.dto.TransactionReviewDtos.InternalTransferUnlinkRequest;
+import com.hogaria.dto.TransactionReviewDtos.InternalTransferUnlinkResponse;
 import com.hogaria.dto.TransactionResponse;
 import com.hogaria.dto.TransactionUpdateRequest;
 import com.hogaria.security.CurrentUserResolver;
+import com.hogaria.service.InternalTransferMatcherService;
+import com.hogaria.service.InternalTransferResolutionService;
+import com.hogaria.service.TransactionDuplicateReviewService;
 import com.hogaria.service.TransactionService;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -29,13 +42,22 @@ import org.springframework.web.bind.annotation.RestController;
 public class TransactionController {
 
   private final TransactionService service;
+  private final TransactionDuplicateReviewService duplicateReviewService;
+  private final InternalTransferMatcherService internalTransferMatcherService;
+  private final InternalTransferResolutionService internalTransferResolutionService;
   private final CurrentUserResolver parser;
 
   public TransactionController(
           TransactionService service,
+          TransactionDuplicateReviewService duplicateReviewService,
+          InternalTransferMatcherService internalTransferMatcherService,
+          InternalTransferResolutionService internalTransferResolutionService,
           CurrentUserResolver parser
   ) {
     this.service = service;
+    this.duplicateReviewService = duplicateReviewService;
+    this.internalTransferMatcherService = internalTransferMatcherService;
+    this.internalTransferResolutionService = internalTransferResolutionService;
     this.parser = parser;
   }
 
@@ -106,5 +128,86 @@ public class TransactionController {
             profileId,
             request
     );
+  }
+
+  @PostMapping("/profiles/{profileId}/transactions/duplicates/preview")
+  public DuplicatePreviewResponse previewDuplicates(
+          @RequestHeader(value = "X-User-Id", required = false) String userHeader,
+          @PathVariable UUID profileId,
+          @RequestBody(required = false) DuplicatePreviewRequest request
+  ) {
+    return duplicateReviewService.preview(
+            parser.parse(userHeader),
+            profileId,
+            request == null ? new DuplicatePreviewRequest(null, null) : request
+    );
+  }
+
+  @GetMapping("/profiles/{profileId}/transactions/duplicates/preview")
+  public DuplicatePreviewResponse previewDuplicatesGet(
+          @RequestHeader(value = "X-User-Id", required = false) String userHeader,
+          @PathVariable UUID profileId,
+          @RequestParam(required = false) Integer year,
+          @RequestParam(required = false) Integer month
+  ) {
+    return duplicateReviewService.preview(
+            parser.parse(userHeader),
+            profileId,
+            new DuplicatePreviewRequest(year, month)
+    );
+  }
+
+  @PostMapping("/profiles/{profileId}/transactions/duplicates/resolve")
+  public DuplicateResolveResponse resolveDuplicates(
+          @RequestHeader(value = "X-User-Id", required = false) String userHeader,
+          @PathVariable UUID profileId,
+          @Valid @RequestBody DuplicateResolveRequest request
+  ) {
+    return duplicateReviewService.resolve(parser.parse(userHeader), profileId, request);
+  }
+
+  @PostMapping("/profiles/{profileId}/transactions/internal-transfers/preview")
+  public InternalTransferPreviewResponse previewInternalTransfers(
+          @RequestHeader(value = "X-User-Id", required = false) String userHeader,
+          @PathVariable UUID profileId,
+          @RequestBody(required = false) InternalTransferPreviewRequest request
+  ) {
+    return internalTransferMatcherService.preview(
+            parser.parse(userHeader),
+            profileId,
+            request == null ? new InternalTransferPreviewRequest(null, null, null) : request
+    );
+  }
+
+  @GetMapping("/profiles/{profileId}/transactions/internal-transfers/preview")
+  public InternalTransferPreviewResponse previewInternalTransfersGet(
+          @RequestHeader(value = "X-User-Id", required = false) String userHeader,
+          @PathVariable UUID profileId,
+          @RequestParam(required = false) Integer year,
+          @RequestParam(required = false) Integer month
+  ) {
+    return internalTransferMatcherService.preview(
+            parser.parse(userHeader),
+            profileId,
+            new InternalTransferPreviewRequest(year, month, null)
+    );
+  }
+
+  @PostMapping("/profiles/{profileId}/transactions/internal-transfers/link")
+  public InternalTransferLinkResponse linkInternalTransfer(
+          @RequestHeader(value = "X-User-Id", required = false) String userHeader,
+          @PathVariable UUID profileId,
+          @Valid @RequestBody InternalTransferLinkRequest request
+  ) {
+    return internalTransferResolutionService.link(parser.parse(userHeader), profileId, request);
+  }
+
+  @PostMapping("/profiles/{profileId}/transactions/internal-transfers/unlink")
+  public InternalTransferUnlinkResponse unlinkInternalTransfer(
+          @RequestHeader(value = "X-User-Id", required = false) String userHeader,
+          @PathVariable UUID profileId,
+          @Valid @RequestBody InternalTransferUnlinkRequest request
+  ) {
+    return internalTransferResolutionService.unlink(parser.parse(userHeader), profileId, request);
   }
 }

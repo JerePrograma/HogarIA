@@ -80,13 +80,59 @@ export function useTransactionFilters(
           filters.classificationStatus === ALL ||
           classificationStatus === filters.classificationStatus;
 
+        const matchesPaymentChannel =
+          filters.paymentChannel === ALL ||
+          transaction.paymentChannel === filters.paymentChannel;
+
+        const matchesSource =
+          !filters.source ||
+          normalizeSearch(transaction.source).includes(
+            normalizeSearch(filters.source),
+          );
+
+        const matchesDateFrom =
+          !filters.dateFrom || transaction.realDate >= filters.dateFrom;
+
+        const matchesDateTo =
+          !filters.dateTo || transaction.realDate <= filters.dateTo;
+
+        const matchesExactAmount =
+          !filters.exactAmount ||
+          Number(transaction.amount) === Number(filters.exactAmount);
+
+        const matchesOnlyDuplicates =
+          !filters.onlyDuplicates ||
+          Boolean(transaction.duplicateFingerprint) ||
+          normalizeSearch(transaction.classificationReason).includes(
+            "duplicate",
+          );
+
+        const matchesOnlyInternalTransfers =
+          !filters.onlyInternalTransfers ||
+          transaction.movementType === "TRANSFER" ||
+          Boolean(transaction.internalTransferGroupId) ||
+          normalizeSearch(transaction.classificationReason).includes(
+            "internal_transfer",
+          );
+
+        const matchesOnlyImported =
+          !filters.onlyImported || transaction.origin === "IMPORT";
+
         return (
           matchesSearch &&
           matchesAccount &&
           matchesCategory &&
           matchesMovement &&
           matchesStatus &&
-          matchesClassification
+          matchesClassification &&
+          matchesPaymentChannel &&
+          matchesSource &&
+          matchesDateFrom &&
+          matchesDateTo &&
+          matchesExactAmount &&
+          matchesOnlyDuplicates &&
+          matchesOnlyInternalTransfers &&
+          matchesOnlyImported
         );
       });
 
@@ -115,6 +161,14 @@ export function useTransactionFilters(
     filters.movementType !== ALL,
     filters.status !== ALL,
     filters.classificationStatus !== ALL,
+    filters.paymentChannel !== ALL,
+    filters.source,
+    filters.dateFrom,
+    filters.dateTo,
+    filters.exactAmount,
+    filters.onlyDuplicates,
+    filters.onlyInternalTransfers,
+    filters.onlyImported,
   ].filter(Boolean).length;
 
   return {

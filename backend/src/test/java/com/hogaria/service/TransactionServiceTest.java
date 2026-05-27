@@ -22,6 +22,7 @@ import java.time.LocalDate;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
@@ -36,8 +37,17 @@ class TransactionServiceTest {
     @Mock CategoryRepository categoryRepo;
     @Mock TransactionCategorySuggestionService suggestionService;
     @Mock TransactionLifecycleService transactionLifecycleService;
+    @Mock DescriptionNormalizer descriptionNormalizer;
+    @Mock TransactionFingerprintService fingerprintService;
+    @Mock DuplicateDetectionService duplicateDetectionService;
+    @Mock TransactionFinancialImpactService financialImpactService;
 
     @InjectMocks TransactionService service;
+
+    @BeforeEach
+    void setupImpact() {
+        lenientImpact();
+    }
 
     @Test
     void rejectsAmountZero() {
@@ -49,8 +59,18 @@ class TransactionServiceTest {
                 MoneyTransaction.MovementType.EXPENSE,
                 LocalDate.now(),
                 LocalDate.now(),
+                null,
                 BigDecimal.ZERO,
                 "ARS",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
                 null,
                 null,
                 null
@@ -77,6 +97,15 @@ class TransactionServiceTest {
                 null,
                 null,
                 true,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
                 null,
                 null,
                 null,
@@ -122,6 +151,15 @@ class TransactionServiceTest {
                 null,
                 null,
                 null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
                 null
         );
 
@@ -142,5 +180,29 @@ class TransactionServiceTest {
                 .classificationStatus(MoneyTransaction.ClassificationStatus.CLASSIFIED)
                 .classificationReason("MANUAL")
                 .build();
+    }
+
+    private void lenientImpact() {
+        org.mockito.Mockito.lenient()
+                .when(financialImpactService.analyze(any(), any(), any()))
+                .thenReturn(new TransactionFinancialImpact(
+                        CashFlowTreatment.VARIABLE_CONSUMPTION_EXPENSE,
+                        MoneyTransaction.BalanceImpact.CONSUMPTION_EXPENSE,
+                        true,
+                        false,
+                        true,
+                        false,
+                        false,
+                        false,
+                        false,
+                        false,
+                        false,
+                        false,
+                        false,
+                        false,
+                        false,
+                        false,
+                        false
+                ));
     }
 }

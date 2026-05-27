@@ -24,9 +24,11 @@ import com.hogaria.repository.MoneyTransactionRepository;
 import java.math.BigDecimal;
 import java.text.Normalizer;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -42,6 +44,10 @@ public class TransactionService {
     private final CategoryRepository categoryRepository;
     private final TransactionCategorySuggestionService suggestionService;
     private final TransactionLifecycleService transactionLifecycleService;
+    private final DescriptionNormalizer descriptionNormalizer;
+    private final TransactionFingerprintService fingerprintService;
+    private final DuplicateDetectionService duplicateDetectionService;
+    private final TransactionFinancialImpactService financialImpactService;
 
     public TransactionService(
             MoneyTransactionRepository repository,
@@ -49,7 +55,11 @@ public class TransactionService {
             AccountRepository accountRepository,
             CategoryRepository categoryRepository,
             TransactionCategorySuggestionService suggestionService,
-            TransactionLifecycleService transactionLifecycleService
+            TransactionLifecycleService transactionLifecycleService,
+            DescriptionNormalizer descriptionNormalizer,
+            TransactionFingerprintService fingerprintService,
+            DuplicateDetectionService duplicateDetectionService,
+            TransactionFinancialImpactService financialImpactService
     ) {
         this.repository = repository;
         this.profileRepository = profileRepository;
@@ -57,6 +67,10 @@ public class TransactionService {
         this.categoryRepository = categoryRepository;
         this.suggestionService = suggestionService;
         this.transactionLifecycleService = transactionLifecycleService;
+        this.descriptionNormalizer = descriptionNormalizer;
+        this.fingerprintService = fingerprintService;
+        this.duplicateDetectionService = duplicateDetectionService;
+        this.financialImpactService = financialImpactService;
     }
 
     @Transactional
@@ -84,9 +98,18 @@ public class TransactionService {
 
         var classificationStatus = metadata != null && metadata.classificationStatus() != null
                 ? metadata.classificationStatus()
+                : request.classificationStatus() != null
+                  ? request.classificationStatus()
                 : request.categoryId() == null
                   ? MoneyTransaction.ClassificationStatus.NEEDS_CATEGORY
                   : MoneyTransaction.ClassificationStatus.CLASSIFIED;
+
+        var normalizedSource = normalizeSource(firstNonBlank(
+                metadata == null ? null : metadata.source(),
+                request.source()
+        ));
+        var normalizedDescription = descriptionNormalizer.normalizeNullable(request.description());
+        var operationDateTime = resolveOperationDateTime(request.operationDateTime(), request.realDate());
 
         var transaction = MoneyTransaction.builder()
                 .profileId(request.profileId())
@@ -95,21 +118,29 @@ public class TransactionService {
                 .movementType(request.movementType())
                 .realDate(request.realDate())
                 .budgetDate(request.budgetDate())
+                .operationDateTime(operationDateTime)
+                .operationDateTimePrecision(request.operationDateTime() == null
+                        ? MoneyTransaction.OperationDateTimePrecision.DATE_ONLY
+                        : MoneyTransaction.OperationDateTimePrecision.DATE_TIME)
                 .amount(request.amount())
                 .currency(request.currency().toUpperCase())
                 .description(request.description())
+                .normalizedDescription(normalizedDescription)
                 .origin(request.origin() == null ? MoneyTransaction.Origin.MANUAL : request.origin())
                 .status(request.status() == null ? MoneyTransaction.Status.CONFIRMED : request.status())
-                .source(metadata == null ? null : metadata.source())
-                .sourceOperationId(metadata == null ? null : metadata.sourceOperationId())
-                .sourceHash(metadata == null ? null : metadata.sourceHash())
-                .paymentChannel(metadata == null ? null : metadata.paymentChannel())
-                .counterparty(metadata == null ? null : metadata.counterparty())
+                .source(normalizedSource)
+                .sourceOperationId(firstNonBlank(metadata == null ? null : metadata.sourceOperationId(), request.sourceOperationId()))
+                .sourceHash(firstNonBlank(metadata == null ? null : metadata.sourceHash(), request.sourceHash()))
+                .paymentChannel(metadata != null && metadata.paymentChannel() != null ? metadata.paymentChannel() : request.paymentChannel())
+                .counterparty(firstNonBlank(metadata == null ? null : metadata.counterparty(), request.counterparty()))
                 .classificationStatus(classificationStatus)
-                .classificationReason(metadata == null ? null : metadata.classificationReason())
-                .importBatchId(metadata == null ? null : metadata.importBatchId())
-                .internalTransferGroupId(metadata == null ? null : metadata.internalTransferGroupId())
+                .classificationReason(firstNonBlank(metadata == null ? null : metadata.classificationReason(), request.classificationReason()))
+                .importBatchId(metadata != null && metadata.importBatchId() != null ? metadata.importBatchId() : request.importBatchId())
+                .internalTransferGroupId(metadata != null && metadata.internalTransferGroupId() != null ? metadata.internalTransferGroupId() : request.internalTransferGroupId())
                 .build();
+
+        applyDerivedIntegrityFields(transaction);
+        duplicateDetectionService.rejectIfDuplicate(transaction, null);
 
         return toResponse(repository.save(transaction));
     }
@@ -179,6 +210,14 @@ public class TransactionService {
             transaction.setBudgetDate(request.budgetDate());
         }
 
+        if (request.operationDateTime() != null) {
+            transaction.setOperationDateTime(request.operationDateTime());
+            transaction.setOperationDateTimePrecision(MoneyTransaction.OperationDateTimePrecision.DATE_TIME);
+        } else if (request.realDate() != null) {
+            transaction.setOperationDateTime(request.realDate().atStartOfDay());
+            transaction.setOperationDateTimePrecision(MoneyTransaction.OperationDateTimePrecision.DATE_ONLY);
+        }
+
         if (request.amount() != null) {
             transaction.setAmount(request.amount());
         }
@@ -189,6 +228,38 @@ public class TransactionService {
 
         if (request.description() != null) {
             transaction.setDescription(request.description());
+        }
+
+        if (request.source() != null) {
+            transaction.setSource(normalizeSource(request.source()));
+        }
+
+        if (request.sourceOperationId() != null) {
+            transaction.setSourceOperationId(request.sourceOperationId().trim());
+        }
+
+        if (request.sourceHash() != null) {
+            transaction.setSourceHash(request.sourceHash().trim());
+        }
+
+        if (request.paymentChannel() != null) {
+            transaction.setPaymentChannel(request.paymentChannel());
+        }
+
+        if (request.counterparty() != null) {
+            transaction.setCounterparty(request.counterparty());
+        }
+
+        if (request.classificationStatus() != null) {
+            transaction.setClassificationStatus(request.classificationStatus());
+        }
+
+        if (request.classificationReason() != null) {
+            transaction.setClassificationReason(request.classificationReason());
+        }
+
+        if (Boolean.TRUE.equals(request.clearInternalTransferGroup())) {
+            transaction.setInternalTransferGroupId(null);
         }
 
         if (request.origin() != null) {
@@ -206,6 +277,9 @@ public class TransactionService {
                 transaction.getMovementType(),
                 userId
         );
+
+        applyDerivedIntegrityFields(transaction);
+        duplicateDetectionService.rejectIfDuplicate(transaction, txId);
 
         return toResponse(repository.save(transaction));
     }
@@ -850,6 +924,64 @@ public class TransactionService {
                 .orElseThrow(() -> new ForbiddenException("Profile does not belong to user"));
     }
 
+    private void applyDerivedIntegrityFields(MoneyTransaction transaction) {
+        transaction.setNormalizedDescription(descriptionNormalizer.normalizeNullable(transaction.getDescription()));
+
+        if (transaction.getOperationDateTime() == null) {
+            transaction.setOperationDateTime(resolveOperationDateTime(null, transaction.getRealDate()));
+            transaction.setOperationDateTimePrecision(MoneyTransaction.OperationDateTimePrecision.DATE_ONLY);
+        }
+
+        if (transaction.getOperationDateTimePrecision() == null) {
+            transaction.setOperationDateTimePrecision(MoneyTransaction.OperationDateTimePrecision.DATE_ONLY);
+        }
+
+        transaction.setSource(normalizeSource(transaction.getSource()));
+        if (transaction.getSourceOperationId() != null) {
+            transaction.setSourceOperationId(transaction.getSourceOperationId().trim());
+        }
+        if (transaction.getSourceHash() != null) {
+            transaction.setSourceHash(transaction.getSourceHash().trim());
+        }
+
+        transaction.setDuplicateFingerprint(fingerprintService.buildFingerprint(transaction));
+
+        Category category = transaction.getCategoryId() == null
+                ? null
+                : categoryRepository.findById(transaction.getCategoryId()).orElse(null);
+        transaction.setBalanceImpact(financialImpactService.analyze(transaction, category, null).balanceImpact());
+    }
+
+    private LocalDateTime resolveOperationDateTime(LocalDateTime operationDateTime, LocalDate realDate) {
+        if (operationDateTime != null) {
+            return operationDateTime;
+        }
+
+        return realDate == null ? null : realDate.atStartOfDay();
+    }
+
+    private String normalizeSource(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+
+        return value.trim().toUpperCase(Locale.ROOT);
+    }
+
+    private String firstNonBlank(String... values) {
+        if (values == null) {
+            return null;
+        }
+
+        for (var value : values) {
+            if (value != null && !value.trim().isBlank()) {
+                return value.trim();
+            }
+        }
+
+        return null;
+    }
+
     private TransactionResponse toResponse(MoneyTransaction transaction) {
         return new TransactionResponse(
                 transaction.getId(),
@@ -859,14 +991,19 @@ public class TransactionService {
                 transaction.getMovementType(),
                 transaction.getRealDate(),
                 transaction.getBudgetDate(),
+                transaction.getOperationDateTime(),
+                transaction.getOperationDateTimePrecision(),
                 transaction.getAmount(),
                 transaction.getCurrency(),
                 transaction.getDescription(),
+                transaction.getNormalizedDescription(),
                 transaction.getOrigin(),
                 transaction.getStatus(),
                 transaction.getSource(),
                 transaction.getSourceOperationId(),
                 transaction.getSourceHash(),
+                transaction.getDuplicateFingerprint(),
+                transaction.getBalanceImpact(),
                 transaction.getPaymentChannel(),
                 transaction.getCounterparty(),
                 transaction.getClassificationStatus(),

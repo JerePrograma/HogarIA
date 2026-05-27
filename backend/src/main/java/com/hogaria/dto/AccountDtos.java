@@ -25,7 +25,7 @@ public class AccountDtos {
       Boolean active) {}
 
   public record AccountResponse(
-      UUID id, UUID profileId, String name, Account.AccountType accountType, String currency,
+      UUID id, UUID profileId, String name, String accountKey, Account.AccountType accountType, String currency,
       BigDecimal creditLimit, Integer statementCloseDay, Integer dueDay, Boolean active,
       LocalDateTime createdAt, LocalDateTime updatedAt) {}
 }

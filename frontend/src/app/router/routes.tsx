@@ -2,6 +2,7 @@ import { AccountsPage } from "../../domains/accounts/AccountsPage";
 import { BudgetPage } from "../../domains/budgets/BudgetPage";
 import { CategoriesPage } from "../../domains/categories/CategoriesPage";
 import { DashboardPage } from "../../domains/dashboard/DashboardPage";
+import { FinancialControlCenterPage } from "../../domains/financial-control/FinancialControlCenterPage";
 import { DevUserPage } from "../../domains/dev-user/DevUserPage";
 import { ExternalLoansPage } from "../../domains/external-loans/ExternalLoansPage";
 import { GoalsPage } from "../../domains/goals/GoalsPage";
@@ -53,6 +54,11 @@ export const profileRoutes: AppRoute[] = [
   {
     path: "/profiles/:profileId/dashboard",
     element: <DashboardPage />,
+    protected: true,
+  },
+  {
+    path: "/profiles/:profileId/control-center",
+    element: <FinancialControlCenterPage />,
     protected: true,
   },
   {

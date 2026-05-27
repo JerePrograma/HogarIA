@@ -42,6 +42,22 @@ Notas:
 - Hábitos financieros por perfil con check-ins.
 - Índices de inflación y acumulado por rango.
 - Importador guiado de Excel por perfil (preview + commit por batch).
+- Centro de control financiero para revisar duplicados, transferencias internas, movimientos sin categoría, pendientes, técnicos/neutrales e importaciones a revisar.
+- Deduplicación persistente por descripción normalizada, fecha-hora operativa, cuenta, monto, moneda y claves de origen.
+
+## Integridad financiera
+- `MoneyTransaction` conserva la descripción original y persiste `normalizedDescription`, `operationDateTime`, `operationDateTimePrecision`, `duplicateFingerprint` y `balanceImpact`.
+- La normalización convierte NBSP en espacios normales, recorta, colapsa espacios, quita diacríticos y lleva el texto a una forma canónica en mayúsculas.
+- La carga manual y el commit de importaciones calculan fingerprint antes de guardar. Si existe un duplicado activo en el mismo perfil/cuenta/fingerprint, el backend responde `409 TRANSACTION_EXACT_DUPLICATE`.
+- Las claves fuertes de origen son idempotentes: `sourceHash` y `source + sourceOperationId` bloquean reimportaciones silenciosas. Reimportar el mismo Excel no debe crear nuevos movimientos.
+- Las cuentas guardan `accountKey` y las categorías guardan `categoryKey`. Diferencias cosméticas como `Mercado Pago`, `MERCADO-PAGO` o `Mercadopago` se normalizan a la misma clave y se bloquean por perfil/tipo/moneda según corresponda.
+- No se eliminan físicamente duplicados/importados para resolver calidad de datos: se marcan como `IGNORED` / `IGNORED_BY_RULE` cuando corresponde preservar trazabilidad.
+
+## Transferencias internas
+- Una transferencia entre cuentas propias no es ingreso ni gasto. Se representa con dos movimientos visibles, ambos con `movementType=TRANSFER`, `classificationStatus=TECHNICAL`, `paymentChannel=INTERNAL_TRANSFER` e `internalTransferGroupId` compartido.
+- El dashboard y reportes usan `TransactionFinancialImpactService` como fuente de verdad para separar ingreso, consumo, ahorro/inversión/deuda, recuperos, intereses, ajustes neutrales y transferencias.
+- Ejemplo MercadoPago → Banco Provincia: una salida DEBIN/fondeo y una entrada de transferencia por el mismo monto y fecha cercana se muestran como candidata. Al vincularla, queda auditable por cuenta, pero neutral para ingreso/gasto/balance operativo.
+- Si solo aparece una pata, queda en revisión como posible transferencia; HogarIA no inventa la contraparte.
 
 ## Endpoints principales
 - `GET/POST /api/profiles/{profileId}/goals`
@@ -55,6 +71,17 @@ Notas:
 - `POST /api/profiles/{profileId}/imports/budget-excel/{batchId}/commit`
 - `GET /api/profiles/{profileId}/imports`
 - `GET /api/profiles/{profileId}/imports/{batchId}`
+- `POST /api/profiles/{profileId}/transactions/duplicates/preview`
+- `POST /api/profiles/{profileId}/transactions/duplicates/resolve`
+- `POST /api/profiles/{profileId}/transactions/internal-transfers/preview`
+- `POST /api/profiles/{profileId}/transactions/internal-transfers/link`
+- `POST /api/profiles/{profileId}/transactions/internal-transfers/unlink`
+
+## Ejemplos operativos
+- Importación repetida del mismo Excel: las filas con `sourceHash` o `sourceOperationId` ya vistos se clasifican como duplicadas y el commit no debe insertarlas.
+- Movimiento manual duplicado: misma cuenta, fecha/hora o fecha real fallback, descripción normalizada, monto y moneda devuelve `409 TRANSACTION_EXACT_DUPLICATE`.
+- Movimiento sin categoría: queda como `NEEDS_CATEGORY`; no se crea una categoría basura para ocultar incertidumbre.
+- Movimiento ignorado: conserva trazabilidad, queda visible en colas de calidad, pero no impacta balance.
 
 ## Smoke test recomendado
 1. Crear dev user.

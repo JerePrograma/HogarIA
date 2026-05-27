@@ -33,6 +33,9 @@ export const queryKeys = {
   transaction: (profileId: string, transactionId: string) =>
     ["tx", profileId, transactionId] as const,
 
+  transactionDataQuality: (profileId: string, year: number, month: number) =>
+    ["tx-quality", profileId, year, month] as const,
+
   budgetYears: (profileId: string) => ["budgets", profileId, "years"] as const,
 
   budgetYear: (profileId: string, year: number) =>

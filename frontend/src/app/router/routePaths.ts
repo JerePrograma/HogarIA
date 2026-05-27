@@ -3,6 +3,7 @@ export const routePaths = {
   profiles: "/profiles",
   profileRoot: (profileId: string) => `/profiles/${profileId}`,
   dashboard: (profileId: string) => `/profiles/${profileId}/dashboard`,
+  controlCenter: (profileId: string) => `/profiles/${profileId}/control-center`,
   accounts: (profileId: string) => `/profiles/${profileId}/accounts`,
   categories: (profileId: string) => `/profiles/${profileId}/categories`,
   transactions: (profileId: string) => `/profiles/${profileId}/transactions`,

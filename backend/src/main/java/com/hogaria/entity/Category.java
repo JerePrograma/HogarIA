@@ -156,8 +156,7 @@ public class Category {
         var clean = Normalizer.normalize(value, Normalizer.Form.NFD)
                 .replaceAll("\\p{M}", "")
                 .toLowerCase(Locale.ROOT)
-                .replaceAll("[^a-z0-9]+", "_")
-                .replaceAll("^_+|_+$", "");
+                .replaceAll("[^a-z0-9]+", "");
 
         return clean.isBlank() ? null : clean;
     }

@@ -3,6 +3,12 @@ import type {
   MoneyTransaction,
   MovementType,
   PaymentChannel,
+  DuplicatePreviewResponse,
+  DuplicateResolvePayload,
+  DuplicateResolveResponse,
+  InternalTransferLinkPayload,
+  InternalTransferLinkResponse,
+  InternalTransferPreviewResponse,
   TransactionDeletionResponse,
   TransactionClassificationStatus,
   TransactionOrigin,
@@ -16,6 +22,7 @@ export interface TransactionCreatePayload {
   movementType: MovementType;
   realDate: string;
   budgetDate: string;
+  operationDateTime?: string | null;
   amount: number;
   currency: string;
   description?: string | null;
@@ -93,4 +100,54 @@ export async function deleteTransaction(
   }
 
   return response.data;
+}
+
+export async function previewDuplicateTransactions(
+  profileId: string,
+  year: number,
+  month: number,
+): Promise<DuplicatePreviewResponse> {
+  const { data } = await http.post(
+    `/profiles/${profileId}/transactions/duplicates/preview`,
+    { year, month },
+  );
+
+  return data;
+}
+
+export async function resolveDuplicateTransactions(
+  profileId: string,
+  payload: DuplicateResolvePayload,
+): Promise<DuplicateResolveResponse> {
+  const { data } = await http.post(
+    `/profiles/${profileId}/transactions/duplicates/resolve`,
+    payload,
+  );
+
+  return data;
+}
+
+export async function previewInternalTransfers(
+  profileId: string,
+  year: number,
+  month: number,
+): Promise<InternalTransferPreviewResponse> {
+  const { data } = await http.post(
+    `/profiles/${profileId}/transactions/internal-transfers/preview`,
+    { year, month },
+  );
+
+  return data;
+}
+
+export async function linkInternalTransfer(
+  profileId: string,
+  payload: InternalTransferLinkPayload,
+): Promise<InternalTransferLinkResponse> {
+  const { data } = await http.post(
+    `/profiles/${profileId}/transactions/internal-transfers/link`,
+    payload,
+  );
+
+  return data;
 }

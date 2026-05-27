@@ -65,6 +65,25 @@ public class MoneyTransaction {
     @Column(length = 255)
     private String description;
 
+    @Column(name = "normalized_description", length = 500)
+    private String normalizedDescription;
+
+    @Column(name = "operation_datetime")
+    private LocalDateTime operationDateTime;
+
+    @Builder.Default
+    @Enumerated(EnumType.STRING)
+    @Column(name = "operation_datetime_precision", nullable = false, length = 20)
+    private OperationDateTimePrecision operationDateTimePrecision = OperationDateTimePrecision.DATE_ONLY;
+
+    @Column(name = "duplicate_fingerprint", length = 64)
+    private String duplicateFingerprint;
+
+    @Builder.Default
+    @Enumerated(EnumType.STRING)
+    @Column(name = "balance_impact", nullable = false, length = 40)
+    private BalanceImpact balanceImpact = BalanceImpact.UNKNOWN;
+
     @Builder.Default
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 40)
@@ -132,6 +151,29 @@ public class MoneyTransaction {
         IGNORED
     }
 
+    public enum OperationDateTimePrecision {
+        DATE_ONLY,
+        DATE_TIME
+    }
+
+    public enum BalanceImpact {
+        OPERATING_INCOME,
+        CONSUMPTION_EXPENSE,
+        SAVING_OUTFLOW,
+        INVESTMENT_OUTFLOW,
+        DEBT_OUTFLOW,
+        RECOVERABLE_OUTFLOW,
+        PRINCIPAL_RECOVERY,
+        INTEREST_INCOME,
+        REFUND_OR_REIMBURSEMENT,
+        INTERNAL_TRANSFER,
+        EXTERNAL_TRANSFER,
+        NEUTRAL_ADJUSTMENT,
+        IGNORED,
+        TECHNICAL,
+        UNKNOWN
+    }
+
     public enum PaymentChannel {
         UNKNOWN,
         CASH,
@@ -181,6 +223,8 @@ public class MoneyTransaction {
         normalizeCurrency();
         normalizeSource();
         normalizeClassificationStatus();
+        normalizeOperationDateTime();
+        normalizeBalanceImpact();
     }
 
     @PreUpdate
@@ -190,6 +234,8 @@ public class MoneyTransaction {
         normalizeCurrency();
         normalizeSource();
         normalizeClassificationStatus();
+        normalizeOperationDateTime();
+        normalizeBalanceImpact();
     }
 
     private void normalizeCurrency() {
@@ -213,6 +259,23 @@ public class MoneyTransaction {
 
         if (categoryId == null && classificationStatus == ClassificationStatus.CLASSIFIED) {
             classificationStatus = ClassificationStatus.NEEDS_CATEGORY;
+        }
+    }
+
+    private void normalizeOperationDateTime() {
+        if (operationDateTime == null && realDate != null) {
+            operationDateTime = realDate.atStartOfDay();
+            operationDateTimePrecision = OperationDateTimePrecision.DATE_ONLY;
+        }
+
+        if (operationDateTimePrecision == null) {
+            operationDateTimePrecision = OperationDateTimePrecision.DATE_ONLY;
+        }
+    }
+
+    private void normalizeBalanceImpact() {
+        if (balanceImpact == null) {
+            balanceImpact = BalanceImpact.UNKNOWN;
         }
     }
 }
