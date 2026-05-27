@@ -82,5 +82,11 @@ public class MonthlyPlanReconciliationService {
     return new TransactionMatch(m.getId(),m.getMonthlyPlanItemId(),m.getMoneyTransactionId(),m.getMatchedAmount(),m.getMatchType(),m.getConfidence()); }
 
   @Transactional
-  public void delete(UUID userId, UUID profileId, UUID matchId){ ensureProfile(profileId,userId); var m=matchRepo.findByIdAndProfileId(matchId,profileId).orElseThrow(()->new NotFoundException("Match no encontrado")); if(m.getMatchType()==MonthlyPlanTransactionMatch.MatchType.SYSTEM_CONVERSION){ itemRepo.findByIdAndProfileId(m.getMonthlyPlanItemId(),profileId).ifPresent(item->{ if(Objects.equals(item.getTransactionId(),m.getMoneyTransactionId())){ item.setTransactionId(null); if(item.getStatus()==MonthlyPlanItem.Status.PAID||item.getStatus()==MonthlyPlanItem.Status.COLLECTED) item.setStatus(item.getExpectedDate()!=null&&!item.getExpectedDate().isBefore(LocalDate.now())?MonthlyPlanItem.Status.SCHEDULED:MonthlyPlanItem.Status.ESTIMATED); itemRepo.save(item); }}); } matchRepo.delete(m); }
+  public void delete(UUID userId, UUID profileId, UUID matchId){ ensureProfile(profileId,userId); var m=matchRepo.findByIdAndProfileId(matchId,profileId).orElseThrow(()->new NotFoundException("Match no encontrado")); if(m.getMatchType()==MonthlyPlanTransactionMatch.MatchType.SYSTEM_CONVERSION){ itemRepo.findByIdAndProfileId(m.getMonthlyPlanItemId(),profileId).ifPresent(item->{ if(Objects.equals(item.getTransactionId(),m.getMoneyTransactionId())){ item.setTransactionId(null); if(item.getStatus()==MonthlyPlanItem.Status.PAID||item.getStatus()==MonthlyPlanItem.Status.COLLECTED) item.setStatus(statusAfterUnlink(item)); itemRepo.save(item); }}); } matchRepo.delete(m); }
+
+  private MonthlyPlanItem.Status statusAfterUnlink(MonthlyPlanItem item) {
+    if (item.getExpectedDate() == null) return MonthlyPlanItem.Status.ESTIMATED;
+    if (item.getExpectedDate().isBefore(LocalDate.now())) return MonthlyPlanItem.Status.DUE;
+    return MonthlyPlanItem.Status.SCHEDULED;
+  }
 }

@@ -32,7 +32,8 @@ class BudgetServiceTest {
       MoneyTransaction.builder().profileId(p).categoryId(salaryId).movementType(MoneyTransaction.MovementType.INCOME).amount(new BigDecimal("1000000")).status(MoneyTransaction.Status.CONFIRMED).budgetDate(LocalDate.of(2026,5,2)).build(),
       MoneyTransaction.builder().profileId(p).categoryId(rentId).movementType(MoneyTransaction.MovementType.EXPENSE).amount(new BigDecimal("300000")).status(MoneyTransaction.Status.CONFIRMED).budgetDate(LocalDate.of(2026,5,5)).build(),
       MoneyTransaction.builder().profileId(p).categoryId(marketId).movementType(MoneyTransaction.MovementType.EXPENSE).amount(new BigDecimal("180000")).status(MoneyTransaction.Status.CONFIRMED).budgetDate(LocalDate.of(2026,5,6)).build(),
-      MoneyTransaction.builder().profileId(p).categoryId(saveId).movementType(MoneyTransaction.MovementType.SAVING).amount(new BigDecimal("200000")).status(MoneyTransaction.Status.CONFIRMED).budgetDate(LocalDate.of(2026,5,10)).build()
+      MoneyTransaction.builder().profileId(p).categoryId(saveId).movementType(MoneyTransaction.MovementType.SAVING).amount(new BigDecimal("200000")).status(MoneyTransaction.Status.CONFIRMED).budgetDate(LocalDate.of(2026,5,10)).build(),
+      MoneyTransaction.builder().profileId(p).categoryId(marketId).movementType(MoneyTransaction.MovementType.EXPENSE).amount(new BigDecimal("999999")).status(MoneyTransaction.Status.IGNORED).classificationStatus(MoneyTransaction.ClassificationStatus.IGNORED_BY_RULE).budgetDate(LocalDate.of(2026,5,11)).build()
     ));
     when(cr.findAllById(any())).thenReturn(List.of(
       Category.builder().id(rentId).name("Alquiler").type(Category.Type.FIXED_EXPENSE).build(),

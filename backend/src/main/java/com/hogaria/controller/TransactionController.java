@@ -5,6 +5,7 @@ import com.hogaria.dto.BulkRecategorizeApplyResponse;
 import com.hogaria.dto.BulkRecategorizePreviewRequest;
 import com.hogaria.dto.BulkRecategorizePreviewResponse;
 import com.hogaria.dto.TransactionCreateRequest;
+import com.hogaria.dto.TransactionDeletionResponse;
 import com.hogaria.dto.TransactionResponse;
 import com.hogaria.dto.TransactionUpdateRequest;
 import com.hogaria.security.CurrentUserResolver;
@@ -21,9 +22,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.http.HttpStatus;
 
 @RestController
 @RequestMapping("/api")
@@ -76,12 +75,11 @@ public class TransactionController {
   }
 
   @DeleteMapping("/transactions/{id}")
-  @ResponseStatus(HttpStatus.NO_CONTENT)
-  public void delete(
+  public TransactionDeletionResponse delete(
           @RequestHeader(value = "X-User-Id", required = false) String userHeader,
           @PathVariable UUID id
   ) {
-    service.delete(parser.parse(userHeader), id);
+    return service.delete(parser.parse(userHeader), id);
   }
 
   @PostMapping("/profiles/{profileId}/transactions/bulk-recategorize/preview")

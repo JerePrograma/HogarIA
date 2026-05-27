@@ -14,6 +14,7 @@ import com.hogaria.domains.transactions.lifecycle.TransactionDeletionObserver;
 import com.hogaria.entity.Account;
 import com.hogaria.entity.AppUser;
 import com.hogaria.entity.Category;
+import com.hogaria.entity.ExternalSyncMapping;
 import com.hogaria.entity.FinancialProfile;
 import com.hogaria.entity.MoneyTransaction;
 import com.hogaria.entity.MonthlyPlanItem;
@@ -21,6 +22,7 @@ import com.hogaria.entity.MonthlyPlanTransactionMatch;
 import com.hogaria.repository.AccountRepository;
 import com.hogaria.repository.AppUserRepository;
 import com.hogaria.repository.CategoryRepository;
+import com.hogaria.repository.ExternalSyncMappingRepository;
 import com.hogaria.repository.FinancialProfileRepository;
 import com.hogaria.repository.MoneyTransactionRepository;
 import com.hogaria.repository.MonthlyPlanItemRepository;
@@ -72,6 +74,7 @@ class TransactionDeletionPostgresTest {
     @Autowired private FinancialProfileRepository profileRepository;
     @Autowired private AccountRepository accountRepository;
     @Autowired private CategoryRepository categoryRepository;
+    @Autowired private ExternalSyncMappingRepository externalSyncMappingRepository;
     @Autowired private MoneyTransactionRepository transactionRepository;
     @Autowired private MonthlyPlanItemRepository monthlyPlanItemRepository;
     @Autowired private MonthlyPlanTransactionMatchRepository matchRepository;
@@ -98,11 +101,17 @@ class TransactionDeletionPostgresTest {
     }
 
     @Test
-    void deleteManualTransactionWithoutLinksReturnsNoContentAndDeletesRow() throws Exception {
+    void deleteManualTransactionWithoutLinksReturnsPhysicalDeleteResponseAndDeletesRow() throws Exception {
         var transaction = saveTransaction(MoneyTransaction.Origin.MANUAL);
 
         deleteTransaction(transaction.getId(), userId)
-                .andExpect(status().isNoContent());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.transactionId").value(transaction.getId().toString()))
+                .andExpect(jsonPath("$.mode").value("PHYSICAL_DELETE"))
+                .andExpect(jsonPath("$.code").value("TRANSACTION_PHYSICALLY_DELETED"))
+                .andExpect(jsonPath("$.message").value("Movimiento eliminado correctamente."))
+                .andExpect(jsonPath("$.resultingStatus").doesNotExist())
+                .andExpect(jsonPath("$.resultingClassificationStatus").doesNotExist());
 
         assertThat(transactionRepository.findById(transaction.getId())).isEmpty();
     }
@@ -113,7 +122,9 @@ class TransactionDeletionPostgresTest {
         var item = saveLinkedPlanItem(transaction.getId(), MonthlyPlanItem.Status.PAID);
 
         deleteTransaction(transaction.getId(), userId)
-                .andExpect(status().isNoContent());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.mode").value("PHYSICAL_DELETE"))
+                .andExpect(jsonPath("$.linkedItemsUpdated").value(1));
 
         assertThat(transactionRepository.findById(transaction.getId())).isEmpty();
 
@@ -129,7 +140,9 @@ class TransactionDeletionPostgresTest {
         saveMatch(item.getId(), transaction.getId(), MonthlyPlanTransactionMatch.MatchType.MANUAL);
 
         deleteTransaction(transaction.getId(), userId)
-                .andExpect(status().isNoContent());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.mode").value("PHYSICAL_DELETE"))
+                .andExpect(jsonPath("$.matchesDeleted").value(1));
 
         assertThat(transactionRepository.findById(transaction.getId())).isEmpty();
         assertThat(matchRepository.findByProfileIdAndMoneyTransactionId(profileId, transaction.getId())).isEmpty();
@@ -146,7 +159,9 @@ class TransactionDeletionPostgresTest {
                 .hasSize(1);
 
         deleteTransaction(converted.transactionId(), userId)
-                .andExpect(status().isNoContent());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.mode").value("PHYSICAL_DELETE"))
+                .andExpect(jsonPath("$.systemConversionMatchesDeleted").value(1));
 
         assertThat(transactionRepository.findById(converted.transactionId())).isEmpty();
         assertThat(matchRepository.findByProfileIdAndMoneyTransactionId(profileId, converted.transactionId()))
@@ -155,6 +170,88 @@ class TransactionDeletionPostgresTest {
         var reloadedItem = monthlyPlanItemRepository.findById(item.getId()).orElseThrow();
         assertThat(reloadedItem.getTransactionId()).isNull();
         assertThat(reloadedItem.getStatus()).isEqualTo(MonthlyPlanItem.Status.SCHEDULED);
+    }
+
+    @Test
+    void deleteImportedTransactionReturnsSoftIgnoreResponseAndKeepsRow() throws Exception {
+        var transaction = saveTransaction(MoneyTransaction.Origin.IMPORT);
+
+        deleteTransaction(transaction.getId(), userId)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.transactionId").value(transaction.getId().toString()))
+                .andExpect(jsonPath("$.mode").value("SOFT_IGNORE"))
+                .andExpect(jsonPath("$.code").value("IMPORTED_TRANSACTION_SOFT_IGNORED"))
+                .andExpect(jsonPath("$.message").value("Movimiento ignorado para preservar trazabilidad."))
+                .andExpect(jsonPath("$.resultingStatus").value("IGNORED"))
+                .andExpect(jsonPath("$.resultingClassificationStatus").value("IGNORED_BY_RULE"));
+
+        var reloaded = transactionRepository.findById(transaction.getId()).orElseThrow();
+        assertThat(reloaded.getStatus()).isEqualTo(MoneyTransaction.Status.IGNORED);
+        assertThat(reloaded.getClassificationStatus()).isEqualTo(MoneyTransaction.ClassificationStatus.IGNORED_BY_RULE);
+        assertThat(reloaded.getClassificationReason()).isEqualTo("IMPORTED_TRANSACTION_SOFT_IGNORED");
+    }
+
+    @Test
+    void deleteExternalSyncTransactionSoftIgnoresAndKeepsMapping() throws Exception {
+        var transaction = saveTransaction(MoneyTransaction.Origin.SYSTEM);
+        var mapping = saveExternalSyncMapping(transaction.getId());
+
+        deleteTransaction(transaction.getId(), userId)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.mode").value("SOFT_IGNORE"))
+                .andExpect(jsonPath("$.code").value("TRANSACTION_EXTERNAL_SYNC_SOFT_IGNORED"));
+
+        var reloaded = transactionRepository.findById(transaction.getId()).orElseThrow();
+        assertThat(reloaded.getStatus()).isEqualTo(MoneyTransaction.Status.IGNORED);
+        assertThat(externalSyncMappingRepository.findById(mapping.getId())).isPresent();
+    }
+
+    @Test
+    void deleteCjPrestamosTransactionSoftIgnores() throws Exception {
+        var transaction = saveTransaction(MoneyTransaction.Origin.SYSTEM, "CJPRESTAMOS");
+
+        deleteTransaction(transaction.getId(), userId)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.mode").value("SOFT_IGNORE"))
+                .andExpect(jsonPath("$.code").value("EXTERNAL_LOAN_TRANSACTION_SOFT_IGNORED"));
+
+        var reloaded = transactionRepository.findById(transaction.getId()).orElseThrow();
+        assertThat(reloaded.getStatus()).isEqualTo(MoneyTransaction.Status.IGNORED);
+        assertThat(reloaded.getClassificationReason()).isEqualTo("EXTERNAL_LOAN_TRANSACTION_SOFT_IGNORED");
+    }
+
+    @Test
+    void softIgnoreLinkedImportedTransactionUnlinksMonthlyPlan() throws Exception {
+        var transaction = saveTransaction(MoneyTransaction.Origin.IMPORT);
+        var item = saveLinkedPlanItem(transaction.getId(), MonthlyPlanItem.Status.COLLECTED);
+        saveMatch(item.getId(), transaction.getId(), MonthlyPlanTransactionMatch.MatchType.MANUAL);
+
+        deleteTransaction(transaction.getId(), userId)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.mode").value("SOFT_IGNORE"))
+                .andExpect(jsonPath("$.linkedItemsUpdated").value(1))
+                .andExpect(jsonPath("$.matchesDeleted").value(1));
+
+        var reloadedTransaction = transactionRepository.findById(transaction.getId()).orElseThrow();
+        assertThat(reloadedTransaction.getStatus()).isEqualTo(MoneyTransaction.Status.IGNORED);
+
+        var reloadedItem = monthlyPlanItemRepository.findById(item.getId()).orElseThrow();
+        assertThat(reloadedItem.getTransactionId()).isNull();
+        assertThat(reloadedItem.getStatus()).isEqualTo(MonthlyPlanItem.Status.SCHEDULED);
+        assertThat(matchRepository.findByProfileIdAndMoneyTransactionId(profileId, transaction.getId())).isEmpty();
+    }
+
+    @Test
+    void physicalDeleteResponseIncludesUnlinkCounters() throws Exception {
+        var transaction = saveTransaction(MoneyTransaction.Origin.MANUAL);
+        var item = saveLinkedPlanItem(transaction.getId(), MonthlyPlanItem.Status.PAID);
+        saveMatch(item.getId(), transaction.getId(), MonthlyPlanTransactionMatch.MatchType.MANUAL);
+
+        deleteTransaction(transaction.getId(), userId)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.mode").value("PHYSICAL_DELETE"))
+                .andExpect(jsonPath("$.linkedItemsUpdated").value(1))
+                .andExpect(jsonPath("$.matchesDeleted").value(1));
     }
 
     @Test
@@ -225,7 +322,11 @@ class TransactionDeletionPostgresTest {
     }
 
     private MoneyTransaction saveTransaction(MoneyTransaction.Origin origin) {
-        return saveTransaction(profileId, accountId, categoryId, origin);
+        return saveTransaction(origin, null);
+    }
+
+    private MoneyTransaction saveTransaction(MoneyTransaction.Origin origin, String source) {
+        return saveTransaction(profileId, accountId, categoryId, origin, source);
     }
 
     private MoneyTransaction saveTransaction(
@@ -233,6 +334,16 @@ class TransactionDeletionPostgresTest {
             UUID targetAccountId,
             UUID targetCategoryId,
             MoneyTransaction.Origin origin
+    ) {
+        return saveTransaction(targetProfileId, targetAccountId, targetCategoryId, origin, null);
+    }
+
+    private MoneyTransaction saveTransaction(
+            UUID targetProfileId,
+            UUID targetAccountId,
+            UUID targetCategoryId,
+            MoneyTransaction.Origin origin,
+            String source
     ) {
         return transactionRepository.saveAndFlush(MoneyTransaction.builder()
                 .profileId(targetProfileId)
@@ -246,6 +357,7 @@ class TransactionDeletionPostgresTest {
                 .description("Movimiento de prueba")
                 .origin(origin)
                 .status(MoneyTransaction.Status.CONFIRMED)
+                .source(source)
                 .build());
     }
 
@@ -286,6 +398,19 @@ class TransactionDeletionPostgresTest {
                 .matchedAmount(new BigDecimal("100.00"))
                 .matchType(matchType)
                 .confidence(MonthlyPlanTransactionMatch.Confidence.HIGH)
+                .build());
+    }
+
+    private ExternalSyncMapping saveExternalSyncMapping(UUID transactionId) {
+        return externalSyncMappingRepository.saveAndFlush(ExternalSyncMapping.builder()
+                .profileId(profileId)
+                .externalSystem("CJPRESTAMOS")
+                .externalEntityType("LOAN")
+                .externalEntityId(UUID.randomUUID().toString())
+                .externalEventType("DISBURSEMENT")
+                .moneyTransactionId(transactionId)
+                .eventHash(UUID.randomUUID().toString())
+                .status("PROCESSED")
                 .build());
     }
 

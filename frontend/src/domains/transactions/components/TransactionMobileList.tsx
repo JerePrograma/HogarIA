@@ -21,7 +21,11 @@ import type {
   Category,
   MoneyTransaction,
 } from "../../../domain/types";
-import { formatDate } from "../utils/transactionUtils";
+import {
+  formatDate,
+  getTransactionRemovalConfirmMessage,
+  getTransactionRemovalLabel,
+} from "../utils/transactionUtils";
 
 interface Props {
   transactions: MoneyTransaction[];
@@ -29,8 +33,9 @@ interface Props {
   categoriesById: Map<string, Category>;
   updatePending: boolean;
   deletePending: boolean;
+  deletingTransactionId?: string;
   onToggleStatus: (transaction: MoneyTransaction) => void;
-  onDelete: (transactionId: string) => void;
+  onDelete: (transaction: MoneyTransaction) => void;
 }
 
 export function TransactionMobileList({
@@ -39,6 +44,7 @@ export function TransactionMobileList({
   categoriesById,
   updatePending,
   deletePending,
+  deletingTransactionId,
   onToggleStatus,
   onDelete,
 }: Props) {
@@ -55,6 +61,8 @@ export function TransactionMobileList({
 
         const classificationStatus =
           getDefaultClassificationStatus(transaction);
+        const isDeleting =
+          deletePending && deletingTransactionId === transaction.id;
 
         return (
           <article key={transaction.id} className="transactions-mobile-card">
@@ -146,11 +154,12 @@ export function TransactionMobileList({
                 className="boton-danger"
                 disabled={deletePending}
                 onClick={() =>
-                  window.confirm("¿Eliminar este movimiento?") &&
-                  onDelete(transaction.id)
+                  window.confirm(
+                    getTransactionRemovalConfirmMessage(transaction),
+                  ) && onDelete(transaction)
                 }
               >
-                Eliminar
+                {getTransactionRemovalLabel(transaction, isDeleting)}
               </button>
             </div>
           </article>

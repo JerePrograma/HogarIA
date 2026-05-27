@@ -56,3 +56,34 @@ export function toTransactionUpdatePayload(
     status: transaction.status === "CONFIRMED" ? "PENDING" : "CONFIRMED",
   };
 }
+
+export function getTransactionRemovalLabel(
+  transaction: MoneyTransaction,
+  pending = false,
+) {
+  if (shouldIgnoreInsteadOfDelete(transaction)) {
+    return pending ? "Ignorando..." : "Ignorar";
+  }
+
+  return pending ? "Eliminando..." : "Eliminar";
+}
+
+export function getTransactionRemovalConfirmMessage(
+  transaction: MoneyTransaction,
+) {
+  const planWarning =
+    " Si está vinculado al plan mensual, también se desvinculará.";
+
+  if (shouldIgnoreInsteadOfDelete(transaction)) {
+    return `¿Ignorar este movimiento para preservar trazabilidad?${planWarning}`;
+  }
+
+  return `¿Eliminar este movimiento?${planWarning}`;
+}
+
+export function shouldIgnoreInsteadOfDelete(transaction: MoneyTransaction) {
+  return (
+    transaction.origin === "IMPORT" ||
+    Boolean(transaction.source && transaction.source.trim())
+  );
+}

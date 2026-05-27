@@ -17,11 +17,20 @@ public class TransactionDeletionPolicy {
     }
 
     public TransactionDeletionDecision decide(MoneyTransaction transaction) {
+        if (CJPRESTAMOS.equals(normalize(transaction.getSource()))) {
+            return softIgnore(
+                    TransactionDeletionDecision.LinkHandling.UNLINK_MONTHLY_PLAN,
+                    "Los movimientos de cjprestamos se ignoran para preservar idempotencia externa.",
+                    "EXTERNAL_LOAN_TRANSACTION_SOFT_IGNORED"
+            );
+        }
+
         if (externalSyncMappingRepository.existsByProfileIdAndMoneyTransactionId(
                 transaction.getProfileId(),
                 transaction.getId()
         )) {
             return softIgnore(
+                    TransactionDeletionDecision.LinkHandling.UNLINK_MONTHLY_PLAN,
                     "El movimiento sostiene idempotencia de una sincronización externa.",
                     "TRANSACTION_EXTERNAL_SYNC_SOFT_IGNORED"
             );
@@ -29,28 +38,28 @@ public class TransactionDeletionPolicy {
 
         if (transaction.getOrigin() == MoneyTransaction.Origin.IMPORT) {
             return softIgnore(
+                    TransactionDeletionDecision.LinkHandling.UNLINK_MONTHLY_PLAN,
                     "Los movimientos importados se ignoran para preservar trazabilidad.",
                     "IMPORTED_TRANSACTION_SOFT_IGNORED"
             );
         }
 
-        if (CJPRESTAMOS.equals(normalize(transaction.getSource()))) {
-            return softIgnore(
-                    "Los movimientos de cjprestamos se ignoran para preservar idempotencia externa.",
-                    "EXTERNAL_LOAN_TRANSACTION_SOFT_IGNORED"
-            );
-        }
-
         return new TransactionDeletionDecision(
-                TransactionDeletionDecision.Mode.PHYSICAL_DELETE,
+                TransactionDeletionDecision.DeletionMode.PHYSICAL_DELETE,
+                TransactionDeletionDecision.LinkHandling.UNLINK_MONTHLY_PLAN,
                 "Movimiento sin restricciones de trazabilidad externa.",
                 "TRANSACTION_PHYSICALLY_DELETED"
         );
     }
 
-    private TransactionDeletionDecision softIgnore(String reason, String code) {
+    private TransactionDeletionDecision softIgnore(
+            TransactionDeletionDecision.LinkHandling linkHandling,
+            String reason,
+            String code
+    ) {
         return new TransactionDeletionDecision(
-                TransactionDeletionDecision.Mode.SOFT_IGNORE,
+                TransactionDeletionDecision.DeletionMode.SOFT_IGNORE,
+                linkHandling,
                 reason,
                 code
         );

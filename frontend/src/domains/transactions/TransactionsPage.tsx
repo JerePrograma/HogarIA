@@ -16,6 +16,7 @@ import { TransactionSetupWarnings } from "./components/TransactionSetupWarnings"
 import { TransactionQuickForm } from "./components/TransactionQuickForm";
 import { TransactionSideSummary } from "./components/TransactionSideSummary";
 import { TransactionListPanel } from "./components/TransactionListPanel";
+import { Alert } from "../../shared/ui/Alert";
 
 export function TransactionsPage() {
   const { profileId = "" } = useParams();
@@ -50,6 +51,7 @@ export function TransactionsPage() {
     status: ALL,
     classificationStatus: ALL,
   });
+  const [deletionMessage, setDeletionMessage] = useState<string | null>(null);
 
   const {
     accountsQuery,
@@ -148,6 +150,11 @@ export function TransactionsPage() {
     });
   };
 
+  const deletionSuccessMessage = (mode: "PHYSICAL_DELETE" | "SOFT_IGNORE") =>
+    mode === "PHYSICAL_DELETE"
+      ? "Movimiento eliminado."
+      : "Movimiento ignorado para preservar trazabilidad.";
+
   return (
     <AppLayout>
       <div className="page-stack transactions-page">
@@ -166,6 +173,10 @@ export function TransactionsPage() {
         <RealConfirmedPanel totals={totals} />
 
         <TransactionMetrics totals={totals} />
+
+        {deletionMessage ? (
+          <Alert tone="success">{deletionMessage}</Alert>
+        ) : null}
 
         <TransactionSetupWarnings
           profileId={profileId}
@@ -208,7 +219,7 @@ export function TransactionsPage() {
           updatePending={updateTransactionMutation.isPending}
           deletePending={deleteTransactionMutation.isPending}
           updatingTransactionId={updateTransactionMutation.variables?.id}
-          deletingTransactionId={deleteTransactionMutation.variables}
+          deletingTransactionId={deleteTransactionMutation.variables?.id}
           onFiltersChange={(patch) =>
             setFilters((current) => ({
               ...current,
@@ -219,8 +230,11 @@ export function TransactionsPage() {
           onToggleStatus={(transaction) =>
             updateTransactionMutation.mutate(transaction)
           }
-          onDelete={(transactionId) =>
-            deleteTransactionMutation.mutate(transactionId)
+          onDelete={(transaction) =>
+            deleteTransactionMutation.mutate(transaction, {
+              onSuccess: (response) =>
+                setDeletionMessage(deletionSuccessMessage(response.mode)),
+            })
           }
         />
       </div>

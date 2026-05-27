@@ -7,6 +7,7 @@ import com.hogaria.dto.BulkRecategorizeCandidate;
 import com.hogaria.dto.BulkRecategorizePreviewRequest;
 import com.hogaria.dto.BulkRecategorizePreviewResponse;
 import com.hogaria.dto.TransactionCreateRequest;
+import com.hogaria.dto.TransactionDeletionResponse;
 import com.hogaria.dto.TransactionResponse;
 import com.hogaria.dto.TransactionUpdateRequest;
 import com.hogaria.domains.transactions.lifecycle.TransactionLifecycleService;
@@ -151,8 +152,19 @@ public class TransactionService {
             transaction.setAccountId(request.accountId());
         }
 
-        if (request.categoryId() != null) {
+        if (Boolean.TRUE.equals(request.clearCategory()) && request.categoryId() != null) {
+            throw new BadRequestException("categoryId and clearCategory cannot be used together");
+        }
+
+        if (Boolean.TRUE.equals(request.clearCategory())) {
+            transaction.setCategoryId(null);
+            transaction.setClassificationStatus(MoneyTransaction.ClassificationStatus.NEEDS_CATEGORY);
+            transaction.setClassificationReason(null);
+        } else if (request.categoryId() != null) {
             transaction.setCategoryId(request.categoryId());
+            if (transaction.getClassificationStatus() == MoneyTransaction.ClassificationStatus.NEEDS_CATEGORY) {
+                transaction.setClassificationStatus(MoneyTransaction.ClassificationStatus.CLASSIFIED);
+            }
         }
 
         if (request.movementType() != null) {
@@ -199,13 +211,13 @@ public class TransactionService {
     }
 
     @Transactional
-    public void delete(UUID userId, UUID txId) {
+    public TransactionDeletionResponse delete(UUID userId, UUID txId) {
         var transaction = repository.findById(txId)
                 .orElseThrow(() -> new NotFoundException("Transaction not found"));
 
         ensureProfile(transaction.getProfileId(), userId);
 
-        transactionLifecycleService.delete(transaction, userId);
+        return transactionLifecycleService.delete(transaction, userId);
     }
 
     @Transactional(readOnly = true)

@@ -22,27 +22,27 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler({BadRequestException.class, IllegalArgumentException.class})
     ResponseEntity<ErrorResponse> bad(RuntimeException ex, HttpServletRequest req) {
-        return build(HttpStatus.BAD_REQUEST, ex.getMessage(), req, "BAD_REQUEST", List.of());
+        return build(HttpStatus.BAD_REQUEST, ex.getMessage(), req, "BAD_REQUEST", List.of(), ex);
     }
 
     @ExceptionHandler(NotFoundException.class)
     ResponseEntity<ErrorResponse> notFound(NotFoundException ex, HttpServletRequest req) {
-        return build(HttpStatus.NOT_FOUND, ex.getMessage(), req, "NOT_FOUND", List.of());
+        return build(HttpStatus.NOT_FOUND, ex.getMessage(), req, "NOT_FOUND", List.of(), ex);
     }
 
     @ExceptionHandler(ForbiddenException.class)
     ResponseEntity<ErrorResponse> forbidden(ForbiddenException ex, HttpServletRequest req) {
-        return build(HttpStatus.FORBIDDEN, ex.getMessage(), req, "FORBIDDEN", List.of());
+        return build(HttpStatus.FORBIDDEN, ex.getMessage(), req, "FORBIDDEN", List.of(), ex);
     }
 
     @ExceptionHandler({ConflictException.class})
     ResponseEntity<ErrorResponse> conflict(ConflictException ex, HttpServletRequest req) {
-        return build(HttpStatus.CONFLICT, ex.getMessage(), req, "CONFLICT", List.of());
+        return build(HttpStatus.CONFLICT, ex.getMessage(), req, "CONFLICT", List.of(), ex);
     }
 
     @ExceptionHandler(DomainConflictException.class)
     ResponseEntity<ErrorResponse> domainConflict(DomainConflictException ex, HttpServletRequest req) {
-        return build(HttpStatus.CONFLICT, ex.getMessage(), req, ex.getCode(), ex.getDetails());
+        return build(HttpStatus.CONFLICT, ex.getMessage(), req, ex.getCode(), ex.getDetails(), ex);
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
@@ -58,7 +58,8 @@ public class GlobalExceptionHandler {
                 "La solicitud tiene campos inválidos.",
                 req,
                 "VALIDATION_ERROR",
-                details
+                details,
+                ex
         );
     }
 
@@ -77,7 +78,8 @@ public class GlobalExceptionHandler {
                 "La solicitud viola restricciones de validación.",
                 req,
                 "CONSTRAINT_VIOLATION",
-                details
+                details,
+                ex
         );
     }
 
@@ -88,43 +90,39 @@ public class GlobalExceptionHandler {
                 "El cuerpo de la solicitud no se pudo leer.",
                 req,
                 "MALFORMED_REQUEST",
-                List.of()
+                List.of(),
+                ex
         );
     }
 
     @ExceptionHandler(DataIntegrityViolationException.class)
     ResponseEntity<ErrorResponse> dataIntegrity(DataIntegrityViolationException ex, HttpServletRequest req) {
-        log.warn(
-                "Data integrity conflict on {} {}: {}",
-                req.getMethod(),
-                req.getRequestURI(),
-                rootMessage(ex)
-        );
-
         return build(
                 HttpStatus.CONFLICT,
                 "La operación no puede completarse porque existen datos relacionados.",
                 req,
                 "DATA_INTEGRITY_CONFLICT",
-                List.of(new ErrorResponse.Detail("constraint", rootMessage(ex)))
+                safeConstraintName(ex)
+                        .map(name -> List.of(new ErrorResponse.Detail("constraint", name)))
+                        .orElseGet(List::of),
+                ex
         );
     }
 
     @ExceptionHandler(CjPrestamosIntegrationException.class)
     ResponseEntity<ErrorResponse> cjPrestamos(CjPrestamosIntegrationException ex, HttpServletRequest req) {
-        return build(HttpStatus.BAD_GATEWAY, ex.getMessage(), req, "CJPRESTAMOS_INTEGRATION_ERROR", List.of());
+        return build(HttpStatus.BAD_GATEWAY, ex.getMessage(), req, "CJPRESTAMOS_INTEGRATION_ERROR", List.of(), ex);
     }
 
     @ExceptionHandler(Exception.class)
     ResponseEntity<ErrorResponse> unexpected(Exception ex, HttpServletRequest req) {
-        log.error("Unexpected backend error on {} {}", req.getMethod(), req.getRequestURI(), ex);
-
         return build(
                 HttpStatus.INTERNAL_SERVER_ERROR,
                 "Error interno del servidor.",
                 req,
                 "INTERNAL_ERROR",
-                List.of()
+                List.of(),
+                ex
         );
     }
 
@@ -133,8 +131,11 @@ public class GlobalExceptionHandler {
             String message,
             HttpServletRequest req,
             String code,
-            List<ErrorResponse.Detail> details
+            List<ErrorResponse.Detail> details,
+            Throwable cause
     ) {
+        logHandled(status, req, code, cause);
+
         return ResponseEntity.status(status)
                 .body(new ErrorResponse(
                         OffsetDateTime.now(),
@@ -147,11 +148,61 @@ public class GlobalExceptionHandler {
                 ));
     }
 
+    private void logHandled(HttpStatus status, HttpServletRequest req, String code, Throwable cause) {
+        var root = rootMessage(cause);
+        if (status.is5xxServerError()) {
+            log.error(
+                    "backend_error method={} path={} code={} rootCause={}",
+                    req.getMethod(),
+                    req.getRequestURI(),
+                    code,
+                    root,
+                    cause
+            );
+            return;
+        }
+
+        log.warn(
+                "backend_request_rejected method={} path={} code={} rootCause={}",
+                req.getMethod(),
+                req.getRequestURI(),
+                code,
+                root
+        );
+    }
+
     private String rootMessage(Throwable ex) {
+        if (ex == null) {
+            return null;
+        }
+
         var current = ex;
         while (current.getCause() != null) {
             current = current.getCause();
         }
         return current.getMessage();
+    }
+
+    private java.util.Optional<String> safeConstraintName(Throwable ex) {
+        var message = rootMessage(ex);
+        if (message == null || message.isBlank()) {
+            return java.util.Optional.empty();
+        }
+
+        var quotedConstraint = java.util.regex.Pattern
+                .compile("constraint [\"']([^\"']+)[\"']", java.util.regex.Pattern.CASE_INSENSITIVE)
+                .matcher(message);
+        if (quotedConstraint.find()) {
+            return java.util.Optional.of(quotedConstraint.group(1));
+        }
+
+        var plainConstraint = java.util.regex.Pattern
+                .compile("constraint\\s+([a-zA-Z0-9_]+)", java.util.regex.Pattern.CASE_INSENSITIVE)
+                .matcher(message);
+        if (plainConstraint.find()) {
+            return java.util.Optional.of(plainConstraint.group(1));
+        }
+
+        return java.util.Optional.empty();
     }
 }

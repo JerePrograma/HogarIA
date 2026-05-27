@@ -64,7 +64,8 @@ export function useTransactionMutations(
   });
 
   const deleteTransactionMutation = useMutation({
-    mutationFn: (id: string) => deleteTransaction(id),
+    mutationFn: (transaction: MoneyTransaction) =>
+      deleteTransaction(transaction.id),
     onSuccess: invalidateTransactionDependents,
   });
 

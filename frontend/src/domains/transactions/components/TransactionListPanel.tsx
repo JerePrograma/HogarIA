@@ -35,7 +35,7 @@ interface Props {
   onFiltersChange: (patch: Partial<TransactionFilters>) => void;
   onResetFilters: () => void;
   onToggleStatus: (transaction: MoneyTransaction) => void;
-  onDelete: (transactionId: string) => void;
+  onDelete: (transaction: MoneyTransaction) => void;
 }
 
 export function TransactionListPanel({
@@ -252,6 +252,7 @@ export function TransactionListPanel({
             categoriesById={categoriesById}
             updatePending={updatePending}
             deletePending={deletePending}
+            deletingTransactionId={deletingTransactionId}
             onToggleStatus={onToggleStatus}
             onDelete={onDelete}
           />

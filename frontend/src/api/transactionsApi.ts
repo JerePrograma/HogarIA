@@ -3,6 +3,7 @@ import type {
   MoneyTransaction,
   MovementType,
   PaymentChannel,
+  TransactionDeletionResponse,
   TransactionClassificationStatus,
   TransactionOrigin,
   TransactionStatus,
@@ -34,7 +35,9 @@ export interface TransactionCreatePayload {
 
 export type TransactionUpdatePayload = Partial<
   Omit<TransactionCreatePayload, "profileId">
->;
+> & {
+  clearCategory?: boolean;
+};
 
 export async function listTransactions(
   profileId: string,
@@ -68,6 +71,26 @@ export async function updateTransaction(
   return data;
 }
 
-export async function deleteTransaction(id: string): Promise<void> {
-  await http.delete(`/transactions/${id}`);
+export async function deleteTransaction(
+  id: string,
+): Promise<TransactionDeletionResponse> {
+  const response = await http.delete<TransactionDeletionResponse | "">(
+    `/transactions/${id}`,
+  );
+
+  if (response.status === 204 || !response.data) {
+    return {
+      transactionId: id,
+      mode: "PHYSICAL_DELETE",
+      code: "TRANSACTION_PHYSICALLY_DELETED",
+      message: "Movimiento eliminado correctamente.",
+      linkedItemsUpdated: 0,
+      matchesDeleted: 0,
+      systemConversionMatchesDeleted: 0,
+      resultingStatus: null,
+      resultingClassificationStatus: null,
+    };
+  }
+
+  return response.data;
 }

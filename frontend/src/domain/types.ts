@@ -55,6 +55,8 @@ export type TransactionClassificationStatus =
   | "TECHNICAL"
   | "IGNORED_BY_RULE";
 
+export type TransactionDeletionMode = "PHYSICAL_DELETE" | "SOFT_IGNORE";
+
 export interface DevUser {
   id: string;
   email: string;
@@ -133,6 +135,18 @@ export interface MoneyTransaction {
 
   createdAt: string;
   updatedAt: string;
+}
+
+export interface TransactionDeletionResponse {
+  transactionId: string;
+  mode: TransactionDeletionMode;
+  code: string;
+  message: string;
+  linkedItemsUpdated: number;
+  matchesDeleted: number;
+  systemConversionMatchesDeleted: number;
+  resultingStatus: TransactionStatus | null;
+  resultingClassificationStatus: TransactionClassificationStatus | null;
 }
 
 // ============================================================

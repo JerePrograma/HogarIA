@@ -6,7 +6,9 @@ import com.hogaria.repository.MonthlyPlanItemRepository;
 import com.hogaria.repository.MonthlyPlanTransactionMatchRepository;
 import java.time.Clock;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -16,6 +18,7 @@ public class MonthlyPlanTransactionLinkService {
     private final MonthlyPlanTransactionMatchRepository matchRepository;
     private final Clock clock;
 
+    @Autowired
     public MonthlyPlanTransactionLinkService(
             MonthlyPlanItemRepository monthlyPlanItemRepository,
             MonthlyPlanTransactionMatchRepository matchRepository
@@ -33,13 +36,20 @@ public class MonthlyPlanTransactionLinkService {
         this.clock = clock;
     }
 
-    public MonthlyPlanTransactionUnlinkResult unlinkTransaction(UUID profileId, UUID transactionId) {
-        var linkedItems = monthlyPlanItemRepository.findByProfileIdAndTransactionId(profileId, transactionId);
-        var matches = matchRepository.findByProfileIdAndMoneyTransactionId(profileId, transactionId);
+    public MonthlyPlanTransactionUnlinkResult describeLinks(UUID profileId, UUID transactionId) {
+        var links = loadLinks(profileId, transactionId);
 
-        int systemConversionMatches = (int) matches.stream()
-                .filter(match -> match.getMatchType() == MonthlyPlanTransactionMatch.MatchType.SYSTEM_CONVERSION)
-                .count();
+        return new MonthlyPlanTransactionUnlinkResult(
+                links.linkedItems().size(),
+                links.matches().size(),
+                links.systemConversionMatches()
+        );
+    }
+
+    public MonthlyPlanTransactionUnlinkResult unlinkTransaction(UUID profileId, UUID transactionId) {
+        var links = loadLinks(profileId, transactionId);
+        var linkedItems = links.linkedItems();
+        var matches = links.matches();
 
         if (!matches.isEmpty()) {
             matchRepository.deleteAll(matches);
@@ -56,7 +66,7 @@ public class MonthlyPlanTransactionLinkService {
         return new MonthlyPlanTransactionUnlinkResult(
                 linkedItems.size(),
                 matches.size(),
-                systemConversionMatches
+                links.systemConversionMatches()
         );
     }
 
@@ -70,10 +80,32 @@ public class MonthlyPlanTransactionLinkService {
     }
 
     private MonthlyPlanItem.Status statusAfterUnlink(MonthlyPlanItem item, LocalDate today) {
-        if (item.getExpectedDate() != null && !item.getExpectedDate().isBefore(today)) {
-            return MonthlyPlanItem.Status.SCHEDULED;
+        if (item.getExpectedDate() == null) {
+            return MonthlyPlanItem.Status.ESTIMATED;
         }
 
-        return MonthlyPlanItem.Status.ESTIMATED;
+        if (item.getExpectedDate().isBefore(today)) {
+            return MonthlyPlanItem.Status.DUE;
+        }
+
+        return MonthlyPlanItem.Status.SCHEDULED;
+    }
+
+    private LinkSnapshot loadLinks(UUID profileId, UUID transactionId) {
+        var linkedItems = monthlyPlanItemRepository.findByProfileIdAndTransactionId(profileId, transactionId);
+        var matches = matchRepository.findByProfileIdAndMoneyTransactionId(profileId, transactionId);
+
+        int systemConversionMatches = (int) matches.stream()
+                .filter(match -> match.getMatchType() == MonthlyPlanTransactionMatch.MatchType.SYSTEM_CONVERSION)
+                .count();
+
+        return new LinkSnapshot(linkedItems, matches, systemConversionMatches);
+    }
+
+    private record LinkSnapshot(
+            List<MonthlyPlanItem> linkedItems,
+            List<MonthlyPlanTransactionMatch> matches,
+            int systemConversionMatches
+    ) {
     }
 }

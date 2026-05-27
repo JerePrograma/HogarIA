@@ -21,7 +21,11 @@ import type {
   Category,
   MoneyTransaction,
 } from "../../../domain/types";
-import { formatDate } from "../utils/transactionUtils";
+import {
+  formatDate,
+  getTransactionRemovalConfirmMessage,
+  getTransactionRemovalLabel,
+} from "../utils/transactionUtils";
 
 interface Props {
   transactions: MoneyTransaction[];
@@ -32,7 +36,7 @@ interface Props {
   updatingTransactionId?: string;
   deletingTransactionId?: string;
   onToggleStatus: (transaction: MoneyTransaction) => void;
-  onDelete: (transactionId: string) => void;
+  onDelete: (transaction: MoneyTransaction) => void;
 }
 
 export function TransactionTable({
@@ -173,11 +177,12 @@ export function TransactionTable({
                       className="boton-danger"
                       disabled={deletePending}
                       onClick={() =>
-                        window.confirm("¿Eliminar este movimiento?") &&
-                        onDelete(transaction.id)
+                        window.confirm(
+                          getTransactionRemovalConfirmMessage(transaction),
+                        ) && onDelete(transaction)
                       }
                     >
-                      {isDeleting ? "Eliminando..." : "Eliminar"}
+                      {getTransactionRemovalLabel(transaction, isDeleting)}
                     </button>
                   </div>
                 </td>
