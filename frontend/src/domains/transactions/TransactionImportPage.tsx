@@ -39,6 +39,8 @@ const ALL = "ALL";
 const sourceLabels: Record<string, string> = {
   BANCO_PROVINCIA: "Banco Provincia",
   MERCADO_PAGO: "Mercado Pago",
+  TARJETA_CREDITO_GENERICA: "Tarjeta de crédito",
+  DEUDAS_TARJETA_GENERICA: "Resumen de cuotas/deudas",
 };
 
 const rowStatusLabels: Record<string, string> = {
@@ -48,7 +50,7 @@ const rowStatusLabels: Record<string, string> = {
   DUPLICATE_EXACT: "Duplicados exactos",
   POSSIBLE_INTERNAL_TRANSFER: "Posibles transferencias internas",
   INTERNAL_TRANSFER_MATCHED: "Transferencias internas",
-  POSSIBLE_CROSS_SOURCE_DUPLICATE: "Posibles duplicados cross-source",
+  POSSIBLE_CROSS_SOURCE_DUPLICATE: "Posibles duplicados entre cuentas",
   ERROR: "Con error",
   SKIPPED: "Omitidas",
 };
@@ -80,6 +82,7 @@ function buildCommitPayload(
   rows: TransactionImportRow[],
   accountId: string,
   createMissingFallbackCategory: boolean,
+  skipDuplicates: boolean,
 ): TransactionImportCommitPayload {
   return {
     rows: rows.map((row) => ({
@@ -92,7 +95,7 @@ function buildCommitPayload(
       description: row.rawDescription ?? row.normalizedDescription,
     })),
     createMissingFallbackCategory,
-    skipDuplicates: true,
+    skipDuplicates,
   };
 }
 
@@ -135,7 +138,9 @@ export function TransactionImportPage() {
   const [preview, setPreview] = useState<TransactionImportPreview | null>(null);
   const [rows, setRows] = useState<TransactionImportRow[]>([]);
   const [createMissingFallbackCategory, setCreateMissingFallbackCategory] =
-    useState(true);
+    useState(false);
+  const [skipDuplicatesConfirmed, setSkipDuplicatesConfirmed] = useState(false);
+  const [wizardStep, setWizardStep] = useState(1);
 
   const [filters, setFilters] = useState<RowFilters>({
     search: "",
@@ -176,6 +181,8 @@ export function TransactionImportPage() {
     onSuccess: (data) => {
       setPreview(data);
       setRows(data.rows ?? []);
+      setWizardStep(2);
+      setSkipDuplicatesConfirmed(false);
       setFilters({
         search: "",
         status: ALL,
@@ -194,6 +201,7 @@ export function TransactionImportPage() {
         rows,
         accountId,
         createMissingFallbackCategory,
+        skipDuplicatesConfirmed,
       );
 
       return commitTransactionImport(profileId, preview.batchId, payload);
@@ -268,6 +276,7 @@ export function TransactionImportPage() {
       (rowCounters.POSSIBLE_CROSS_SOURCE_DUPLICATE ?? 0) ||
     preview?.duplicateRows ||
     0;
+  const exactDuplicateRows = rowCounters.DUPLICATE_EXACT ?? 0;
   const needsCategoryRows = rowCounters.NEEDS_CATEGORY ?? 0;
 
   const duplicateSuggestionGroups = useMemo(() => {
@@ -340,15 +349,19 @@ export function TransactionImportPage() {
     preview?.batchId &&
     importableRows > 0 &&
     unresolvedRows === 0 &&
+    invalidRows === 0 &&
     incompatibleRows === 0 &&
+    (exactDuplicateRows === 0 || skipDuplicatesConfirmed) &&
     !commitMutation.isPending,
   );
 
-  const currentStep = commitMutation.data ? 3 : preview ? 2 : 1;
+  const currentStep = commitMutation.data ? 7 : preview ? wizardStep : 1;
 
   const resetPreviewState = () => {
     setPreview(null);
     setRows([]);
+    setWizardStep(1);
+    setSkipDuplicatesConfirmed(false);
     setFilters({
       search: "",
       status: ALL,
@@ -391,9 +404,31 @@ export function TransactionImportPage() {
     });
   };
 
+  const duplicateDecisionMissing =
+    exactDuplicateRows > 0 && !skipDuplicatesConfirmed;
   const hasBlockingIssues =
-    unresolvedRows > 0 || invalidRows > 0 || incompatibleRows > 0;
+    unresolvedRows > 0 ||
+    invalidRows > 0 ||
+    incompatibleRows > 0 ||
+    duplicateDecisionMissing;
   const hasPreviewRows = rows.length > 0;
+
+  const wizardSteps = buildWizardSteps({
+    currentStep,
+    totalRows: preview?.totalRows ?? rows.length,
+    invalidRows,
+    duplicateRows,
+    exactDuplicateRows,
+    internalRows:
+      (rowCounters.POSSIBLE_INTERNAL_TRANSFER ?? 0) +
+      (rowCounters.INTERNAL_TRANSFER_MATCHED ?? 0),
+    needsCategoryRows,
+    incompatibleRows,
+    importableRows,
+    hasPreview: Boolean(preview),
+    hasResult: Boolean(commitMutation.data),
+    duplicateDecisionMissing,
+  });
 
   return (
     <AppLayout>
@@ -411,21 +446,17 @@ export function TransactionImportPage() {
               className="transaction-import-steps"
               aria-label="Progreso de importación"
             >
-              <span
-                className={`transaction-import-step ${currentStep >= 1 ? "active" : ""}`}
-              >
-                1 · Archivo
-              </span>
-              <span
-                className={`transaction-import-step ${currentStep >= 2 ? "active" : ""}`}
-              >
-                2 · Revisión
-              </span>
-              <span
-                className={`transaction-import-step ${currentStep >= 3 ? "active" : ""}`}
-              >
-                3 · Resultado
-              </span>
+              {wizardSteps.map((step) => (
+                <button
+                  key={step.id}
+                  type="button"
+                  className={`transaction-import-step ${currentStep >= step.id ? "active" : ""}`}
+                  disabled={!preview && step.id > 1}
+                  onClick={() => setWizardStep(step.id)}
+                >
+                  {step.id} · {step.title}
+                </button>
+              ))}
             </div>
           </div>
 
@@ -455,6 +486,23 @@ export function TransactionImportPage() {
               ) : null}
             </div>
           </aside>
+        </section>
+
+        <section className="transaction-import-wizard-panel">
+          {wizardSteps.map((step) => (
+            <article
+              key={step.id}
+              className={`transaction-import-wizard-card ${currentStep === step.id ? "active" : ""}`}
+            >
+              <p className="label-ui">Paso {step.id}</p>
+              <h3>{step.title}</h3>
+              <strong>{step.counter}</strong>
+              <p className="muted">{step.description}</p>
+              <p className={step.blocked ? "mensaje-warning" : "compact-muted"}>
+                {step.action}
+              </p>
+            </article>
+          ))}
         </section>
 
         <section className="transaction-import-layout">
@@ -536,11 +584,11 @@ export function TransactionImportPage() {
                 <section className="transaction-import-rules-card">
                   <div>
                     <p className="eyebrow">Regla de categorías</p>
-                    <h3>Categoría fallback automática</h3>
+                    <h3>Categoría temporal para revisar</h3>
                     <p className="muted">
-                      Si una fila necesita categoría y no tiene sugerencia, se
-                      puede crear o usar una categoría fallback para no bloquear
-                      la importación.
+                      Si una fila no tiene categoría, lo más seguro es elegirla.
+                      Solo activá esta opción si aceptás crear una categoría
+                      temporal llamada “Otros a revisar”.
                     </p>
                   </div>
 
@@ -553,7 +601,20 @@ export function TransactionImportPage() {
                       }
                     />
                     <span>
-                      Crear categoría fallback cuando falte una categoría válida
+                      Crear categoría temporal “Otros a revisar” para filas sin categoría
+                    </span>
+                  </label>
+
+                  <label className="transaction-import-toggle">
+                    <input
+                      type="checkbox"
+                      checked={skipDuplicatesConfirmed}
+                      onChange={(event) =>
+                        setSkipDuplicatesConfirmed(event.target.checked)
+                      }
+                    />
+                    <span>
+                      Omitir duplicados exactos detectados en este archivo
                     </span>
                   </label>
                 </section>
@@ -576,6 +637,15 @@ export function TransactionImportPage() {
                         <span>
                           Asigná una categoría o activá la categoría fallback
                           para continuar.
+                        </span>
+                      </div>
+                    ) : null}
+
+                    {duplicateDecisionMissing ? (
+                      <div className="mensaje-warning">
+                        <strong>{exactDuplicateRows} duplicado(s) exacto(s).</strong>
+                        <span>
+                          Marcá que querés omitirlos antes de confirmar.
                         </span>
                       </div>
                     ) : null}
@@ -812,6 +882,30 @@ export function TransactionImportPage() {
                   </section>
                 ) : null}
 
+                <div className="transaction-import-step-actions">
+                  <button
+                    type="button"
+                    className="boton-secundario"
+                    disabled={wizardStep <= 2}
+                    onClick={() => setWizardStep((step) => Math.max(2, step - 1))}
+                  >
+                    Paso anterior
+                  </button>
+                  <button
+                    type="button"
+                    className="boton-principal"
+                    disabled={
+                      wizardStep >= 7 ||
+                      (wizardStep === 3 && duplicateDecisionMissing) ||
+                      (wizardStep === 5 && (unresolvedRows > 0 || incompatibleRows > 0)) ||
+                      (wizardStep === 7 && hasBlockingIssues)
+                    }
+                    onClick={() => setWizardStep((step) => Math.min(7, step + 1))}
+                  >
+                    Siguiente paso
+                  </button>
+                </div>
+
                 <ImportCommitPanel
                   canCommit={canCommit}
                   pending={commitMutation.isPending}
@@ -905,4 +999,96 @@ export function TransactionImportPage() {
       </div>
     </AppLayout>
   );
+}
+
+function buildWizardSteps({
+  currentStep,
+  totalRows,
+  invalidRows,
+  duplicateRows,
+  exactDuplicateRows,
+  internalRows,
+  needsCategoryRows,
+  incompatibleRows,
+  importableRows,
+  hasPreview,
+  hasResult,
+  duplicateDecisionMissing,
+}: {
+  currentStep: number;
+  totalRows: number;
+  invalidRows: number;
+  duplicateRows: number;
+  exactDuplicateRows: number;
+  internalRows: number;
+  needsCategoryRows: number;
+  incompatibleRows: number;
+  importableRows: number;
+  hasPreview: boolean;
+  hasResult: boolean;
+  duplicateDecisionMissing: boolean;
+}) {
+  return [
+    {
+      id: 1,
+      title: "Subir archivo",
+      counter: hasPreview ? `${totalRows} fila(s)` : "Sin archivo",
+      description: "Elegí origen, cuenta y archivo. Todavía no se guarda nada.",
+      action: hasPreview ? "Archivo leído." : "Subí un archivo para empezar.",
+      blocked: false,
+    },
+    {
+      id: 2,
+      title: "Vista previa",
+      counter: hasPreview ? `${totalRows} fila(s)` : "Pendiente",
+      description: "Vemos fechas, montos y textos ya normalizados.",
+      action: invalidRows > 0 ? "Hay filas con error." : "Podés revisar el detalle.",
+      blocked: invalidRows > 0,
+    },
+    {
+      id: 3,
+      title: "Duplicados",
+      counter: `${duplicateRows} detectado(s)`,
+      description: "Evitamos contar dos veces el mismo gasto o ingreso.",
+      action: duplicateDecisionMissing
+        ? `Omití explícitamente ${exactDuplicateRows} duplicado(s) exacto(s).`
+        : "Sin bloqueo por duplicados.",
+      blocked: duplicateDecisionMissing,
+    },
+    {
+      id: 4,
+      title: "Transferencias",
+      counter: `${internalRows} posible(s)`,
+      description: "Detectamos plata movida entre tus cuentas para no inflar el mes.",
+      action: internalRows > 0 ? "Se omiten o revisan antes de contar." : "Sin pares sospechosos.",
+      blocked: false,
+    },
+    {
+      id: 5,
+      title: "Categorías",
+      counter: `${needsCategoryRows} sin resolver`,
+      description: "Las categorías mantienen entendibles los gráficos.",
+      action:
+        needsCategoryRows > 0 || incompatibleRows > 0
+          ? "Elegí categorías compatibles antes de confirmar."
+          : "Categorías listas.",
+      blocked: needsCategoryRows > 0 || incompatibleRows > 0,
+    },
+    {
+      id: 6,
+      title: "Impacto",
+      counter: `${importableRows} importable(s)`,
+      description: "Revisá qué entra como gasto, ingreso o movimiento neutral.",
+      action: importableRows > 0 ? "Listo para confirmar." : "No hay filas nuevas para importar.",
+      blocked: importableRows === 0,
+    },
+    {
+      id: 7,
+      title: "Confirmar",
+      counter: hasResult ? "Finalizado" : currentStep >= 7 ? "Último paso" : "Pendiente",
+      description: "Recién acá se crean movimientos reales.",
+      action: hasResult ? "Importación procesada." : "Confirmá solo si no quedan bloqueos.",
+      blocked: false,
+    },
+  ];
 }

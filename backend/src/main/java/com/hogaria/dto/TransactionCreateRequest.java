@@ -5,7 +5,7 @@ import java.math.BigDecimal;import java.time.LocalDate;import java.time.LocalDat
 public record TransactionCreateRequest(
         @NotNull UUID profileId,
         @NotNull UUID accountId,
-        @NotNull UUID categoryId,
+        UUID categoryId,
         @NotNull MoneyTransaction.MovementType movementType,
         @NotNull LocalDate realDate,
         @NotNull LocalDate budgetDate,

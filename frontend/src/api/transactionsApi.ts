@@ -12,6 +12,8 @@ import type {
   TransactionDeletionResponse,
   TransactionClassificationStatus,
   TransactionOrigin,
+  TransactionBulkActionResponse,
+  TransactionCreatePreview,
   TransactionStatus,
 } from "../domain/types";
 
@@ -62,6 +64,17 @@ export async function createTransaction(
   payload: TransactionCreatePayload,
 ): Promise<MoneyTransaction> {
   const { data } = await http.post("/transactions", payload);
+  return data;
+}
+
+export async function previewCreateTransaction(
+  profileId: string,
+  payload: TransactionCreatePayload,
+): Promise<TransactionCreatePreview> {
+  const { data } = await http.post(
+    `/profiles/${profileId}/transactions/preview-create`,
+    payload,
+  );
   return data;
 }
 
@@ -147,6 +160,46 @@ export async function linkInternalTransfer(
   const { data } = await http.post(
     `/profiles/${profileId}/transactions/internal-transfers/link`,
     payload,
+  );
+
+  return data;
+}
+
+export async function bulkCategorizeTransactions(
+  profileId: string,
+  transactionIds: string[],
+  categoryId: string,
+): Promise<TransactionBulkActionResponse> {
+  const { data } = await http.post(
+    `/profiles/${profileId}/transactions/bulk-categorize`,
+    { transactionIds, categoryId },
+  );
+
+  return data;
+}
+
+export async function bulkStatusTransactions(
+  profileId: string,
+  transactionIds: string[],
+  status: TransactionStatus,
+  reason?: string,
+): Promise<TransactionBulkActionResponse> {
+  const { data } = await http.post(
+    `/profiles/${profileId}/transactions/bulk-status`,
+    { transactionIds, status, reason },
+  );
+
+  return data;
+}
+
+export async function bulkIgnoreTransactions(
+  profileId: string,
+  transactionIds: string[],
+  reason?: string,
+): Promise<TransactionBulkActionResponse> {
+  const { data } = await http.post(
+    `/profiles/${profileId}/transactions/bulk-ignore`,
+    { transactionIds, reason },
   );
 
   return data;

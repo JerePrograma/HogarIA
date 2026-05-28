@@ -22,6 +22,17 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler({BadRequestException.class, IllegalArgumentException.class})
     ResponseEntity<ErrorResponse> bad(RuntimeException ex, HttpServletRequest req) {
+        if (ex instanceof DomainBadRequestException domainBadRequest) {
+            return build(
+                    HttpStatus.BAD_REQUEST,
+                    ex.getMessage(),
+                    req,
+                    domainBadRequest.getCode(),
+                    domainBadRequest.getDetails(),
+                    ex
+            );
+        }
+
         return build(HttpStatus.BAD_REQUEST, ex.getMessage(), req, "BAD_REQUEST", List.of(), ex);
     }
 

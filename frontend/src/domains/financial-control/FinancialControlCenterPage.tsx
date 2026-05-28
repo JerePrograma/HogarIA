@@ -40,6 +40,8 @@ type QueueCard = {
   amount?: number;
   tone: QueueTone;
   filterHint: string;
+  actionLabel: string;
+  actionTo: string;
 };
 
 export function FinancialControlCenterPage() {
@@ -126,8 +128,8 @@ export function FinancialControlCenterPage() {
   const internalCandidates = internalTransfersQuery.data?.candidates ?? [];
 
   const quality = useMemo(
-    () => buildQuality(transactions, accounts, categories, duplicateGroups, internalCandidates),
-    [accounts, categories, duplicateGroups, internalCandidates, transactions],
+    () => buildQuality(profileId, transactions, accounts, categories, duplicateGroups, internalCandidates),
+    [accounts, categories, duplicateGroups, internalCandidates, profileId, transactions],
   );
 
   const loading =
@@ -193,30 +195,29 @@ export function FinancialControlCenterPage() {
           <>
             <section className="metrics-grid">
               {quality.cards.map((card) => (
-                <QualityCard key={card.title} card={card} profileId={profileId} />
+                <QualityCard key={card.title} card={card} />
               ))}
             </section>
 
             <section className="two-column-layout">
               <ReviewPanel
-                title="Duplicados y cross-source"
+                title="Movimientos repetidos"
                 emptyTitle="Sin duplicados activos"
-                emptyMessage="No hay grupos exactos ni cruces de origen pendientes para este período."
+                emptyMessage="No hay movimientos repetidos pendientes para este período."
               >
                 {duplicateGroups.slice(0, 6).map((group) => (
                   <div className="surface-inset" key={`${group.groupType}-${group.key}`}>
-                    <p className="label-ui">{group.groupType}</p>
+                    <p className="label-ui">Ya cargaste esto</p>
                     <strong>{formatMoney(group.amount, group.currency)}</strong>
                     <p className="compact-muted">
-                      {group.transactions.length} movimientos · fingerprint{" "}
-                      {group.transactions[0]?.duplicateFingerprint?.slice(0, 10) ?? "sin dato"}
+                      {group.transactions.length} movimientos muy parecidos.
                     </p>
                     <div className="row-actions mt-3">
                       <Link
                         className="boton-secundario"
-                        to={routePaths.transactions(profileId)}
+                        to={`${routePaths.transactions(profileId)}?onlyDuplicates=true`}
                       >
-                        Ver movimientos
+                        Resolver duplicados
                       </Link>
                       {group.transactions.length > 1 ? (
                         <button
@@ -255,7 +256,7 @@ export function FinancialControlCenterPage() {
                     <div className="row-actions mt-3">
                       <button
                         type="button"
-                        className="boton-primario"
+                        className="boton-principal"
                         disabled={linkTransferMutation.isPending}
                         onClick={() => linkTransferMutation.mutate(candidate)}
                       >
@@ -263,9 +264,9 @@ export function FinancialControlCenterPage() {
                       </button>
                       <Link
                         className="boton-secundario"
-                        to={routePaths.transactions(profileId)}
+                        to={`${routePaths.transactions(profileId)}?onlyInternalTransfers=true`}
                       >
-                        Auditar
+                        Revisar pares
                       </Link>
                     </div>
                   </div>
@@ -304,7 +305,7 @@ export function FinancialControlCenterPage() {
   );
 }
 
-function QualityCard({ card, profileId }: { card: QueueCard; profileId: string }) {
+function QualityCard({ card }: { card: QueueCard }) {
   const toneClass =
     card.tone === "risk"
       ? "metric-card-danger"
@@ -320,8 +321,8 @@ function QualityCard({ card, profileId }: { card: QueueCard; profileId: string }
       <h3>{card.title}</h3>
       <strong>{card.count}</strong>
       {card.amount != null ? <p className="compact-muted">{card.amount}</p> : null}
-      <Link className="boton-fantasma mt-3" to={routePaths.transactions(profileId)}>
-        Abrir cola
+      <Link className="boton-fantasma mt-3" to={card.actionTo}>
+        {card.actionLabel}
       </Link>
     </article>
   );
@@ -366,12 +367,14 @@ function ImpactLine({ label, value }: { label: string; value: number }) {
 }
 
 function buildQuality(
+  profileId: string,
   transactions: MoneyTransaction[],
   accounts: Account[],
   categories: Category[],
   duplicateGroups: DuplicateGroup[],
   internalCandidates: InternalTransferCandidate[],
 ) {
+  const transactionsPath = routePaths.transactions(profileId);
   const withoutCategory = transactions.filter(
     (tx) => !tx.categoryId || getDefaultClassificationStatus(tx) === "NEEDS_CATEGORY",
   );
@@ -411,61 +414,81 @@ function buildQuality(
       title: "Duplicados exactos",
       count: duplicateGroups.filter((group) => group.groupType === "EXACT_DUPLICATE").length,
       tone: duplicateGroups.some((group) => group.groupType === "EXACT_DUPLICATE") ? "risk" : "ok",
-      filterHint: "No insertar doble",
+      filterHint: "Ya cargaste esto",
+      actionLabel: "Resolver duplicados",
+      actionTo: `${transactionsPath}?onlyDuplicates=true`,
     },
     {
-      title: "Cross-source posibles",
+      title: "Repetidos posibles",
       count: duplicateGroups.filter((group) => group.groupType === "POSSIBLE_CROSS_SOURCE_DUPLICATE").length,
       tone: "watch",
-      filterHint: "Banco vs billetera",
+      filterHint: "Puede venir de dos lugares",
+      actionLabel: "Revisar repetidos",
+      actionTo: `${transactionsPath}?onlyDuplicates=true`,
     },
     {
       title: "Transferencias internas",
       count: internalCandidates.length,
       tone: internalCandidates.length > 0 ? "watch" : "ok",
-      filterHint: "Neutralizar",
+      filterHint: "Plata entre tus cuentas",
+      actionLabel: "Revisar pares",
+      actionTo: `${transactionsPath}?onlyInternalTransfers=true`,
     },
     {
       title: "Sin categoría",
       count: withoutCategory.length,
       tone: withoutCategory.length > 0 ? "watch" : "ok",
-      filterHint: "Completar",
+      filterHint: "Necesita categoría",
+      actionLabel: "Categorizar ahora",
+      actionTo: `${transactionsPath}?onlyWithoutCategory=true`,
     },
     {
       title: "Pendientes",
       count: pending.length,
       tone: pending.length > 0 ? "watch" : "ok",
-      filterHint: "Confirmar",
+      filterHint: "Necesita confirmación",
+      actionLabel: "Confirmar pendientes",
+      actionTo: `${transactionsPath}?status=PENDING`,
     },
     {
-      title: "Ignorados/técnicos",
+      title: "No afectan el mes",
       count: ignoredTechnical.length,
       tone: "neutral",
-      filterHint: "Auditable",
+      filterHint: "Visibles pero neutrales",
+      actionLabel: "Auditar neutrales",
+      actionTo: `${transactionsPath}?impact=NEUTRAL`,
     },
     {
       title: "Importaciones a revisar",
       count: importReview.length,
       tone: importReview.length > 0 ? "watch" : "ok",
-      filterHint: `${imported.length} importados`,
+      filterHint: `${imported.length} vinieron de archivo`,
+      actionLabel: "Continuar importación",
+      actionTo: `${transactionsPath}?origin=IMPORT`,
     },
     {
       title: "Catálogos",
       count: catalogIssues.length,
       tone: catalogIssues.length > 0 ? "risk" : "ok",
       filterHint: "Cuentas/categorías",
+      actionLabel: "Limpiar categorías",
+      actionTo: `/profiles/${profileId}/categories#limpiar`,
     },
     {
       title: "Impactan balance",
       count: impacting.length,
       tone: "ok",
-      filterHint: "Operativo",
+      filterHint: "Ingresos y gastos reales",
+      actionLabel: "Ver movimientos",
+      actionTo: transactionsPath,
     },
     {
       title: "Visibles neutrales",
       count: neutral.length + internalTransfers.length,
       tone: "neutral",
-      filterHint: "No inflan",
+      filterHint: "No inflan el resultado",
+      actionLabel: "Auditar neutrales",
+      actionTo: `${transactionsPath}?impact=NEUTRAL`,
     },
   ];
 

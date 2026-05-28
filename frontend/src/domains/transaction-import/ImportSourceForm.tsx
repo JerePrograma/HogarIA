@@ -16,6 +16,16 @@ const SOURCES: Array<{
     label: 'Mercado Pago',
     description: 'Movimientos exportados desde Mercado Pago.',
   },
+  {
+    value: 'TARJETA_CREDITO_GENERICA',
+    label: 'Tarjeta de crédito',
+    description: 'Resumen simple para revisar consumos reales.',
+  },
+  {
+    value: 'DEUDAS_TARJETA_GENERICA',
+    label: 'Cuotas/deudas',
+    description: 'Resumen para planificar próximos meses.',
+  },
 ];
 
 interface Props {

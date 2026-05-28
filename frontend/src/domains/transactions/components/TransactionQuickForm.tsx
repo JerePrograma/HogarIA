@@ -26,7 +26,9 @@ interface Props {
   compatibleCategories: Category[];
   canSave: boolean;
   pending: boolean;
+  previewPending: boolean;
   isError: boolean;
+  errorMessage?: string | null;
   onFormChange: (patch: Partial<TransactionForm>) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }
@@ -37,7 +39,9 @@ export function TransactionQuickForm({
   compatibleCategories,
   canSave,
   pending,
+  previewPending,
   isError,
+  errorMessage,
   onFormChange,
   onSubmit,
 }: Props) {
@@ -209,18 +213,27 @@ export function TransactionQuickForm({
 
       <div className="form-actions">
         <button type="submit" className="boton-principal" disabled={!canSave}>
-          {pending ? "Guardando..." : "Guardar movimiento"}
+          {pending
+            ? "Guardando..."
+            : previewPending
+              ? "Revisando..."
+              : "Revisar y guardar"}
         </button>
 
         {!canSave ? (
           <span className="muted">
-            Completá cuenta, categoría, monto y fechas para guardar.
+            Completá cuenta, monto y fechas. La categoría puede quedar pendiente.
           </span>
         ) : null}
       </div>
 
       {isError ? (
-        <ErrorState message="No se pudo guardar el movimiento. Revisá los datos ingresados." />
+        <ErrorState
+          message={
+            errorMessage ??
+            "No se pudo guardar el movimiento. Revisá los datos ingresados."
+          }
+        />
       ) : null}
     </form>
   );

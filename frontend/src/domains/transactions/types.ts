@@ -1,7 +1,9 @@
 import type {
   MovementType,
   PaymentChannel,
+  BalanceImpact,
   TransactionClassificationStatus,
+  TransactionOrigin,
   TransactionStatus,
 } from "../../domain/types";
 
@@ -30,6 +32,7 @@ export interface TransactionFilters {
   movementType: MovementType | AllOption;
   status: TransactionStatus | AllOption;
   classificationStatus: TransactionClassificationStatus | AllOption;
+  origin: TransactionOrigin | AllOption;
   paymentChannel: PaymentChannel | AllOption;
   source: string;
   dateFrom: string;
@@ -37,5 +40,7 @@ export interface TransactionFilters {
   exactAmount: string;
   onlyDuplicates: boolean;
   onlyInternalTransfers: boolean;
+  onlyWithoutCategory: boolean;
   onlyImported: boolean;
+  impactKind: BalanceImpact | "NEUTRAL" | AllOption;
 }

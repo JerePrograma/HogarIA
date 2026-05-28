@@ -6,6 +6,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.never;
 
 import com.hogaria.domains.transactions.lifecycle.TransactionLifecycleService;
 import com.hogaria.dto.TransactionCreateRequest;
@@ -65,7 +67,8 @@ class TransactionDuplicateDetectionTest {
                 descriptionNormalizer,
                 fingerprintService,
                 duplicateDetectionService,
-                impactService
+                impactService,
+                new TransactionReviewMapper()
         );
 
         org.mockito.Mockito.lenient().when(profileRepo.findByIdAndUserId(profileId, userId)).thenReturn(Optional.of(new FinancialProfile()));
@@ -78,6 +81,9 @@ class TransactionDuplicateDetectionTest {
             }
             return tx;
         });
+        org.mockito.Mockito.lenient()
+                .when(txRepo.findByProfileIdAndRealDateBetweenAndAmountAndAccountIdNot(any(), any(), any(), any(), any()))
+                .thenReturn(List.of());
     }
 
     @Test
@@ -181,6 +187,63 @@ class TransactionDuplicateDetectionTest {
         );
 
         assertEquals("TRANSACTION_EXACT_DUPLICATE", ex.getCode());
+    }
+
+    @Test
+    void previewCreateDetectsExactDuplicateWithoutPersisting() {
+        var existing = transaction(accountId, " Café   pago ", new BigDecimal("1200.00"));
+        existing.setNormalizedDescription(descriptionNormalizer.normalizeNullable(existing.getDescription()));
+        existing.setOperationDateTime(existing.getRealDate().atStartOfDay());
+        existing.setDuplicateFingerprint(fingerprintService.buildFingerprint(existing));
+
+        when(txRepo.findActiveDuplicatesByFingerprint(eq(profileId), eq(accountId), any(), any(), any(), eq(null)))
+                .thenReturn(List.of(existing));
+
+        var preview = service.previewCreate(
+                userId,
+                profileId,
+                request(accountId, "CAFE pago", new BigDecimal("1200.00"), null, null, null)
+        );
+
+        assertEquals(com.hogaria.dto.TransactionCreatePreviewDtos.RiskLevel.BLOCKING, preview.riskLevel());
+        assertEquals(com.hogaria.dto.TransactionCreatePreviewDtos.RecommendedAction.REVIEW_DUPLICATE, preview.recommendedAction());
+        assertEquals(1, preview.duplicateCandidates().size());
+        verify(txRepo, never()).save(any(MoneyTransaction.class));
+    }
+
+    @Test
+    void previewCreateDetectsEquivalentDescriptionWithSpacesAccentsAndCase() {
+        var preview = service.previewCreate(
+                userId,
+                profileId,
+                request(accountId, "  café   pago  ", new BigDecimal("1200.00"), null, null, null)
+        );
+
+        assertEquals("CAFE PAGO", preview.normalizedDescription());
+    }
+
+    @Test
+    void previewCreateDetectsInternalTransferCandidateBetweenDifferentAccounts() {
+        var existing = transaction(otherAccountId, "Transferencia recibida", new BigDecimal("400000.00"));
+        existing.setMovementType(MoneyTransaction.MovementType.INCOME);
+        existing.setCurrency("ARS");
+        when(txRepo.findByProfileIdAndRealDateBetweenAndAmountAndAccountIdNot(
+                eq(profileId),
+                any(),
+                any(),
+                eq(new BigDecimal("400000.00")),
+                eq(accountId)
+        )).thenReturn(List.of(existing));
+
+        var preview = service.previewCreate(
+                userId,
+                profileId,
+                request(accountId, "Fondeo Mercado Pago", new BigDecimal("400000.00"), null, null, null)
+        );
+
+        assertEquals(com.hogaria.dto.TransactionCreatePreviewDtos.RiskLevel.WARNING, preview.riskLevel());
+        assertEquals(com.hogaria.dto.TransactionCreatePreviewDtos.RecommendedAction.LINK_TRANSFER, preview.recommendedAction());
+        assertEquals(1, preview.internalTransferCandidates().size());
     }
 
     private TransactionCreateRequest request(

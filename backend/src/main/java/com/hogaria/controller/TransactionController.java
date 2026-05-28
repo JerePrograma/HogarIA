@@ -4,7 +4,12 @@ import com.hogaria.dto.BulkRecategorizeApplyRequest;
 import com.hogaria.dto.BulkRecategorizeApplyResponse;
 import com.hogaria.dto.BulkRecategorizePreviewRequest;
 import com.hogaria.dto.BulkRecategorizePreviewResponse;
+import com.hogaria.dto.TransactionBulkDtos.BulkActionResponse;
+import com.hogaria.dto.TransactionBulkDtos.BulkCategorizeRequest;
+import com.hogaria.dto.TransactionBulkDtos.BulkIgnoreRequest;
+import com.hogaria.dto.TransactionBulkDtos.BulkStatusRequest;
 import com.hogaria.dto.TransactionCreateRequest;
+import com.hogaria.dto.TransactionCreatePreviewDtos.TransactionCreatePreviewResponse;
 import com.hogaria.dto.TransactionDeletionResponse;
 import com.hogaria.dto.TransactionReviewDtos.DuplicatePreviewRequest;
 import com.hogaria.dto.TransactionReviewDtos.DuplicatePreviewResponse;
@@ -69,6 +74,15 @@ public class TransactionController {
     return service.create(request, parser.parse(userHeader));
   }
 
+  @PostMapping("/profiles/{profileId}/transactions/preview-create")
+  public TransactionCreatePreviewResponse previewCreate(
+          @RequestHeader(value = "X-User-Id", required = false) String userHeader,
+          @PathVariable UUID profileId,
+          @Valid @RequestBody TransactionCreateRequest request
+  ) {
+    return service.previewCreate(parser.parse(userHeader), profileId, request);
+  }
+
   @GetMapping("/profiles/{profileId}/transactions")
   public List<TransactionResponse> list(
           @RequestHeader(value = "X-User-Id", required = false) String userHeader,
@@ -128,6 +142,33 @@ public class TransactionController {
             profileId,
             request
     );
+  }
+
+  @PostMapping("/profiles/{profileId}/transactions/bulk-categorize")
+  public BulkActionResponse bulkCategorize(
+          @RequestHeader(value = "X-User-Id", required = false) String userHeader,
+          @PathVariable UUID profileId,
+          @Valid @RequestBody BulkCategorizeRequest request
+  ) {
+    return service.bulkCategorize(parser.parse(userHeader), profileId, request);
+  }
+
+  @PostMapping("/profiles/{profileId}/transactions/bulk-status")
+  public BulkActionResponse bulkStatus(
+          @RequestHeader(value = "X-User-Id", required = false) String userHeader,
+          @PathVariable UUID profileId,
+          @Valid @RequestBody BulkStatusRequest request
+  ) {
+    return service.bulkStatus(parser.parse(userHeader), profileId, request);
+  }
+
+  @PostMapping("/profiles/{profileId}/transactions/bulk-ignore")
+  public BulkActionResponse bulkIgnore(
+          @RequestHeader(value = "X-User-Id", required = false) String userHeader,
+          @PathVariable UUID profileId,
+          @Valid @RequestBody BulkIgnoreRequest request
+  ) {
+    return service.bulkIgnore(parser.parse(userHeader), profileId, request);
   }
 
   @PostMapping("/profiles/{profileId}/transactions/duplicates/preview")

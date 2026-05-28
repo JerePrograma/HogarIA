@@ -6,14 +6,25 @@ import com.hogaria.dto.BulkRecategorizeApplyItem;
 import com.hogaria.dto.BulkRecategorizeCandidate;
 import com.hogaria.dto.BulkRecategorizePreviewRequest;
 import com.hogaria.dto.BulkRecategorizePreviewResponse;
+import com.hogaria.dto.TransactionBulkDtos.BulkActionResponse;
+import com.hogaria.dto.TransactionBulkDtos.BulkCategorizeRequest;
+import com.hogaria.dto.TransactionBulkDtos.BulkIgnoreRequest;
+import com.hogaria.dto.TransactionBulkDtos.BulkStatusRequest;
 import com.hogaria.dto.TransactionCreateRequest;
+import com.hogaria.dto.TransactionCreatePreviewDtos.CategorySuggestionPreview;
+import com.hogaria.dto.TransactionCreatePreviewDtos.RecommendedAction;
+import com.hogaria.dto.TransactionCreatePreviewDtos.RiskLevel;
+import com.hogaria.dto.TransactionCreatePreviewDtos.TransactionCreatePreviewResponse;
 import com.hogaria.dto.TransactionDeletionResponse;
+import com.hogaria.dto.TransactionReviewDtos.InternalTransferCandidate;
 import com.hogaria.dto.TransactionResponse;
 import com.hogaria.dto.TransactionUpdateRequest;
 import com.hogaria.domains.transactions.lifecycle.TransactionLifecycleService;
 import com.hogaria.entity.Category;
 import com.hogaria.entity.MoneyTransaction;
 import com.hogaria.exception.BadRequestException;
+import com.hogaria.exception.DomainBadRequestException;
+import com.hogaria.exception.ErrorResponse;
 import com.hogaria.exception.ForbiddenException;
 import com.hogaria.exception.NotFoundException;
 import com.hogaria.repository.AccountRepository;
@@ -25,6 +36,7 @@ import java.math.BigDecimal;
 import java.text.Normalizer;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -48,6 +60,7 @@ public class TransactionService {
     private final TransactionFingerprintService fingerprintService;
     private final DuplicateDetectionService duplicateDetectionService;
     private final TransactionFinancialImpactService financialImpactService;
+    private final TransactionReviewMapper transactionReviewMapper;
 
     public TransactionService(
             MoneyTransactionRepository repository,
@@ -59,7 +72,8 @@ public class TransactionService {
             DescriptionNormalizer descriptionNormalizer,
             TransactionFingerprintService fingerprintService,
             DuplicateDetectionService duplicateDetectionService,
-            TransactionFinancialImpactService financialImpactService
+            TransactionFinancialImpactService financialImpactService,
+            TransactionReviewMapper transactionReviewMapper
     ) {
         this.repository = repository;
         this.profileRepository = profileRepository;
@@ -71,6 +85,7 @@ public class TransactionService {
         this.fingerprintService = fingerprintService;
         this.duplicateDetectionService = duplicateDetectionService;
         this.financialImpactService = financialImpactService;
+        this.transactionReviewMapper = transactionReviewMapper;
     }
 
     @Transactional
@@ -88,6 +103,36 @@ public class TransactionService {
             throw new BadRequestException("Amount must be positive");
         }
 
+        ensureProfileMatchesRequest(request.profileId(), request.profileId());
+        validate(
+                request.profileId(),
+                request.accountId(),
+                request.categoryId(),
+                request.movementType(),
+                userId
+        );
+        validateCategoryDecision(request);
+
+        var transaction = buildTransaction(request, metadata);
+
+        applyDerivedIntegrityFields(transaction);
+        duplicateDetectionService.rejectIfDuplicate(transaction, null);
+
+        return toResponse(repository.save(transaction));
+    }
+
+    @Transactional(readOnly = true)
+    public TransactionCreatePreviewResponse previewCreate(
+            UUID userId,
+            UUID profileId,
+            TransactionCreateRequest request
+    ) {
+        ensureProfileMatchesRequest(profileId, request.profileId());
+
+        if (request.amount().signum() <= 0) {
+            throw new BadRequestException("Amount must be positive");
+        }
+
         validate(
                 request.profileId(),
                 request.accountId(),
@@ -96,53 +141,49 @@ public class TransactionService {
                 userId
         );
 
-        var classificationStatus = metadata != null && metadata.classificationStatus() != null
-                ? metadata.classificationStatus()
-                : request.classificationStatus() != null
-                  ? request.classificationStatus()
-                : request.categoryId() == null
-                  ? MoneyTransaction.ClassificationStatus.NEEDS_CATEGORY
-                  : MoneyTransaction.ClassificationStatus.CLASSIFIED;
-
-        var normalizedSource = normalizeSource(firstNonBlank(
-                metadata == null ? null : metadata.source(),
-                request.source()
-        ));
-        var normalizedDescription = descriptionNormalizer.normalizeNullable(request.description());
-        var operationDateTime = resolveOperationDateTime(request.operationDateTime(), request.realDate());
-
-        var transaction = MoneyTransaction.builder()
-                .profileId(request.profileId())
-                .accountId(request.accountId())
-                .categoryId(request.categoryId())
-                .movementType(request.movementType())
-                .realDate(request.realDate())
-                .budgetDate(request.budgetDate())
-                .operationDateTime(operationDateTime)
-                .operationDateTimePrecision(request.operationDateTime() == null
-                        ? MoneyTransaction.OperationDateTimePrecision.DATE_ONLY
-                        : MoneyTransaction.OperationDateTimePrecision.DATE_TIME)
-                .amount(request.amount())
-                .currency(request.currency().toUpperCase())
-                .description(request.description())
-                .normalizedDescription(normalizedDescription)
-                .origin(request.origin() == null ? MoneyTransaction.Origin.MANUAL : request.origin())
-                .status(request.status() == null ? MoneyTransaction.Status.CONFIRMED : request.status())
-                .source(normalizedSource)
-                .sourceOperationId(firstNonBlank(metadata == null ? null : metadata.sourceOperationId(), request.sourceOperationId()))
-                .sourceHash(firstNonBlank(metadata == null ? null : metadata.sourceHash(), request.sourceHash()))
-                .paymentChannel(metadata != null && metadata.paymentChannel() != null ? metadata.paymentChannel() : request.paymentChannel())
-                .counterparty(firstNonBlank(metadata == null ? null : metadata.counterparty(), request.counterparty()))
-                .classificationStatus(classificationStatus)
-                .classificationReason(firstNonBlank(metadata == null ? null : metadata.classificationReason(), request.classificationReason()))
-                .importBatchId(metadata != null && metadata.importBatchId() != null ? metadata.importBatchId() : request.importBatchId())
-                .internalTransferGroupId(metadata != null && metadata.internalTransferGroupId() != null ? metadata.internalTransferGroupId() : request.internalTransferGroupId())
-                .build();
-
+        var transaction = buildTransaction(request, null);
         applyDerivedIntegrityFields(transaction);
-        duplicateDetectionService.rejectIfDuplicate(transaction, null);
 
-        return toResponse(repository.save(transaction));
+        var duplicateCandidates = new ArrayList<MoneyTransaction>();
+        duplicateCandidates.addAll(duplicateDetectionService.findStrongSourceDuplicates(transaction, null));
+        duplicateCandidates.addAll(duplicateDetectionService.findExactDuplicates(transaction, null));
+
+        var transferCandidates = findPreviewInternalTransferCandidates(transaction);
+        var categorySuggestion = buildCategorySuggestionPreview(request, transaction);
+        boolean categoryDecisionAllowed = isUncategorizedCreateAllowed(request);
+        boolean needsCategoryDecision = request.categoryId() == null && !categoryDecisionAllowed;
+
+        RiskLevel riskLevel;
+        RecommendedAction recommendedAction;
+        if (!duplicateCandidates.isEmpty()) {
+            riskLevel = RiskLevel.BLOCKING;
+            recommendedAction = RecommendedAction.REVIEW_DUPLICATE;
+        } else if (needsCategoryDecision) {
+            riskLevel = RiskLevel.WARNING;
+            recommendedAction = RecommendedAction.CHOOSE_CATEGORY;
+        } else if (!transferCandidates.isEmpty()) {
+            riskLevel = RiskLevel.WARNING;
+            recommendedAction = RecommendedAction.LINK_TRANSFER;
+        } else if (categorySuggestion != null
+                && categorySuggestion.status() == TransactionCategorySuggestionService.Status.NEEDS_CATEGORY) {
+            riskLevel = RiskLevel.WARNING;
+            recommendedAction = RecommendedAction.CHOOSE_CATEGORY;
+        } else {
+            riskLevel = RiskLevel.OK;
+            recommendedAction = RecommendedAction.CREATE;
+        }
+
+        return new TransactionCreatePreviewResponse(
+                riskLevel,
+                duplicateCandidates.isEmpty() && !needsCategoryDecision,
+                transaction.getNormalizedDescription(),
+                humanFinancialImpact(transaction.getBalanceImpact(), transaction.getMovementType()),
+                buildHumanPreviewSummary(transaction, duplicateCandidates, transferCandidates, categorySuggestion, needsCategoryDecision),
+                duplicateCandidates.stream().map(transactionReviewMapper::toItem).distinct().toList(),
+                transferCandidates,
+                categorySuggestion,
+                recommendedAction
+        );
     }
 
     @Transactional(readOnly = true)
@@ -156,6 +197,88 @@ public class TransactionService {
                 .stream()
                 .map(this::toResponse)
                 .toList();
+    }
+
+    @Transactional
+    public BulkActionResponse bulkCategorize(
+            UUID userId,
+            UUID profileId,
+            BulkCategorizeRequest request
+    ) {
+        ensureProfile(profileId, userId);
+        var category = getCategoryForProfile(profileId, request.categoryId());
+        var transactions = loadBulkTransactionsStrict(profileId, request.transactionIds());
+        var updatedIds = new ArrayList<UUID>();
+
+        for (var transaction : transactions) {
+            if (isLinkedInternalTransfer(transaction) && isRealExpenseCategory(category)) {
+                throw new DomainBadRequestException(
+                        "Para tratar una transferencia interna como gasto real primero tenés que desvincularla.",
+                        "CATEGORY_INCOMPATIBLE",
+                        List.of(new ErrorResponse.Detail("transactionId", transaction.getId().toString()))
+                );
+            }
+
+            validateMovementCategory(transaction.getMovementType(), category.getType());
+            transaction.setCategoryId(category.getId());
+            if (transaction.getClassificationStatus() == MoneyTransaction.ClassificationStatus.NEEDS_CATEGORY) {
+                transaction.setClassificationStatus(MoneyTransaction.ClassificationStatus.CLASSIFIED);
+                transaction.setClassificationReason("BULK_CATEGORY_CONFIRMED");
+            }
+            applyDerivedIntegrityFields(transaction);
+            updatedIds.add(repository.save(transaction).getId());
+        }
+
+        return new BulkActionResponse(updatedIds.size(), updatedIds, List.of());
+    }
+
+    @Transactional
+    public BulkActionResponse bulkStatus(
+            UUID userId,
+            UUID profileId,
+            BulkStatusRequest request
+    ) {
+        ensureProfile(profileId, userId);
+        var transactions = loadBulkTransactionsStrict(profileId, request.transactionIds());
+        var updatedIds = new ArrayList<UUID>();
+
+        for (var transaction : transactions) {
+            transaction.setStatus(request.status());
+            if (request.classificationStatus() != null) {
+                transaction.setClassificationStatus(request.classificationStatus());
+            } else if (request.status() == MoneyTransaction.Status.IGNORED) {
+                transaction.setClassificationStatus(MoneyTransaction.ClassificationStatus.IGNORED_BY_RULE);
+            }
+            if (request.reason() != null && !request.reason().isBlank()) {
+                transaction.setClassificationReason(request.reason().trim());
+            }
+            applyDerivedIntegrityFields(transaction);
+            updatedIds.add(repository.save(transaction).getId());
+        }
+
+        return new BulkActionResponse(updatedIds.size(), updatedIds, List.of());
+    }
+
+    @Transactional
+    public BulkActionResponse bulkIgnore(
+            UUID userId,
+            UUID profileId,
+            BulkIgnoreRequest request
+    ) {
+        ensureProfile(profileId, userId);
+        var transactions = loadBulkTransactionsStrict(profileId, request.transactionIds());
+        var updatedIds = new ArrayList<UUID>();
+        var reason = firstNonBlank(request.reason(), "BULK_IGNORE");
+
+        for (var transaction : transactions) {
+            transaction.setStatus(MoneyTransaction.Status.IGNORED);
+            transaction.setClassificationStatus(MoneyTransaction.ClassificationStatus.IGNORED_BY_RULE);
+            transaction.setClassificationReason(reason);
+            applyDerivedIntegrityFields(transaction);
+            updatedIds.add(repository.save(transaction).getId());
+        }
+
+        return new BulkActionResponse(updatedIds.size(), updatedIds, List.of());
     }
 
     @Transactional(readOnly = true)
@@ -554,6 +677,7 @@ public class TransactionService {
                         && item.targetClassificationStatus() == null) {
                     transaction.setClassificationStatus(MoneyTransaction.ClassificationStatus.IGNORED_BY_RULE);
                 }
+                applyDerivedIntegrityFields(transaction);
                 repository.save(transaction);
 
                 updated++;
@@ -840,6 +964,285 @@ public class TransactionService {
         return category;
     }
 
+    private MoneyTransaction buildTransaction(
+            TransactionCreateRequest request,
+            TransactionMetadata metadata
+    ) {
+        var classificationStatus = metadata != null && metadata.classificationStatus() != null
+                ? metadata.classificationStatus()
+                : request.classificationStatus() != null
+                ? request.classificationStatus()
+                : request.categoryId() == null
+                ? MoneyTransaction.ClassificationStatus.NEEDS_CATEGORY
+                : MoneyTransaction.ClassificationStatus.CLASSIFIED;
+
+        var normalizedSource = normalizeSource(firstNonBlank(
+                metadata == null ? null : metadata.source(),
+                request.source()
+        ));
+        var normalizedDescription = descriptionNormalizer.normalizeNullable(request.description());
+        var operationDateTime = resolveOperationDateTime(request.operationDateTime(), request.realDate());
+
+        return MoneyTransaction.builder()
+                .profileId(request.profileId())
+                .accountId(request.accountId())
+                .categoryId(request.categoryId())
+                .movementType(request.movementType())
+                .realDate(request.realDate())
+                .budgetDate(request.budgetDate())
+                .operationDateTime(operationDateTime)
+                .operationDateTimePrecision(request.operationDateTime() == null
+                        ? MoneyTransaction.OperationDateTimePrecision.DATE_ONLY
+                        : MoneyTransaction.OperationDateTimePrecision.DATE_TIME)
+                .amount(request.amount())
+                .currency(request.currency().toUpperCase())
+                .description(request.description())
+                .normalizedDescription(normalizedDescription)
+                .origin(request.origin() == null ? MoneyTransaction.Origin.MANUAL : request.origin())
+                .status(request.status() == null ? MoneyTransaction.Status.CONFIRMED : request.status())
+                .source(normalizedSource)
+                .sourceOperationId(firstNonBlank(metadata == null ? null : metadata.sourceOperationId(), request.sourceOperationId()))
+                .sourceHash(firstNonBlank(metadata == null ? null : metadata.sourceHash(), request.sourceHash()))
+                .paymentChannel(metadata != null && metadata.paymentChannel() != null ? metadata.paymentChannel() : request.paymentChannel())
+                .counterparty(firstNonBlank(metadata == null ? null : metadata.counterparty(), request.counterparty()))
+                .classificationStatus(classificationStatus)
+                .classificationReason(firstNonBlank(metadata == null ? null : metadata.classificationReason(), request.classificationReason()))
+                .importBatchId(metadata != null && metadata.importBatchId() != null ? metadata.importBatchId() : request.importBatchId())
+                .internalTransferGroupId(metadata != null && metadata.internalTransferGroupId() != null ? metadata.internalTransferGroupId() : request.internalTransferGroupId())
+                .build();
+    }
+
+    private void ensureProfileMatchesRequest(UUID profileId, UUID requestProfileId) {
+        if (!Objects.equals(profileId, requestProfileId)) {
+            throw new DomainBadRequestException(
+                    "El perfil de la ruta no coincide con el perfil del movimiento.",
+                    "PROFILE_MISMATCH"
+            );
+        }
+    }
+
+    private void validateCategoryDecision(TransactionCreateRequest request) {
+        if (request.categoryId() != null || isUncategorizedCreateAllowed(request)) {
+            return;
+        }
+
+        throw new DomainBadRequestException(
+                "Elegí una categoría o guardalo como pendiente para revisar después.",
+                "CATEGORY_REQUIRED"
+        );
+    }
+
+    private boolean isUncategorizedCreateAllowed(TransactionCreateRequest request) {
+        return request.status() == MoneyTransaction.Status.PENDING
+                || request.classificationStatus() == MoneyTransaction.ClassificationStatus.NEEDS_CATEGORY
+                || request.classificationStatus() == MoneyTransaction.ClassificationStatus.REVIEW
+                || request.status() == MoneyTransaction.Status.IGNORED
+                || request.classificationStatus() == MoneyTransaction.ClassificationStatus.IGNORED_BY_RULE;
+    }
+
+    private CategorySuggestionPreview buildCategorySuggestionPreview(
+            TransactionCreateRequest request,
+            MoneyTransaction transaction
+    ) {
+        if (request.categoryId() != null) {
+            var selected = categoryRepository.findById(request.categoryId()).orElse(null);
+            return selected == null
+                    ? null
+                    : new CategorySuggestionPreview(
+                    selected.getId(),
+                    selected.getName(),
+                    selected.getType(),
+                    transaction.getMovementType(),
+                    TransactionCategorySuggestionService.Confidence.HIGH,
+                    TransactionCategorySuggestionService.Status.READY,
+                    "USER_SELECTED_CATEGORY",
+                    "Usamos la categoría que elegiste."
+            );
+        }
+
+        var suggestion = suggestionService.suggest(
+                request.profileId(),
+                request.description(),
+                request.movementType(),
+                request.source(),
+                request.amount()
+        );
+
+        if (suggestion == null) {
+            return null;
+        }
+
+        return new CategorySuggestionPreview(
+                suggestion.suggestedCategoryId(),
+                suggestion.suggestedCategoryName(),
+                suggestion.suggestedCategoryType(),
+                suggestion.suggestedMovementType(),
+                suggestion.confidence(),
+                suggestion.status(),
+                suggestion.reason(),
+                humanCategorySuggestionReason(suggestion)
+        );
+    }
+
+    private String humanCategorySuggestionReason(TransactionCategorySuggestionService.Suggestion suggestion) {
+        if (suggestion.suggestedCategoryName() != null && suggestion.confidence() == TransactionCategorySuggestionService.Confidence.HIGH) {
+            return "Sugerimos " + suggestion.suggestedCategoryName() + " porque coincide con reglas o movimientos similares.";
+        }
+
+        if (suggestion.suggestedCategoryName() != null) {
+            return "Podría ir en " + suggestion.suggestedCategoryName() + ", pero conviene revisarlo.";
+        }
+
+        return "No estamos seguros de la categoría. Elegí una antes de confirmarlo como movimiento real.";
+    }
+
+    private List<InternalTransferCandidate> findPreviewInternalTransferCandidates(MoneyTransaction draft) {
+        if (draft.getRealDate() == null
+                || draft.getAmount() == null
+                || draft.getAccountId() == null
+                || draft.getMovementType() == MoneyTransaction.MovementType.ADJUSTMENT) {
+            return List.of();
+        }
+
+        var from = draft.getRealDate().minusDays(2);
+        var to = draft.getRealDate().plusDays(2);
+        var draftItem = transactionReviewMapper.toItem(draft);
+
+        return repository.findByProfileIdAndRealDateBetweenAndAmountAndAccountIdNot(
+                        draft.getProfileId(),
+                        from,
+                        to,
+                        draft.getAmount(),
+                        draft.getAccountId()
+                )
+                .stream()
+                .filter(existing -> existing.getStatus() != MoneyTransaction.Status.IGNORED)
+                .filter(existing -> existing.getClassificationStatus() != MoneyTransaction.ClassificationStatus.IGNORED_BY_RULE)
+                .filter(existing -> Objects.equals(existing.getCurrency(), draft.getCurrency()))
+                .filter(existing -> isOppositeCashMovement(draft, existing))
+                .limit(5)
+                .map(existing -> {
+                    var existingItem = transactionReviewMapper.toItem(existing);
+                    long days = Math.abs(ChronoUnit.DAYS.between(draft.getRealDate(), existing.getRealDate()));
+
+                    if (isDebitLike(draft)) {
+                        return new InternalTransferCandidate(
+                                draftItem,
+                                existingItem,
+                                BigDecimal.ZERO,
+                                days,
+                                "Mismo monto, cuentas distintas y fecha cercana. Parece plata movida entre tus cuentas."
+                        );
+                    }
+
+                    return new InternalTransferCandidate(
+                            existingItem,
+                            draftItem,
+                            BigDecimal.ZERO,
+                            days,
+                            "Mismo monto, cuentas distintas y fecha cercana. Parece plata movida entre tus cuentas."
+                    );
+                })
+                .toList();
+    }
+
+    private boolean isOppositeCashMovement(MoneyTransaction left, MoneyTransaction right) {
+        return isDebitLike(left) && isCreditLike(right)
+                || isCreditLike(left) && isDebitLike(right)
+                || left.getMovementType() == MoneyTransaction.MovementType.TRANSFER
+                || right.getMovementType() == MoneyTransaction.MovementType.TRANSFER;
+    }
+
+    private boolean isDebitLike(MoneyTransaction transaction) {
+        return transaction.getMovementType() == MoneyTransaction.MovementType.EXPENSE
+                || transaction.getMovementType() == MoneyTransaction.MovementType.SAVING
+                || transaction.getMovementType() == MoneyTransaction.MovementType.TRANSFER;
+    }
+
+    private boolean isCreditLike(MoneyTransaction transaction) {
+        return transaction.getMovementType() == MoneyTransaction.MovementType.INCOME
+                || transaction.getMovementType() == MoneyTransaction.MovementType.TRANSFER;
+    }
+
+    private String humanFinancialImpact(
+            MoneyTransaction.BalanceImpact balanceImpact,
+            MoneyTransaction.MovementType movementType
+    ) {
+        if (balanceImpact == MoneyTransaction.BalanceImpact.INTERNAL_TRANSFER
+                || movementType == MoneyTransaction.MovementType.TRANSFER) {
+            return "Esto se ve en la cuenta, pero no cambia tu resultado del mes.";
+        }
+
+        if (balanceImpact == MoneyTransaction.BalanceImpact.OPERATING_INCOME) {
+            return "Esto parece ingreso real.";
+        }
+
+        if (balanceImpact == MoneyTransaction.BalanceImpact.CONSUMPTION_EXPENSE
+                || balanceImpact == MoneyTransaction.BalanceImpact.DEBT_OUTFLOW
+                || movementType == MoneyTransaction.MovementType.EXPENSE) {
+            return "Esto parece gasto real.";
+        }
+
+        if (balanceImpact == MoneyTransaction.BalanceImpact.IGNORED
+                || balanceImpact == MoneyTransaction.BalanceImpact.TECHNICAL
+                || balanceImpact == MoneyTransaction.BalanceImpact.NEUTRAL_ADJUSTMENT) {
+            return "Esto no afecta tus gastos del mes.";
+        }
+
+        return "Necesita revisión antes de confiar en el resultado del mes.";
+    }
+
+    private String buildHumanPreviewSummary(
+            MoneyTransaction transaction,
+            List<MoneyTransaction> duplicateCandidates,
+            List<InternalTransferCandidate> transferCandidates,
+            CategorySuggestionPreview categorySuggestion,
+            boolean needsCategoryDecision
+    ) {
+        if (!duplicateCandidates.isEmpty()) {
+            return "Ya cargaste un movimiento muy parecido. Revisalo antes de guardar otro.";
+        }
+
+        if (!transferCandidates.isEmpty()) {
+            return "Esto parece plata movida entre tus cuentas. Se puede guardar, pero conviene vincularlo para que no infle ingresos o gastos.";
+        }
+
+        if (needsCategoryDecision) {
+            return "Falta una categoría para saber si afecta tu presupuesto. Podés elegirla o dejarlo pendiente.";
+        }
+
+        if (categorySuggestion != null
+                && categorySuggestion.status() == TransactionCategorySuggestionService.Status.NEEDS_CATEGORY) {
+            return "No estamos seguros de la categoría. Revisala antes de confirmarlo.";
+        }
+
+        return humanFinancialImpact(transaction.getBalanceImpact(), transaction.getMovementType());
+    }
+
+    private List<MoneyTransaction> loadBulkTransactionsStrict(UUID profileId, List<UUID> transactionIds) {
+        var transactions = repository.findByProfileIdAndIdIn(profileId, transactionIds);
+
+        if (transactions.size() != transactionIds.size()) {
+            throw new DomainBadRequestException(
+                    "Hay movimientos inexistentes o que no pertenecen al perfil.",
+                    "TRANSACTION_NOT_FOUND"
+            );
+        }
+
+        return transactions;
+    }
+
+    private boolean isLinkedInternalTransfer(MoneyTransaction transaction) {
+        return transaction.getInternalTransferGroupId() != null
+                || transaction.getBalanceImpact() == MoneyTransaction.BalanceImpact.INTERNAL_TRANSFER;
+    }
+
+    private boolean isRealExpenseCategory(Category category) {
+        return category.getType() == Category.Type.FIXED_EXPENSE
+                || category.getType() == Category.Type.VARIABLE_EXPENSE
+                || category.getType() == Category.Type.DEBT;
+    }
+
     private void validate(
             UUID profileId,
             UUID accountId,
@@ -850,7 +1253,7 @@ public class TransactionService {
         ensureProfile(profileId, userId);
 
         if (!accountRepository.existsByIdAndProfileId(accountId, profileId)) {
-            throw new BadRequestException("Account does not belong to profile");
+            throw new DomainBadRequestException("La cuenta no existe en este perfil.", "ACCOUNT_NOT_FOUND");
         }
 
         if (categoryId == null) {
@@ -868,18 +1271,30 @@ public class TransactionService {
     ) {
         if (!isMovementCategoryCompatible(movementType, categoryType)) {
             if (movementType == MoneyTransaction.MovementType.INCOME) {
-                throw new BadRequestException("Movement/category mismatch: INCOME requiere categoría INCOME");
+                throw new DomainBadRequestException(
+                        "Esta categoría no sirve para ingresos.",
+                        "CATEGORY_INCOMPATIBLE"
+                );
             }
 
             if (movementType == MoneyTransaction.MovementType.SAVING) {
-                throw new BadRequestException("Movement/category mismatch: SAVING requiere categoría SAVING/INVESTMENT");
+                throw new DomainBadRequestException(
+                        "Esta categoría no sirve para ahorro o inversión.",
+                        "CATEGORY_INCOMPATIBLE"
+                );
             }
 
             if (movementType == MoneyTransaction.MovementType.EXPENSE) {
-                throw new BadRequestException("Movement/category mismatch: EXPENSE no permite categoría INCOME");
+                throw new DomainBadRequestException(
+                        "Esta categoría no sirve para gastos.",
+                        "CATEGORY_INCOMPATIBLE"
+                );
             }
 
-            throw new BadRequestException("Movement/category mismatch");
+            throw new DomainBadRequestException(
+                    "La categoría no es compatible con el tipo de movimiento.",
+                    "CATEGORY_INCOMPATIBLE"
+            );
         }
     }
 

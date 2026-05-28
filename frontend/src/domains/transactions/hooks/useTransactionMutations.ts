@@ -1,5 +1,8 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
+  bulkCategorizeTransactions,
+  bulkIgnoreTransactions,
+  bulkStatusTransactions,
   createTransaction,
   deleteTransaction,
   updateTransaction,
@@ -69,9 +72,47 @@ export function useTransactionMutations(
     onSuccess: invalidateTransactionDependents,
   });
 
+  const bulkCategorizeMutation = useMutation({
+    mutationFn: ({
+      transactionIds,
+      categoryId,
+    }: {
+      transactionIds: string[];
+      categoryId: string;
+    }) => bulkCategorizeTransactions(profileId, transactionIds, categoryId),
+    onSuccess: invalidateTransactionDependents,
+  });
+
+  const bulkStatusMutation = useMutation({
+    mutationFn: ({
+      transactionIds,
+      status,
+      reason,
+    }: {
+      transactionIds: string[];
+      status: "CONFIRMED" | "PENDING";
+      reason?: string;
+    }) => bulkStatusTransactions(profileId, transactionIds, status, reason),
+    onSuccess: invalidateTransactionDependents,
+  });
+
+  const bulkIgnoreMutation = useMutation({
+    mutationFn: ({
+      transactionIds,
+      reason,
+    }: {
+      transactionIds: string[];
+      reason?: string;
+    }) => bulkIgnoreTransactions(profileId, transactionIds, reason),
+    onSuccess: invalidateTransactionDependents,
+  });
+
   return {
     createTransactionMutation,
     updateTransactionMutation,
     deleteTransactionMutation,
+    bulkCategorizeMutation,
+    bulkStatusMutation,
+    bulkIgnoreMutation,
   };
 }

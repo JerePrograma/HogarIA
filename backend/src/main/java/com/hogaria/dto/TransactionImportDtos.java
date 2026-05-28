@@ -7,7 +7,12 @@ import java.time.LocalDate;
 import java.util.*;
 
 public class TransactionImportDtos {
-  public enum TransactionImportSource { BANCO_PROVINCIA, MERCADO_PAGO }
+  public enum TransactionImportSource {
+    BANCO_PROVINCIA,
+    MERCADO_PAGO,
+    TARJETA_CREDITO_GENERICA,
+    DEUDAS_TARJETA_GENERICA
+  }
   public enum Confidence { HIGH, MEDIUM, LOW, NONE }
   public enum RowStatus {
     READY,

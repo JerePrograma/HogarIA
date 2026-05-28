@@ -44,6 +44,9 @@ Notas:
 - Importador guiado de Excel por perfil (preview + commit por batch).
 - Centro de control financiero para revisar duplicados, transferencias internas, movimientos sin categoría, pendientes, técnicos/neutrales e importaciones a revisar.
 - Deduplicación persistente por descripción normalizada, fecha-hora operativa, cuenta, monto, moneda y claves de origen.
+- Alta manual con previsualización: antes de guardar, HogarIA avisa si ya cargaste algo parecido, si parece plata movida entre tus cuentas o si falta categoría.
+- Movimientos con vista simple para uso diario y vista auditoría para revisar trazabilidad técnica sin mezclarla con la experiencia principal.
+- Acciones masivas para categorizar, confirmar, dejar pendiente, ignorar y vincular transferencias internas seleccionadas.
 
 ## Integridad financiera
 - `MoneyTransaction` conserva la descripción original y persiste `normalizedDescription`, `operationDateTime`, `operationDateTimePrecision`, `duplicateFingerprint` y `balanceImpact`.
@@ -76,12 +79,49 @@ Notas:
 - `POST /api/profiles/{profileId}/transactions/internal-transfers/preview`
 - `POST /api/profiles/{profileId}/transactions/internal-transfers/link`
 - `POST /api/profiles/{profileId}/transactions/internal-transfers/unlink`
+- `POST /api/profiles/{profileId}/transactions/preview-create`
+- `POST /api/profiles/{profileId}/transactions/bulk-categorize`
+- `POST /api/profiles/{profileId}/transactions/bulk-status`
+- `POST /api/profiles/{profileId}/transactions/bulk-ignore`
 
 ## Ejemplos operativos
 - Importación repetida del mismo Excel: las filas con `sourceHash` o `sourceOperationId` ya vistos se clasifican como duplicadas y el commit no debe insertarlas.
 - Movimiento manual duplicado: misma cuenta, fecha/hora o fecha real fallback, descripción normalizada, monto y moneda devuelve `409 TRANSACTION_EXACT_DUPLICATE`.
 - Movimiento sin categoría: queda como `NEEDS_CATEGORY`; no se crea una categoría basura para ocultar incertidumbre.
 - Movimiento ignorado: conserva trazabilidad, queda visible en colas de calidad, pero no impacta balance.
+
+## Usar HogarIA sin saber finanzas
+La app intenta traducir la lógica contable a decisiones simples:
+
+- Movimiento real: un gasto o ingreso que cambia el resultado del mes.
+- Pendiente: algo que cargaste pero todavía querés revisar.
+- Ignorado: queda guardado para trazabilidad, pero no cuenta en gráficos ni balances.
+- Transferencia interna: plata movida entre tus cuentas; se ve en cada cuenta, pero no es ingreso ni gasto.
+- Sin categoría: HogarIA no adivina si no está seguro. Te pide elegir una categoría entendible.
+
+### Cargar un movimiento
+En Movimientos, completá cuenta, monto, fecha y descripción. Al tocar “Revisar y guardar”, HogarIA hace una prevalidación:
+
+1. Si ya cargaste algo igual, te muestra “Ya existe un movimiento muy parecido”.
+2. Si parece transferencia interna, sugiere vincularla para no inflar ingresos/gastos.
+3. Si falta categoría, podés elegir una sugerida o dejarlo pendiente.
+4. Si no hay riesgos, se guarda directo.
+
+### Importar movimientos
+El importador usa siete pasos: archivo, vista previa, duplicados, transferencias, categorías, impacto y confirmación. Nada se guarda hasta el último paso. Por defecto no crea categorías temporales; si querés usarlas, tenés que activar “Crear categoría temporal ‘Otros a revisar’”.
+
+### Importar tarjeta/deudas
+Para consumos de tarjeta, usá “Tarjeta de crédito” en Importación guiada. Para resúmenes de cuotas/deudas futuras, usá la entrada de planificación de deudas: esos datos deben crear compromisos planificados, no movimientos reales confirmados. Si el archivo viene como resumen futuro, HogarIA lo marca para planificación y evita contarlo como gasto real del mes.
+
+### Limpiar categorías
+La pantalla Categorías incluye “Limpiar categorías” con equivalencias por nombre normalizado. El catálogo recomendado para gráficos simples es: Vivienda, Servicios, Supermercado, Comida fuera, Transporte, Salud, Educación, Hijos/Familia, Deudas, Ahorro, Inversión, Ingresos laborales, Ingresos extra, Transferencias internas, Ajustes, Impuestos, Ocio y Otros a revisar.
+
+### Ejemplos comunes
+1. Cargué dos veces el mismo gasto: Movimientos avisa antes de guardar; Centro de control lleva a “Resolver duplicados”.
+2. Pasé plata de Mercado Pago al Banco Provincia: HogarIA sugiere transferencia interna para que no aparezca como ingreso/gasto.
+3. Importé dos veces el mismo Excel: las filas repetidas se omiten si confirmás explícitamente omitir duplicados.
+4. Subí resumen de tarjeta con cuotas: tratá las cuotas futuras como planificación, no como movimientos reales confirmados.
+5. No sé qué categoría elegir: dejá el movimiento pendiente o usá “Otros a revisar” solo como categoría temporal consciente.
 
 ## Smoke test recomendado
 1. Crear dev user.

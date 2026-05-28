@@ -556,6 +556,8 @@ public class TransactionImportService {
       return switch (source) {
         case BANCO_PROVINCIA -> parseBancoProvincia(file, profileId, accountId, year, month);
         case MERCADO_PAGO -> parseMercadoPago(file, profileId, accountId, year, month);
+        case TARJETA_CREDITO_GENERICA -> parseGenericCard(file, profileId, accountId, year, month, false);
+        case DEUDAS_TARJETA_GENERICA -> parseGenericCard(file, profileId, accountId, year, month, true);
       };
     } catch (BadRequestException ex) {
       throw ex;
@@ -897,6 +899,138 @@ public class TransactionImportService {
                       + firstDataRow.substring(0, Math.min(firstDataRow.length(), 500))
                       + "]."
       );
+    }
+
+    return rows;
+  }
+
+  private List<TransactionImportPreviewRow> parseGenericCard(
+          MultipartFile file,
+          UUID profileId,
+          UUID accountId,
+          Integer year,
+          Integer month,
+          boolean planningOnly
+  ) throws Exception {
+    if (file == null || file.isEmpty()) {
+      throw new BadRequestException("El resumen de tarjeta/deudas está vacío.");
+    }
+
+    var formatter = new DataFormatter(ES_AR);
+    var categories = loadVisibleCategories(profileId);
+    var rows = new ArrayList<TransactionImportPreviewRow>();
+
+    try (var workbook = WorkbookFactory.create(file.getInputStream())) {
+      if (workbook.getNumberOfSheets() == 0) {
+        throw new BadRequestException("El archivo no tiene hojas.");
+      }
+
+      var sheet = workbook.getSheetAt(0);
+      Map<String, Integer> headers = null;
+      int headerRow = -1;
+
+      for (var row : sheet) {
+        var values = readExcelRowValues(row, formatter);
+        var candidate = buildGenericCardHeaderIndex(values);
+        if (hasGenericCardRequiredHeaders(candidate)) {
+          headers = candidate;
+          headerRow = row.getRowNum();
+          break;
+        }
+      }
+
+      if (headers == null) {
+        throw new BadRequestException("No encontramos columnas de fecha, descripción/comercio y monto.");
+      }
+
+      int outputRow = 0;
+      for (int rowIndex = headerRow + 1; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
+        var sheetRow = sheet.getRow(rowIndex);
+        var values = readExcelRowValues(sheetRow, formatter);
+        if (values.stream().allMatch(value -> value == null || value.isBlank())) {
+          continue;
+        }
+
+        var dateText = genericCardValue(values, headers, "fecha", "fecha_compra", "fecha_de_compra");
+        var description = firstNonBlank(
+                genericCardValue(values, headers, "descripcion", "descripción", "comercio", "detalle"),
+                "Consumo de tarjeta"
+        );
+        var amountText = genericCardValue(values, headers, "monto", "importe", "importe_cuota", "monto_cuota");
+
+        LocalDate date;
+        BigDecimal amount;
+        try {
+          date = parseBancoProvinciaDate(dateText);
+          amount = parseLocalizedAmount(amountText).abs();
+        } catch (Exception ex) {
+          outputRow++;
+          rows.add(new TransactionImportPreviewRow(
+                  outputRow,
+                  planningOnly ? TransactionImportSource.DEUDAS_TARJETA_GENERICA : TransactionImportSource.TARJETA_CREDITO_GENERICA,
+                  null,
+                  null,
+                  null,
+                  null,
+                  description,
+                  normalizeDescription(description),
+                  null,
+                  BigDecimal.ZERO,
+                  DEFAULT_CURRENCY,
+                  MoneyTransaction.MovementType.EXPENSE,
+                  null,
+                  null,
+                  Confidence.NONE,
+                  RowStatus.ERROR,
+                  "No pudimos leer fecha o monto de esta fila.",
+                  String.join("|", values),
+                  null, null, null, null, null, null
+          ));
+          continue;
+        }
+
+        var normalizedDescription = normalizeDescription(description);
+        var installmentText = genericCardValue(values, headers, "cuota", "cuotas", "plan");
+        var enrichedDescription = installmentText == null || installmentText.isBlank()
+                ? description
+                : description + " | Cuotas: " + installmentText;
+        var budgetDate = resolveBudgetDate(date, year, month);
+        var suggestion = suggestCategory(
+                profileId,
+                categories,
+                normalizedDescription,
+                MoneyTransaction.MovementType.EXPENSE
+        );
+
+        outputRow++;
+        rows.add(new TransactionImportPreviewRow(
+                outputRow,
+                planningOnly ? TransactionImportSource.DEUDAS_TARJETA_GENERICA : TransactionImportSource.TARJETA_CREDITO_GENERICA,
+                null,
+                buildSourceHash("CARD", profileId, accountId, null, date, normalizedDescription, amount),
+                date,
+                budgetDate,
+                enrichedDescription,
+                normalizedDescription,
+                amount.negate(),
+                amount,
+                DEFAULT_CURRENCY,
+                MoneyTransaction.MovementType.EXPENSE,
+                planningOnly ? null : suggestion.categoryId(),
+                planningOnly ? "Planificación futura de tarjeta" : suggestion.categoryName(),
+                planningOnly ? Confidence.LOW : suggestion.confidence(),
+                planningOnly ? RowStatus.SKIPPED : suggestion.status(),
+                planningOnly
+                        ? "Este resumen sirve para planificar cuotas futuras; no se crea un movimiento real confirmado."
+                        : suggestion.warning(),
+                String.join("|", values),
+                null, null, null, null, null, null
+        ));
+      }
+    }
+
+    if (rows.isEmpty()) {
+      throw new BadRequestException("No se detectaron consumos en el resumen.");
     }
 
     return rows;
@@ -1743,23 +1877,7 @@ public class TransactionImportService {
   }
 
   private String fallbackCategoryName(MoneyTransaction.MovementType movementType) {
-    if (movementType == MoneyTransaction.MovementType.INCOME) {
-      return "Falta de categoría - Ingreso";
-    }
-
-    if (movementType == MoneyTransaction.MovementType.SAVING) {
-      return "Falta de categoría - Ahorro";
-    }
-
-    if (movementType == MoneyTransaction.MovementType.TRANSFER) {
-      return "Falta de categoría - Transferencia";
-    }
-
-    if (movementType == MoneyTransaction.MovementType.ADJUSTMENT) {
-      return "Falta de categoría - Ajuste";
-    }
-
-    return "Falta de categoría - Gasto";
+    return "Otros a revisar";
   }
 
   private BancoProvinciaHeaderIndexes detectBancoProvinciaHeader(
@@ -1803,6 +1921,43 @@ public class TransactionImportService {
     }
 
     return indexes;
+  }
+
+  private Map<String, Integer> buildGenericCardHeaderIndex(List<String> headers) {
+    var indexes = new HashMap<String, Integer>();
+
+    for (int i = 0; i < headers.size(); i++) {
+      indexes.put(normalizeHeader(headers.get(i)).replace(" ", "_"), i);
+    }
+
+    return indexes;
+  }
+
+  private boolean hasGenericCardRequiredHeaders(Map<String, Integer> headers) {
+    return hasAnyGenericHeader(headers, "fecha", "fecha_compra", "fecha_de_compra")
+            && hasAnyGenericHeader(headers, "descripcion", "descripción", "comercio", "detalle")
+            && hasAnyGenericHeader(headers, "monto", "importe", "importe_cuota", "monto_cuota");
+  }
+
+  private boolean hasAnyGenericHeader(Map<String, Integer> headers, String... names) {
+    for (var name : names) {
+      if (headers.containsKey(normalizeHeader(name).replace(" ", "_"))) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  private String genericCardValue(List<String> values, Map<String, Integer> headers, String... names) {
+    for (var name : names) {
+      var index = headers.get(normalizeHeader(name).replace(" ", "_"));
+      if (index != null && index >= 0 && index < values.size()) {
+        return cleanDelimitedValue(values.get(index));
+      }
+    }
+
+    return "";
   }
 
   private char detectDelimiter(String headerLine) {

@@ -3,6 +3,7 @@ package com.hogaria.service;
 import com.hogaria.entity.Category;
 import com.hogaria.entity.MoneyTransaction;
 import com.hogaria.repository.CategoryRepository;
+import com.hogaria.repository.MoneyTransactionRepository;
 import java.math.BigDecimal;
 import java.text.Normalizer;
 import java.util.ArrayList;
@@ -71,10 +72,15 @@ public class TransactionCategorySuggestionService {
   }
 
   private final CategoryRepository categoryRepository;
+  private final MoneyTransactionRepository transactionRepository;
   private final List<Rule> rules;
 
-  public TransactionCategorySuggestionService(CategoryRepository categoryRepository) {
+  public TransactionCategorySuggestionService(
+          CategoryRepository categoryRepository,
+          MoneyTransactionRepository transactionRepository
+  ) {
     this.categoryRepository = categoryRepository;
+    this.transactionRepository = transactionRepository;
     this.rules = List.of(
             rule(
                     "\\b(COMISION|COMISIÓN|CARGO|PUNTO\\s+EFECTIVO|MANTENIMIENTO\\s+DE\\s+CUENTA)\\b",
@@ -236,6 +242,11 @@ public class TransactionCategorySuggestionService {
     var categories = profileId == null
             ? List.<Category>of()
             : loadVisibleCategories(profileId);
+
+    var historicalSuggestion = suggestFromHistory(context, categories);
+    if (historicalSuggestion != null) {
+      return historicalSuggestion;
+    }
 
     for (var rule : rules) {
       if (!rule.allowMovementTypeOverride()
@@ -512,6 +523,81 @@ public class TransactionCategorySuggestionService {
     return normalize(value)
             .toLowerCase(Locale.ROOT)
             .replaceAll("[^a-z0-9]+", "");
+  }
+
+  private Suggestion suggestFromHistory(SuggestionContext context, List<Category> categories) {
+    if (context.profileId() == null || context.normalizedDescription().isBlank()) {
+      return null;
+    }
+
+    var categoriesById = new java.util.HashMap<UUID, Category>();
+    for (var category : categories) {
+      categoriesById.put(category.getId(), category);
+    }
+
+    var candidate = transactionRepository.findByProfileId(context.profileId())
+            .stream()
+            .filter(tx -> tx.getCategoryId() != null)
+            .filter(tx -> tx.getStatus() != MoneyTransaction.Status.IGNORED)
+            .filter(tx -> tx.getClassificationStatus() != MoneyTransaction.ClassificationStatus.IGNORED_BY_RULE)
+            .filter(tx -> context.movementType() == null || tx.getMovementType() == context.movementType())
+            .filter(tx -> sameMerchantSignal(context.normalizedDescription(), normalize(tx.getDescription())))
+            .map(tx -> categoriesById.get(tx.getCategoryId()))
+            .filter(Objects::nonNull)
+            .filter(Category::getActive)
+            .filter(category -> isCompatible(context.movementType(), category.getType()))
+            .findFirst()
+            .orElse(null);
+
+    if (candidate == null) {
+      return null;
+    }
+
+    return new Suggestion(
+            candidate.getId(),
+            candidate.getName(),
+            candidate.getType(),
+            context.movementType(),
+            Confidence.HIGH,
+            Status.READY,
+            "HISTORY_SIMILAR_DESCRIPTION",
+            "Sugerimos esta categoría porque ya la usaste en movimientos parecidos.",
+            inferPaymentChannel(context.normalizedDescription(), context.normalizedSource()),
+            MoneyTransaction.ClassificationStatus.CLASSIFIED
+    );
+  }
+
+  private boolean sameMerchantSignal(String left, String right) {
+    if (left.isBlank() || right.isBlank()) {
+      return false;
+    }
+
+    if (left.equals(right)) {
+      return true;
+    }
+
+    var leftTokens = keyTokens(left);
+    var rightTokens = keyTokens(right);
+
+    if (leftTokens.isEmpty() || rightTokens.isEmpty()) {
+      return false;
+    }
+
+    for (var token : leftTokens) {
+      if (token.length() >= 4 && rightTokens.contains(token)) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  private java.util.Set<String> keyTokens(String value) {
+    return java.util.Arrays.stream(normalize(value).split("\\s+"))
+            .map(String::trim)
+            .filter(token -> token.length() >= 4)
+            .filter(token -> !java.util.Set.of("PAGO", "COMPRA", "TARJETA", "DEBITO", "CREDITO", "TRANSFERENCIA").contains(token))
+            .collect(java.util.stream.Collectors.toSet());
   }
 
   private String normalize(String value) {

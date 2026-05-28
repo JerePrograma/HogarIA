@@ -64,6 +64,20 @@ export function DashboardPage() {
                   Ir a planificación
                 </Button>
               </div>
+              <div className="page-actions">
+                <Button tone="secondary" to={`${routePaths.planning(profileId)}/monthly`}>
+                  Planificar próximo mes
+                </Button>
+                <Button tone="secondary" to={`${routePaths.planning(profileId)}/monthly/external-debts/banco-provincia`}>
+                  Revisar cuotas futuras
+                </Button>
+                <Button tone="secondary" to={`${routePaths.transactions(profileId)}?onlyWithoutCategory=true`}>
+                  Completar sin categoría
+                </Button>
+                <Button tone="secondary" to={`${routePaths.transactions(profileId)}?onlyInternalTransfers=true`}>
+                  Resolver transferencias
+                </Button>
+              </div>
             </div>
           }
         />

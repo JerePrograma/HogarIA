@@ -211,6 +211,37 @@ export interface InternalTransferPreviewResponse {
   candidates: InternalTransferCandidate[];
 }
 
+export type TransactionCreateRiskLevel = "OK" | "WARNING" | "BLOCKING";
+
+export type TransactionCreateRecommendedAction =
+  | "CREATE"
+  | "REVIEW_DUPLICATE"
+  | "LINK_TRANSFER"
+  | "CHOOSE_CATEGORY";
+
+export interface TransactionCreateCategorySuggestion {
+  categoryId: string | null;
+  categoryName: string | null;
+  categoryType: CategoryType | null;
+  movementType: MovementType | null;
+  confidence: SuggestionConfidence | "HIGH" | "MEDIUM" | "LOW" | null;
+  status: "READY" | "NEEDS_CATEGORY" | "NO_SUGGESTION" | "SKIPPED" | null;
+  reason: string | null;
+  humanReason: string | null;
+}
+
+export interface TransactionCreatePreview {
+  riskLevel: TransactionCreateRiskLevel;
+  canCreateDirectly: boolean;
+  normalizedDescription: string | null;
+  financialImpact: string;
+  humanSummary: string;
+  duplicateCandidates: TransactionReviewItem[];
+  internalTransferCandidates: InternalTransferCandidate[];
+  categorySuggestion: TransactionCreateCategorySuggestion | null;
+  recommendedAction: TransactionCreateRecommendedAction;
+}
+
 export interface InternalTransferLinkPayload {
   debitTransactionId: string;
   creditTransactionId: string;
@@ -246,6 +277,12 @@ export interface TransactionDeletionResponse {
   systemConversionMatchesDeleted: number;
   resultingStatus: TransactionStatus | null;
   resultingClassificationStatus: TransactionClassificationStatus | null;
+}
+
+export interface TransactionBulkActionResponse {
+  updatedCount: number;
+  updatedTransactionIds: string[];
+  warnings: string[];
 }
 
 // ============================================================

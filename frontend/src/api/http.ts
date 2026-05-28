@@ -60,3 +60,32 @@ export const getApiErrorMessage = (error: unknown): string => {
   if (status === 500) return 'Error interno del servidor (500).';
   return `Error HTTP ${status}.`;
 };
+
+export const getApiErrorCode = (error: unknown): string | null => {
+  if (!axios.isAxiosError(error)) return null;
+
+  const data = error.response?.data as { code?: string } | undefined;
+  return data?.code ?? null;
+};
+
+const domainErrorMessages: Record<string, string> = {
+  TRANSACTION_EXACT_DUPLICATE:
+    'Ya cargaste este movimiento. Abrí el parecido o guardalo como nuevo solo si estás seguro.',
+  TRANSACTION_SOURCE_DUPLICATE:
+    'Ese movimiento ya vino de una importación anterior. No lo volvemos a contar.',
+  TRANSACTION_POSSIBLE_INTERNAL_TRANSFER:
+    'Esto parece plata movida entre tus cuentas. Conviene vincularlo para que no infle ingresos o gastos.',
+  CATEGORY_REQUIRED:
+    'Elegí una categoría o dejalo pendiente para revisar después.',
+  ACCOUNT_NOT_FOUND:
+    'La cuenta elegida no existe en este perfil.',
+  CATEGORY_INCOMPATIBLE:
+    'La categoría no coincide con el tipo de movimiento. Cambiala antes de guardar.',
+};
+
+export const getDomainErrorMessage = (error: unknown): string => {
+  const code = getApiErrorCode(error);
+  if (code && domainErrorMessages[code]) return domainErrorMessages[code];
+
+  return getApiErrorMessage(error);
+};

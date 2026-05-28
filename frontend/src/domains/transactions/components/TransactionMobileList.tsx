@@ -31,6 +31,9 @@ interface Props {
   transactions: MoneyTransaction[];
   accountsById: Map<string, Account>;
   categoriesById: Map<string, Category>;
+  viewMode: "SIMPLE" | "AUDIT";
+  selectedTransactionIds: string[];
+  onToggleSelection: (id: string) => void;
   updatePending: boolean;
   deletePending: boolean;
   deletingTransactionId?: string;
@@ -42,6 +45,9 @@ export function TransactionMobileList({
   transactions,
   accountsById,
   categoriesById,
+  viewMode,
+  selectedTransactionIds,
+  onToggleSelection,
   updatePending,
   deletePending,
   deletingTransactionId,
@@ -67,6 +73,12 @@ export function TransactionMobileList({
         return (
           <article key={transaction.id} className="transactions-mobile-card">
             <header>
+              <input
+                type="checkbox"
+                checked={selectedTransactionIds.includes(transaction.id)}
+                onChange={() => onToggleSelection(transaction.id)}
+                aria-label="Seleccionar movimiento"
+              />
               <div>
                 <strong>{transaction.description || "Sin descripción"}</strong>
                 <p className="muted">
@@ -134,6 +146,23 @@ export function TransactionMobileList({
                   <dt>Motivo</dt>
                   <dd>{transaction.classificationReason}</dd>
                 </div>
+              ) : null}
+
+              {viewMode === "AUDIT" ? (
+                <>
+                  <div>
+                    <dt>Descripción leída</dt>
+                    <dd>{transaction.normalizedDescription ?? "-"}</dd>
+                  </div>
+                  <div>
+                    <dt>Clave repetido</dt>
+                    <dd>{transaction.duplicateFingerprint?.slice(0, 10) ?? "-"}</dd>
+                  </div>
+                  <div>
+                    <dt>Grupo interno</dt>
+                    <dd>{transaction.internalTransferGroupId?.slice(0, 10) ?? "-"}</dd>
+                  </div>
+                </>
               ) : null}
             </dl>
 

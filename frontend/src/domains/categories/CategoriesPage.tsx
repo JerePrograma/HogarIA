@@ -60,6 +60,7 @@ export function CategoriesPage() {
   const categories = sortByNameDesc(categoriesQuery.data ?? []);
   const activeCategories = categories.filter((category) => category.active);
   const globalCategories = categories.filter((category) => category.scope === 'GLOBAL');
+  const duplicateCategoryGroups = buildDuplicateCategoryGroups(activeCategories);
 
   const invalidateCategories = () =>
     queryClient.invalidateQueries({ queryKey: queryKeys.categories(profileId) });
@@ -251,6 +252,61 @@ export function CategoriesPage() {
           ) : null}
         </section>
 
+        <section className="panel" id="limpiar">
+          <div className="section-title">
+            <div>
+              <p className="eyebrow">Limpieza</p>
+              <h2>Limpiar categorías</h2>
+              <p className="muted">
+                Mantené pocas categorías claras para que los gráficos no se llenen de variantes parecidas.
+              </p>
+            </div>
+            <span className="badge-count">{duplicateCategoryGroups.length}</span>
+          </div>
+
+          <div className="surface-inset">
+            <strong>Catálogo recomendado</strong>
+            <p className="muted">
+              Vivienda, Servicios, Supermercado, Comida fuera, Transporte, Salud, Educación,
+              Hijos/Familia, Deudas, Ahorro, Inversión, Ingresos laborales, Ingresos extra,
+              Transferencias internas, Ajustes, Impuestos, Ocio y Otros a revisar.
+            </p>
+          </div>
+
+          {duplicateCategoryGroups.length === 0 ? (
+            <EmptyState
+              title="Sin categorías repetidas"
+              message="No encontramos categorías activas con el mismo nombre normalizado y tipo."
+            />
+          ) : (
+            <div className="grid gap-3">
+              {duplicateCategoryGroups.map((group) => (
+                <article key={group.key} className="surface-inset">
+                  <strong>{group.label}</strong>
+                  <p className="muted">
+                    {group.items.length} categorías se ven demasiado parecidas. Conviene dejar una sola activa.
+                  </p>
+                  <div className="row-actions mt-3">
+                    {group.items.map((category) => (
+                      <button
+                        key={category.id}
+                        type="button"
+                        className="boton-secundario"
+                        disabled={toggleMutation.isPending || category.scope === 'GLOBAL'}
+                        onClick={() => toggleMutation.mutate(category)}
+                      >
+                        {category.scope === 'GLOBAL'
+                          ? `${category.name} · global`
+                          : `Desactivar ${category.name}`}
+                      </button>
+                    ))}
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
+
         <section className="panel">
           <div className="section-title">
             <div>
@@ -436,4 +492,29 @@ export function CategoriesPage() {
       </div>
     </AppLayout>
   );
+}
+
+function buildDuplicateCategoryGroups(categories: Category[]) {
+  const groups = new Map<string, Category[]>();
+
+  categories.forEach((category) => {
+    const key = `${category.type}:${category.categoryKey ?? normalizeCategoryName(category.name)}`;
+    groups.set(key, [...(groups.get(key) ?? []), category]);
+  });
+
+  return [...groups.entries()]
+    .filter(([, items]) => items.length > 1)
+    .map(([key, items]) => ({
+      key,
+      label: items.map((item) => item.name).join(' / '),
+      items,
+    }));
+}
+
+function normalizeCategoryName(value: string) {
+  return value
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '');
 }

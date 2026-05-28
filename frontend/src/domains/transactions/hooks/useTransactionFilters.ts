@@ -27,6 +27,16 @@ export function useTransactionFilters(
   const filteredTransactions = useMemo(() => {
     const search = normalizeSearch(filters.search);
 
+    const duplicateFingerprintCount = new Map<string, number>();
+
+    transactions.forEach((transaction) => {
+      if (!transaction.duplicateFingerprint) return;
+      duplicateFingerprintCount.set(
+        transaction.duplicateFingerprint,
+        (duplicateFingerprintCount.get(transaction.duplicateFingerprint) ?? 0) + 1,
+      );
+    });
+
     const visibleTransactions = transactions.filter((transaction) => {
         const accountName = accountsById.get(transaction.accountId)?.name ?? "";
 
@@ -84,6 +94,9 @@ export function useTransactionFilters(
           filters.paymentChannel === ALL ||
           transaction.paymentChannel === filters.paymentChannel;
 
+        const matchesOrigin =
+          filters.origin === ALL || transaction.origin === filters.origin;
+
         const matchesSource =
           !filters.source ||
           normalizeSearch(transaction.source).includes(
@@ -102,7 +115,9 @@ export function useTransactionFilters(
 
         const matchesOnlyDuplicates =
           !filters.onlyDuplicates ||
-          Boolean(transaction.duplicateFingerprint) ||
+          (transaction.duplicateFingerprint
+            ? (duplicateFingerprintCount.get(transaction.duplicateFingerprint) ?? 0) > 1
+            : false) ||
           normalizeSearch(transaction.classificationReason).includes(
             "duplicate",
           );
@@ -118,6 +133,17 @@ export function useTransactionFilters(
         const matchesOnlyImported =
           !filters.onlyImported || transaction.origin === "IMPORT";
 
+        const matchesOnlyWithoutCategory =
+          !filters.onlyWithoutCategory ||
+          !transaction.categoryId ||
+          classificationStatus === "NEEDS_CATEGORY";
+
+        const matchesImpact =
+          filters.impactKind === ALL ||
+          (filters.impactKind === "NEUTRAL"
+            ? !shouldCountTransactionInOperationalBalance(transaction)
+            : transaction.balanceImpact === filters.impactKind);
+
         return (
           matchesSearch &&
           matchesAccount &&
@@ -125,6 +151,7 @@ export function useTransactionFilters(
           matchesMovement &&
           matchesStatus &&
           matchesClassification &&
+          matchesOrigin &&
           matchesPaymentChannel &&
           matchesSource &&
           matchesDateFrom &&
@@ -132,7 +159,9 @@ export function useTransactionFilters(
           matchesExactAmount &&
           matchesOnlyDuplicates &&
           matchesOnlyInternalTransfers &&
-          matchesOnlyImported
+          matchesOnlyImported &&
+          matchesOnlyWithoutCategory &&
+          matchesImpact
         );
       });
 
@@ -161,6 +190,7 @@ export function useTransactionFilters(
     filters.movementType !== ALL,
     filters.status !== ALL,
     filters.classificationStatus !== ALL,
+    filters.origin !== ALL,
     filters.paymentChannel !== ALL,
     filters.source,
     filters.dateFrom,
@@ -168,7 +198,9 @@ export function useTransactionFilters(
     filters.exactAmount,
     filters.onlyDuplicates,
     filters.onlyInternalTransfers,
+    filters.onlyWithoutCategory,
     filters.onlyImported,
+    filters.impactKind !== ALL,
   ].filter(Boolean).length;
 
   return {

@@ -5,8 +5,13 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 
 import com.hogaria.domains.transactions.lifecycle.TransactionLifecycleService;
+import com.hogaria.dto.TransactionBulkDtos.BulkCategorizeRequest;
+import com.hogaria.dto.TransactionBulkDtos.BulkIgnoreRequest;
+import com.hogaria.dto.TransactionBulkDtos.BulkStatusRequest;
 import com.hogaria.dto.TransactionCreateRequest;
 import com.hogaria.dto.TransactionUpdateRequest;
 import com.hogaria.entity.Category;
@@ -20,6 +25,7 @@ import com.hogaria.repository.MoneyTransactionRepository;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.Optional;
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeEach;
@@ -41,6 +47,7 @@ class TransactionServiceTest {
     @Mock TransactionFingerprintService fingerprintService;
     @Mock DuplicateDetectionService duplicateDetectionService;
     @Mock TransactionFinancialImpactService financialImpactService;
+    @Mock TransactionReviewMapper transactionReviewMapper;
 
     @InjectMocks TransactionService service;
 
@@ -164,6 +171,105 @@ class TransactionServiceTest {
         );
 
         assertThrows(BadRequestException.class, () -> service.update(userId, transactionId, request));
+    }
+
+    @Test
+    void bulkCategorizePreservesInternalTransferIntegrity() {
+        var userId = UUID.randomUUID();
+        var profileId = UUID.randomUUID();
+        var transactionId = UUID.randomUUID();
+        var accountId = UUID.randomUUID();
+        var categoryId = UUID.randomUUID();
+        var transaction = transaction(profileId, accountId, null);
+        transaction.setId(transactionId);
+        transaction.setMovementType(MoneyTransaction.MovementType.TRANSFER);
+        transaction.setInternalTransferGroupId(UUID.randomUUID());
+        transaction.setBalanceImpact(MoneyTransaction.BalanceImpact.INTERNAL_TRANSFER);
+
+        when(profileRepo.findByIdAndUserId(profileId, userId)).thenReturn(Optional.of(new FinancialProfile()));
+        when(categoryRepo.findById(categoryId)).thenReturn(Optional.of(Category.builder()
+                .id(categoryId)
+                .profileId(profileId)
+                .active(true)
+                .type(Category.Type.VARIABLE_EXPENSE)
+                .build()));
+        when(txRepo.findByProfileIdAndIdIn(profileId, List.of(transactionId))).thenReturn(List.of(transaction));
+
+        assertThrows(BadRequestException.class, () -> service.bulkCategorize(
+                userId,
+                profileId,
+                new BulkCategorizeRequest(List.of(transactionId), categoryId)
+        ));
+    }
+
+    @Test
+    void bulkIgnoreDoesNotDeleteMovements() {
+        var userId = UUID.randomUUID();
+        var profileId = UUID.randomUUID();
+        var transactionId = UUID.randomUUID();
+        var transaction = transaction(profileId, UUID.randomUUID(), UUID.randomUUID());
+        transaction.setId(transactionId);
+
+        when(profileRepo.findByIdAndUserId(profileId, userId)).thenReturn(Optional.of(new FinancialProfile()));
+        when(txRepo.findByProfileIdAndIdIn(profileId, List.of(transactionId))).thenReturn(List.of(transaction));
+        when(txRepo.save(any(MoneyTransaction.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        var response = service.bulkIgnore(
+                userId,
+                profileId,
+                new BulkIgnoreRequest(List.of(transactionId), "DUPLICATE_RESOLVED")
+        );
+
+        assertEquals(1, response.updatedCount());
+        assertEquals(MoneyTransaction.Status.IGNORED, transaction.getStatus());
+        assertEquals(MoneyTransaction.ClassificationStatus.IGNORED_BY_RULE, transaction.getClassificationStatus());
+        verify(txRepo, never()).delete(any(MoneyTransaction.class));
+    }
+
+    @Test
+    void bulkStatusRecalculatesImpact() {
+        var userId = UUID.randomUUID();
+        var profileId = UUID.randomUUID();
+        var transactionId = UUID.randomUUID();
+        var transaction = transaction(profileId, UUID.randomUUID(), UUID.randomUUID());
+        transaction.setId(transactionId);
+
+        when(profileRepo.findByIdAndUserId(profileId, userId)).thenReturn(Optional.of(new FinancialProfile()));
+        when(txRepo.findByProfileIdAndIdIn(profileId, List.of(transactionId))).thenReturn(List.of(transaction));
+        when(txRepo.save(any(MoneyTransaction.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(financialImpactService.analyze(any(), any(), any()))
+                .thenReturn(new TransactionFinancialImpact(
+                        CashFlowTreatment.UNKNOWN,
+                        MoneyTransaction.BalanceImpact.IGNORED,
+                        false,
+                        false,
+                        false,
+                        false,
+                        false,
+                        false,
+                        false,
+                        false,
+                        false,
+                        false,
+                        false,
+                        true,
+                        false,
+                        false,
+                        false
+                ));
+
+        service.bulkStatus(
+                userId,
+                profileId,
+                new BulkStatusRequest(
+                        List.of(transactionId),
+                        MoneyTransaction.Status.IGNORED,
+                        null,
+                        "Revisión masiva"
+                )
+        );
+
+        assertEquals(MoneyTransaction.BalanceImpact.IGNORED, transaction.getBalanceImpact());
     }
 
     private MoneyTransaction transaction(UUID profileId, UUID accountId, UUID categoryId) {

@@ -11,6 +11,7 @@ import {
   classificationStatusOptions,
   movementTypeOptions,
   paymentChannelOptions,
+  transactionOriginOptions,
   transactionStatusOptions,
 } from "../../../domain/financeOptions";
 import { EmptyState } from "../../../shared/ui/EmptyState";
@@ -18,6 +19,9 @@ import { ErrorState } from "../../../shared/ui/ErrorState";
 import { ALL, WITHOUT_CATEGORY, type TransactionFilters } from "../types";
 import { TransactionTable } from "./TransactionTable";
 import { TransactionMobileList } from "./TransactionMobileList";
+import { useState } from "react";
+
+type ViewMode = "SIMPLE" | "AUDIT";
 
 interface Props {
   transactions: MoneyTransaction[];
@@ -38,6 +42,13 @@ interface Props {
   onResetFilters: () => void;
   onToggleStatus: (transaction: MoneyTransaction) => void;
   onDelete: (transaction: MoneyTransaction) => void;
+  selectedTransactionIds: string[];
+  onSelectionChange: (ids: string[]) => void;
+  bulkPending: boolean;
+  onBulkCategorize: (categoryId: string) => void;
+  onBulkStatus: (status: "CONFIRMED" | "PENDING") => void;
+  onBulkIgnore: () => void;
+  onBulkLinkTransfer: () => void;
 }
 
 export function TransactionListPanel({
@@ -59,7 +70,39 @@ export function TransactionListPanel({
   onResetFilters,
   onToggleStatus,
   onDelete,
+  selectedTransactionIds,
+  onSelectionChange,
+  bulkPending,
+  onBulkCategorize,
+  onBulkStatus,
+  onBulkIgnore,
+  onBulkLinkTransfer,
 }: Props) {
+  const [viewMode, setViewMode] = useState<ViewMode>("SIMPLE");
+  const [bulkCategoryId, setBulkCategoryId] = useState("");
+  const selectedCount = selectedTransactionIds.length;
+
+  const toggleSelection = (id: string) => {
+    onSelectionChange(
+      selectedTransactionIds.includes(id)
+        ? selectedTransactionIds.filter((current) => current !== id)
+        : [...selectedTransactionIds, id],
+    );
+  };
+
+  const toggleVisibleSelection = () => {
+    const visibleIds = filteredTransactions.map((transaction) => transaction.id);
+    const allVisibleSelected = visibleIds.every((id) =>
+      selectedTransactionIds.includes(id),
+    );
+
+    onSelectionChange(
+      allVisibleSelected
+        ? selectedTransactionIds.filter((id) => !visibleIds.includes(id))
+        : [...new Set([...selectedTransactionIds, ...visibleIds])],
+    );
+  };
+
   return (
     <section className="panel transactions-list-panel">
       <div className="section-title">
@@ -83,6 +126,23 @@ export function TransactionListPanel({
             Limpiar filtros ({activeFilterCount})
           </button>
         ) : null}
+      </div>
+
+      <div className="transactions-view-switch">
+        <button
+          type="button"
+          className={viewMode === "SIMPLE" ? "boton-principal" : "boton-secundario"}
+          onClick={() => setViewMode("SIMPLE")}
+        >
+          Vista simple
+        </button>
+        <button
+          type="button"
+          className={viewMode === "AUDIT" ? "boton-principal" : "boton-secundario"}
+          onClick={() => setViewMode("AUDIT")}
+        >
+          Auditoría
+        </button>
       </div>
 
       <div className="transactions-toolbar">
@@ -183,6 +243,26 @@ export function TransactionListPanel({
           </label>
 
           <label>
+            Origen
+            <select
+              className="input-ui"
+              value={filters.origin}
+              onChange={(event) =>
+                onFiltersChange({
+                  origin: event.target.value as TransactionFilters["origin"],
+                })
+              }
+            >
+              <option value={ALL}>Todos</option>
+              {transactionOriginOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label>
             Clasificación
             <select
               className="input-ui"
@@ -268,6 +348,26 @@ export function TransactionListPanel({
               }
             />
           </label>
+
+          <label>
+            Impacto
+            <select
+              className="input-ui"
+              value={filters.impactKind}
+              onChange={(event) =>
+                onFiltersChange({
+                  impactKind: event.target.value as TransactionFilters["impactKind"],
+                })
+              }
+            >
+              <option value={ALL}>Todos</option>
+              <option value="NEUTRAL">No cambia el resultado</option>
+              <option value="OPERATING_INCOME">Ingreso real</option>
+              <option value="CONSUMPTION_EXPENSE">Gasto real</option>
+              <option value="INTERNAL_TRANSFER">Transferencia entre cuentas</option>
+              <option value="IGNORED">Ignorado</option>
+            </select>
+          </label>
         </div>
 
         <div className="transactions-filter-grid">
@@ -305,8 +405,94 @@ export function TransactionListPanel({
             />{" "}
             Solo importados
           </label>
+
+          <label>
+            <input
+              type="checkbox"
+              checked={filters.onlyWithoutCategory}
+              onChange={(event) =>
+                onFiltersChange({ onlyWithoutCategory: event.target.checked })
+              }
+            />{" "}
+            Solo sin categoría
+          </label>
         </div>
       </div>
+
+      {selectedCount > 0 ? (
+        <section className="transactions-bulk-panel">
+          <div>
+            <strong>
+              {selectedCount} seleccionado{selectedCount === 1 ? "" : "s"}
+            </strong>
+            <p className="muted">
+              Aplicá una acción clara a todos los movimientos elegidos.
+            </p>
+          </div>
+
+          <select
+            className="input-ui"
+            value={bulkCategoryId}
+            onChange={(event) => setBulkCategoryId(event.target.value)}
+          >
+            <option value="">Elegir categoría</option>
+            {categories.map((category) => (
+              <option key={category.id} value={category.id}>
+                {category.name}
+              </option>
+            ))}
+          </select>
+
+          <button
+            type="button"
+            className="boton-secundario"
+            disabled={!bulkCategoryId || bulkPending}
+            onClick={() => onBulkCategorize(bulkCategoryId)}
+          >
+            Categorizar
+          </button>
+          <button
+            type="button"
+            className="boton-secundario"
+            disabled={bulkPending}
+            onClick={() => onBulkStatus("CONFIRMED")}
+          >
+            Confirmar
+          </button>
+          <button
+            type="button"
+            className="boton-secundario"
+            disabled={bulkPending}
+            onClick={() => onBulkStatus("PENDING")}
+          >
+            Marcar pendiente
+          </button>
+          <button
+            type="button"
+            className="boton-secundario"
+            disabled={bulkPending}
+            onClick={onBulkIgnore}
+          >
+            Ignorar
+          </button>
+          <button
+            type="button"
+            className="boton-secundario"
+            disabled={bulkPending || selectedCount !== 2}
+            onClick={onBulkLinkTransfer}
+          >
+            Vincular transferencia
+          </button>
+          <button
+            type="button"
+            className="boton-fantasma"
+            disabled={bulkPending}
+            onClick={() => onSelectionChange([])}
+          >
+            Limpiar selección
+          </button>
+        </section>
+      ) : null}
 
       {loading ? (
         <EmptyState
@@ -342,6 +528,10 @@ export function TransactionListPanel({
             transactions={filteredTransactions}
             accountsById={accountsById}
             categoriesById={categoriesById}
+            viewMode={viewMode}
+            selectedTransactionIds={selectedTransactionIds}
+            onToggleSelection={toggleSelection}
+            onToggleVisibleSelection={toggleVisibleSelection}
             updatePending={updatePending}
             deletePending={deletePending}
             updatingTransactionId={updatingTransactionId}
@@ -354,6 +544,9 @@ export function TransactionListPanel({
             transactions={filteredTransactions}
             accountsById={accountsById}
             categoriesById={categoriesById}
+            viewMode={viewMode}
+            selectedTransactionIds={selectedTransactionIds}
+            onToggleSelection={toggleSelection}
             updatePending={updatePending}
             deletePending={deletePending}
             deletingTransactionId={deletingTransactionId}
