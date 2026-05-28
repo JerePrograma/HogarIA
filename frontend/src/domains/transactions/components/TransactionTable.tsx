@@ -15,6 +15,8 @@ import { formatMoney } from "../../../domain/formatters";
 import {
   getCategoryDisplayName,
   getDefaultClassificationStatus,
+  isDuplicateReviewReason,
+  isInternalTransferReviewReason,
   shouldCountTransactionInOperationalBalance,
 } from "../../../domain/transactionRules";
 import type { Account, Category, MoneyTransaction } from "../../../domain/types";
@@ -388,9 +390,18 @@ function ShortValue({ label, value }: { label: string; value?: string | null }) 
 }
 
 function humanImpact(transaction: MoneyTransaction) {
+  if (isDuplicateReviewReason(transaction.classificationReason)) {
+    return "Duplicado en revisión";
+  }
+
+  if (isInternalTransferReviewReason(transaction.classificationReason)) {
+    return "Transferencia en revisión";
+  }
+
   if (
-    transaction.movementType === "TRANSFER" ||
-    transaction.balanceImpact === "INTERNAL_TRANSFER"
+    transaction.balanceImpact === "INTERNAL_TRANSFER" ||
+    transaction.internalTransferGroupId ||
+    transaction.paymentChannel === "INTERNAL_TRANSFER"
   ) {
     return "No afecta el mes";
   }
@@ -403,15 +414,40 @@ function humanImpact(transaction: MoneyTransaction) {
     return "No afecta el mes";
   }
 
-  if (transaction.movementType === "INCOME") return "Ingreso real";
-  if (transaction.movementType === "EXPENSE") return "Gasto real";
-  if (transaction.movementType === "SAVING") return "Ahorro";
+  if (
+    transaction.balanceImpact === "OPERATING_INCOME" ||
+    transaction.balanceImpact === "INTEREST_INCOME" ||
+    (!transaction.balanceImpact && transaction.movementType === "INCOME")
+  ) {
+    return "Ingreso real";
+  }
+
+  if (
+    transaction.balanceImpact === "CONSUMPTION_EXPENSE" ||
+    transaction.balanceImpact === "DEBT_OUTFLOW" ||
+    (!transaction.balanceImpact && transaction.movementType === "EXPENSE")
+  ) {
+    return "Gasto real";
+  }
+
+  if (
+    transaction.balanceImpact === "SAVING_OUTFLOW" ||
+    transaction.balanceImpact === "INVESTMENT_OUTFLOW" ||
+    (!transaction.balanceImpact && transaction.movementType === "SAVING")
+  ) {
+    return "Ahorro";
+  }
 
   return "Revisar";
 }
 
 function badgeTone(label: string): "neutral" | "ok" | "watch" {
-  if (label === "Gasto real" || label === "Revisar" || label === "Sin categoría") {
+  if (
+    label === "Gasto real" ||
+    label === "Revisar" ||
+    label === "Sin categoría" ||
+    label.includes("revisión")
+  ) {
     return "watch";
   }
   if (label === "Ingreso real" || label === "Ahorro") return "ok";

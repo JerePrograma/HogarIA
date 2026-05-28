@@ -1,6 +1,7 @@
 package com.hogaria.service;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.hogaria.entity.Category;
@@ -50,6 +51,19 @@ class CashFlowImpactTest {
         assertFalse(impact.impactsIncome());
         assertFalse(impact.impactsConsumptionExpense());
         assertFalse(impact.impactsOperationalBalance());
+    }
+
+    @Test
+    void explicitInternalTransferBalanceImpactIsNeutralEvenWhenMovementTypeIsWrong() {
+        var tx = tx(MoneyTransaction.MovementType.EXPENSE);
+        tx.setBalanceImpact(MoneyTransaction.BalanceImpact.INTERNAL_TRANSFER);
+
+        var impact = service.analyze(tx, category(Category.Type.VARIABLE_EXPENSE), null);
+
+        assertTrue(impact.internalTransfer());
+        assertFalse(impact.impactsConsumptionExpense());
+        assertFalse(impact.impactsOperationalBalance());
+        assertEquals(MoneyTransaction.BalanceImpact.INTERNAL_TRANSFER, impact.balanceImpact());
     }
 
     @Test

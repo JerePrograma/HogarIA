@@ -19,7 +19,7 @@ export function TransactionMetrics({ totals }: Props) {
       <MetricCard
         title="Gastos confirmados"
         value={formatMoney(totals.expenses)}
-        helper="Egresos operativos confirmados para el mes."
+        helper="Egresos operativos confirmados, sin internos ni duplicados."
         tone="danger"
       />
 
@@ -33,7 +33,7 @@ export function TransactionMetrics({ totals }: Props) {
       <MetricCard
         title="Balance operativo"
         value={formatMoney(totals.operationalBalance)}
-        helper="Ingresos menos gastos y ahorro, sólo con movimientos confirmados."
+        helper="Ingresos menos egresos operativos confirmados."
         tone={totals.operationalBalance >= 0 ? "success" : "danger"}
       />
     </section>

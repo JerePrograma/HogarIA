@@ -1,6 +1,7 @@
 // src/domain/transactionRules.ts
 
 import type {
+  BalanceImpact,
   Category,
   CategoryType,
   MoneyTransaction,
@@ -125,15 +126,101 @@ export function isTransactionWithoutCategory(
   );
 }
 
-export function shouldCountTransactionInOperationalBalance(
+const OPERATIONAL_BALANCE_IMPACTS = new Set<BalanceImpact>([
+  "OPERATING_INCOME",
+  "INTEREST_INCOME",
+  "CONSUMPTION_EXPENSE",
+  "SAVING_OUTFLOW",
+  "INVESTMENT_OUTFLOW",
+  "DEBT_OUTFLOW",
+]);
+
+const NON_OPERATIONAL_BALANCE_IMPACTS = new Set<BalanceImpact>([
+  "RECOVERABLE_OUTFLOW",
+  "PRINCIPAL_RECOVERY",
+  "REFUND_OR_REIMBURSEMENT",
+  "INTERNAL_TRANSFER",
+  "EXTERNAL_TRANSFER",
+  "NEUTRAL_ADJUSTMENT",
+  "IGNORED",
+  "TECHNICAL",
+  "UNKNOWN",
+]);
+
+const INTERNAL_TRANSFER_REVIEW_REASONS = [
+  "POSSIBLE_INTERNAL_TRANSFER",
+  "INTERNAL_TRANSFER_MATCHED",
+  "TRANSFER_UNMATCHED",
+  "USER_MARKED_INTERNAL_TRANSFER",
+];
+
+const DUPLICATE_REVIEW_REASONS = [
+  "POSSIBLE_CROSS_SOURCE_DUPLICATE",
+  "USER_IGNORED_CROSS_SOURCE",
+  "DUPLICATE_RESOLVED_KEEP",
+  "EXACT_DUPLICATE",
+  "SOURCE_DUPLICATE",
+];
+
+type OperationalBalanceTransaction = Pick<
+  MoneyTransaction,
+  "status" | "movementType" | "classificationStatus"
+> &
+  Partial<
+    Pick<
+      MoneyTransaction,
+      | "balanceImpact"
+      | "paymentChannel"
+      | "internalTransferGroupId"
+      | "classificationReason"
+    >
+  >;
+
+export function isInternalTransferReviewReason(reason?: string | null) {
+  return includesAnyReason(reason, INTERNAL_TRANSFER_REVIEW_REASONS);
+}
+
+export function isDuplicateReviewReason(reason?: string | null) {
+  return includesAnyReason(reason, DUPLICATE_REVIEW_REASONS);
+}
+
+export function isTransactionInReviewForOperationalBalance(
   transaction: Pick<
     MoneyTransaction,
-    "status" | "movementType" | "classificationStatus"
+    "classificationStatus" | "classificationReason" | "balanceImpact"
   >,
+) {
+  return (
+    transaction.classificationStatus === "REVIEW" ||
+    isInternalTransferReviewReason(transaction.classificationReason) ||
+    isDuplicateReviewReason(transaction.classificationReason)
+  );
+}
+
+export function shouldCountTransactionInOperationalBalance(
+  transaction: OperationalBalanceTransaction,
 ) {
   if (transaction.status === "IGNORED") return false;
   if (transaction.classificationStatus === "TECHNICAL") return false;
   if (transaction.classificationStatus === "IGNORED_BY_RULE") return false;
+  if (transaction.internalTransferGroupId) return false;
+  if (transaction.paymentChannel === "INTERNAL_TRANSFER") return false;
+  if (isInternalTransferReviewReason(transaction.classificationReason)) {
+    return false;
+  }
+  if (isDuplicateReviewReason(transaction.classificationReason)) {
+    return false;
+  }
+
+  if (transaction.balanceImpact) {
+    if (NON_OPERATIONAL_BALANCE_IMPACTS.has(transaction.balanceImpact)) {
+      return false;
+    }
+
+    return OPERATIONAL_BALANCE_IMPACTS.has(transaction.balanceImpact);
+  }
+
+  if (transaction.classificationStatus === "REVIEW") return false;
   if (transaction.movementType === "TRANSFER") return false;
   if (transaction.movementType === "ADJUSTMENT") return false;
 
@@ -143,18 +230,48 @@ export function shouldCountTransactionInOperationalBalance(
 export function getSignedOperationalAmount(
   transaction: Pick<
     MoneyTransaction,
-    "amount" | "status" | "movementType" | "classificationStatus"
+    | "amount"
+    | "status"
+    | "movementType"
+    | "classificationStatus"
+    | "balanceImpact"
+    | "paymentChannel"
+    | "internalTransferGroupId"
+    | "classificationReason"
   >,
 ) {
   if (!shouldCountTransactionInOperationalBalance(transaction)) return 0;
 
   const amount = Number(transaction.amount ?? 0);
 
+  if (
+    transaction.balanceImpact === "OPERATING_INCOME" ||
+    transaction.balanceImpact === "INTEREST_INCOME"
+  ) {
+    return amount;
+  }
+
+  if (
+    transaction.balanceImpact === "CONSUMPTION_EXPENSE" ||
+    transaction.balanceImpact === "SAVING_OUTFLOW" ||
+    transaction.balanceImpact === "INVESTMENT_OUTFLOW" ||
+    transaction.balanceImpact === "DEBT_OUTFLOW"
+  ) {
+    return -amount;
+  }
+
   if (transaction.movementType === "INCOME") return amount;
   if (transaction.movementType === "EXPENSE") return -amount;
   if (transaction.movementType === "SAVING") return -amount;
 
   return 0;
+}
+
+function includesAnyReason(reason: string | null | undefined, needles: string[]) {
+  if (!reason) return false;
+
+  const normalized = reason.toUpperCase();
+  return needles.some((needle) => normalized.includes(needle));
 }
 
 export function getDefaultClassificationStatus(

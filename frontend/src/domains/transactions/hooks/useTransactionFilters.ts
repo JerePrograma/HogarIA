@@ -13,6 +13,8 @@ import { sortTransactionsForLedger } from "../../../domain/sorting";
 import {
   getDefaultClassificationStatus,
   getSignedOperationalAmount,
+  isDuplicateReviewReason,
+  isInternalTransferReviewReason,
   shouldCountTransactionInOperationalBalance,
 } from "../../../domain/transactionRules";
 import { normalizeSearch } from "../utils/transactionUtils";
@@ -118,17 +120,15 @@ export function useTransactionFilters(
           (transaction.duplicateFingerprint
             ? (duplicateFingerprintCount.get(transaction.duplicateFingerprint) ?? 0) > 1
             : false) ||
-          normalizeSearch(transaction.classificationReason).includes(
-            "duplicate",
-          );
+          isDuplicateReviewReason(transaction.classificationReason);
 
         const matchesOnlyInternalTransfers =
           !filters.onlyInternalTransfers ||
           transaction.movementType === "TRANSFER" ||
           Boolean(transaction.internalTransferGroupId) ||
-          normalizeSearch(transaction.classificationReason).includes(
-            "internal_transfer",
-          );
+          transaction.balanceImpact === "INTERNAL_TRANSFER" ||
+          transaction.paymentChannel === "INTERNAL_TRANSFER" ||
+          isInternalTransferReviewReason(transaction.classificationReason);
 
         const matchesOnlyImported =
           !filters.onlyImported || transaction.origin === "IMPORT";

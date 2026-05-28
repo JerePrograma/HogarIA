@@ -48,6 +48,7 @@ public class DashboardDtos {
       BigDecimal confirmedIncome,
       BigDecimal confirmedExpenses,
       BigDecimal confirmedSavings,
+      BigDecimal operationalOutflows,
       BigDecimal operationalBalance,
       long confirmedCount,
       long pendingCount,
@@ -62,7 +63,12 @@ public class DashboardDtos {
       BigDecimal transfersAmount,
       BigDecimal adjustmentsAmount,
       BigDecimal technicalAmount,
-      BigDecimal nonOperationalAmount) {}
+      BigDecimal nonOperationalAmount,
+      long excludedInternalTransferCount,
+      BigDecimal excludedInternalTransferAmount,
+      long excludedDuplicateCount,
+      BigDecimal excludedDuplicateAmount,
+      BigDecimal reviewAmount) {}
 
   public record CategoryDeviationResponse(
       UUID categoryId,

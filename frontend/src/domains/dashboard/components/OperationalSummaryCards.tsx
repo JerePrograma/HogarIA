@@ -51,7 +51,7 @@ export function OperationalSummaryCards({ summary, realSummary }: Props) {
         <MetricCard
           title="Gastos"
           value={formatMoney(expenses)}
-          helper="Egresos operativos confirmados."
+          helper={`Egresos operativos confirmados. Excluidos: ${formatMoney((realSummary?.excludedInternalTransferAmount ?? 0) + (realSummary?.excludedDuplicateAmount ?? 0))}.`}
           tone="danger"
         />
 

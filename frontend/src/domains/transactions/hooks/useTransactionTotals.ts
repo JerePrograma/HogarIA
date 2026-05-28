@@ -6,6 +6,7 @@ export interface TransactionTotals {
   income: number;
   expenses: number;
   saving: number;
+  operationalOutflows: number;
   operationalBalance: number;
 
   ignored: number;
@@ -13,6 +14,9 @@ export interface TransactionTotals {
   adjustments: number;
   technical: number;
   nonOperational: number;
+  excludedInternalTransfers: number;
+  excludedDuplicates: number;
+  reviewAmount: number;
 
   confirmedCount: number;
   pendingCount: number;
@@ -33,6 +37,7 @@ function calculateTransactionTotals(
     income: summary.confirmedIncome,
     expenses: summary.confirmedExpenses,
     saving: summary.confirmedSavings,
+    operationalOutflows: summary.operationalOutflows,
     operationalBalance: summary.operationalBalance,
 
     ignored: summary.ignoredAmount,
@@ -40,6 +45,9 @@ function calculateTransactionTotals(
     adjustments: summary.adjustmentsAmount,
     technical: summary.technicalAmount,
     nonOperational: summary.nonOperationalAmount,
+    excludedInternalTransfers: summary.excludedInternalTransferAmount,
+    excludedDuplicates: summary.excludedDuplicateAmount,
+    reviewAmount: summary.reviewAmount,
 
     confirmedCount: summary.confirmedCount,
     pendingCount: summary.pendingCount,

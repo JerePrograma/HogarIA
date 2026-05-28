@@ -7,6 +7,9 @@ import type {
 } from "./types";
 import {
   getDefaultClassificationStatus,
+  getSignedOperationalAmount,
+  isDuplicateReviewReason,
+  isInternalTransferReviewReason,
   shouldCountTransactionInOperationalBalance,
 } from "./transactionRules";
 import { sortOperationalAlerts } from "./sorting";
@@ -21,6 +24,7 @@ export interface RealConfirmedSummary {
   confirmedIncome: number;
   confirmedExpenses: number;
   confirmedSavings: number;
+  operationalOutflows: number;
   operationalBalance: number;
   confirmedCount: number;
   pendingCount: number;
@@ -36,6 +40,11 @@ export interface RealConfirmedSummary {
   adjustmentsAmount: number;
   technicalAmount: number;
   nonOperationalAmount: number;
+  excludedInternalTransferCount: number;
+  excludedInternalTransferAmount: number;
+  excludedDuplicateCount: number;
+  excludedDuplicateAmount: number;
+  reviewAmount: number;
 }
 
 export interface PlanExecutionCategorySummary {
@@ -82,6 +91,7 @@ const emptyRealConfirmedSummary: RealConfirmedSummary = {
   confirmedIncome: 0,
   confirmedExpenses: 0,
   confirmedSavings: 0,
+  operationalOutflows: 0,
   operationalBalance: 0,
   confirmedCount: 0,
   pendingCount: 0,
@@ -97,6 +107,11 @@ const emptyRealConfirmedSummary: RealConfirmedSummary = {
   adjustmentsAmount: 0,
   technicalAmount: 0,
   nonOperationalAmount: 0,
+  excludedInternalTransferCount: 0,
+  excludedInternalTransferAmount: 0,
+  excludedDuplicateCount: 0,
+  excludedDuplicateAmount: 0,
+  reviewAmount: 0,
 };
 
 export function buildRealConfirmedSummary(
@@ -128,6 +143,26 @@ export function buildRealConfirmedSummary(
         acc.reviewCount += 1;
       }
 
+      const isInternalTransferExcluded =
+        transaction.internalTransferGroupId ||
+        transaction.paymentChannel === "INTERNAL_TRANSFER" ||
+        transaction.balanceImpact === "INTERNAL_TRANSFER" ||
+        isInternalTransferReviewReason(transaction.classificationReason);
+
+      const isDuplicateExcluded = isDuplicateReviewReason(
+        transaction.classificationReason,
+      );
+
+      if (isInternalTransferExcluded && transaction.status !== "PENDING") {
+        acc.excludedInternalTransferCount += 1;
+        acc.excludedInternalTransferAmount += amount;
+      }
+
+      if (isDuplicateExcluded && transaction.status !== "PENDING") {
+        acc.excludedDuplicateCount += 1;
+        acc.excludedDuplicateAmount += amount;
+      }
+
       if (classificationStatus === "TECHNICAL") {
         acc.technicalCount += 1;
         if (transaction.status === "CONFIRMED") acc.technicalAmount += amount;
@@ -150,23 +185,44 @@ export function buildRealConfirmedSummary(
       if (!shouldCountTransactionInOperationalBalance(transaction)) {
         acc.nonOperationalCount += 1;
         acc.nonOperationalAmount += amount;
+        if (
+          classificationStatus === "REVIEW" &&
+          !isInternalTransferExcluded &&
+          !isDuplicateExcluded
+        ) {
+          acc.reviewAmount += amount;
+        }
         return acc;
       }
 
-      if (transaction.movementType === "INCOME") {
+      const signedAmount = getSignedOperationalAmount(transaction);
+      acc.operationalBalance += signedAmount;
+
+      if (
+        transaction.balanceImpact === "OPERATING_INCOME" ||
+        transaction.balanceImpact === "INTEREST_INCOME" ||
+        (!transaction.balanceImpact && transaction.movementType === "INCOME")
+      ) {
         acc.confirmedIncome += amount;
-        acc.operationalBalance += amount;
       }
 
-      if (transaction.movementType === "EXPENSE") {
+      if (
+        transaction.balanceImpact === "CONSUMPTION_EXPENSE" ||
+        transaction.balanceImpact === "DEBT_OUTFLOW" ||
+        (!transaction.balanceImpact && transaction.movementType === "EXPENSE")
+      ) {
         acc.confirmedExpenses += amount;
-        acc.operationalBalance -= amount;
       }
 
-      if (transaction.movementType === "SAVING") {
+      if (
+        transaction.balanceImpact === "SAVING_OUTFLOW" ||
+        transaction.balanceImpact === "INVESTMENT_OUTFLOW" ||
+        (!transaction.balanceImpact && transaction.movementType === "SAVING")
+      ) {
         acc.confirmedSavings += amount;
-        acc.operationalBalance -= amount;
       }
+
+      acc.operationalOutflows = acc.confirmedExpenses + acc.confirmedSavings;
 
       return acc;
     },
@@ -503,6 +559,10 @@ function shouldUseTransactionForExecutionComparison(
   if (transaction.status !== "CONFIRMED") return false;
   if (!shouldCountTransactionInOperationalBalance(transaction)) return false;
 
+  if (transaction.balanceImpact) {
+    return isOutflowBalanceImpact(transaction.balanceImpact);
+  }
+
   return isOutflowMovementType(transaction.movementType);
 }
 
@@ -514,4 +574,15 @@ function isOutflowMovementType(
   movementType: MoneyTransaction["movementType"],
 ): boolean {
   return movementType === "EXPENSE" || movementType === "SAVING";
+}
+
+function isOutflowBalanceImpact(
+  balanceImpact: NonNullable<MoneyTransaction["balanceImpact"]>,
+): boolean {
+  return (
+    balanceImpact === "CONSUMPTION_EXPENSE" ||
+    balanceImpact === "SAVING_OUTFLOW" ||
+    balanceImpact === "INVESTMENT_OUTFLOW" ||
+    balanceImpact === "DEBT_OUTFLOW"
+  );
 }

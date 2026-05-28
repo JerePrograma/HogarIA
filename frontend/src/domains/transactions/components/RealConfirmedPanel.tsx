@@ -99,6 +99,27 @@ export function RealConfirmedPanel({ totals }: Props) {
           helper={`Lectura secundaria: ${formatMoney(totals.nonOperational)} no operativo.`}
           tone={technicalReading > 0 ? "info" : "neutral"}
         />
+
+        <MetricCard
+          title="Transferencias internas excluidas"
+          value={formatMoney(totals.excludedInternalTransfers)}
+          helper="No suman como gasto ni ingreso real."
+          tone={totals.excludedInternalTransfers > 0 ? "info" : "neutral"}
+        />
+
+        <MetricCard
+          title="Duplicados excluidos"
+          value={formatMoney(totals.excludedDuplicates)}
+          helper="Cross-source o exactos, fuera del balance operativo."
+          tone={totals.excludedDuplicates > 0 ? "warning" : "neutral"}
+        />
+
+        <MetricCard
+          title="Monto en revisión"
+          value={formatMoney(totals.reviewAmount)}
+          helper="Pendiente de decisión antes de sumarlo como real definitivo."
+          tone={totals.reviewAmount > 0 ? "warning" : "neutral"}
+        />
       </div>
     </section>
   );

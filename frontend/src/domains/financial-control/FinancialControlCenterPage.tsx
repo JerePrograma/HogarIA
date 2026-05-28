@@ -21,6 +21,7 @@ import type {
   DuplicateGroup,
   InternalTransferCandidate,
   MoneyTransaction,
+  TransactionReviewItem,
 } from "../../domain/types";
 import {
   getDefaultClassificationStatus,
@@ -42,6 +43,19 @@ type QueueCard = {
   filterHint: string;
   actionLabel: string;
   actionTo: string;
+};
+
+type ProvinciaMercadoPagoReviewItem = {
+  key: string;
+  kind: "INTERNAL_TRANSFER" | "CROSS_SOURCE_DUPLICATE";
+  amount: number;
+  currency: string;
+  date: string;
+  banco: TransactionReviewItem;
+  mercadoPago: TransactionReviewItem;
+  recommendation: string;
+  candidate?: InternalTransferCandidate;
+  duplicateGroup?: DuplicateGroup;
 };
 
 export function FinancialControlCenterPage() {
@@ -198,6 +212,72 @@ export function FinancialControlCenterPage() {
                 <QualityCard key={card.title} card={card} />
               ))}
             </section>
+
+            <ReviewPanel
+              title="Movimientos entre Provincia y Mercado Pago por revisar"
+              emptyTitle="Sin pares Banco Provincia / Mercado Pago"
+              emptyMessage="No hay fondeos, transferencias o duplicados cross-source pendientes entre esas fuentes."
+            >
+              {quality.provinciaMercadoPagoReview.slice(0, 8).map((item) => (
+                <div className="surface-inset" key={item.key}>
+                  <div className="section-title">
+                    <div>
+                      <p className="label-ui">
+                        {item.kind === "INTERNAL_TRANSFER"
+                          ? "Posible transferencia interna"
+                          : "Posible duplicado cross-source"}
+                      </p>
+                      <strong>{formatMoney(item.amount, item.currency)}</strong>
+                      <p className="compact-muted">{item.date}</p>
+                    </div>
+                  </div>
+
+                  <div className="transactions-filter-grid">
+                    <SourceLeg
+                      label="Banco Provincia"
+                      transaction={item.banco}
+                    />
+                    <SourceLeg
+                      label="Mercado Pago"
+                      transaction={item.mercadoPago}
+                    />
+                  </div>
+
+                  <p className="compact-muted mt-3">{item.recommendation}</p>
+
+                  <div className="row-actions mt-3">
+                    {item.candidate ? (
+                      <button
+                        type="button"
+                        className="boton-principal"
+                        disabled={linkTransferMutation.isPending}
+                        onClick={() => linkTransferMutation.mutate(item.candidate!)}
+                      >
+                        Vincular como transferencia interna
+                      </button>
+                    ) : null}
+
+                    {item.duplicateGroup ? (
+                      <button
+                        type="button"
+                        className="boton-danger"
+                        disabled={resolveDuplicateMutation.isPending}
+                        onClick={() => resolveDuplicateMutation.mutate(item.duplicateGroup!)}
+                      >
+                        Marcar como duplicado
+                      </button>
+                    ) : null}
+
+                    <Link
+                      className="boton-secundario"
+                      to={routePaths.transactions(profileId)}
+                    >
+                      Mantener ambos como reales
+                    </Link>
+                  </div>
+                </div>
+              ))}
+            </ReviewPanel>
 
             <section className="two-column-layout">
               <ReviewPanel
@@ -366,6 +446,23 @@ function ImpactLine({ label, value }: { label: string; value: number }) {
   );
 }
 
+function SourceLeg({
+  label,
+  transaction,
+}: {
+  label: string;
+  transaction: TransactionReviewItem;
+}) {
+  return (
+    <div className="surface-inset">
+      <p className="label-ui">{label}</p>
+      <strong>{formatMoney(transaction.amount, transaction.currency)}</strong>
+      <p className="compact-muted">{transaction.realDate}</p>
+      <p>{transaction.description || transaction.normalizedDescription || "Sin descripción"}</p>
+    </div>
+  );
+}
+
 function buildQuality(
   profileId: string,
   transactions: MoneyTransaction[],
@@ -400,6 +497,10 @@ function buildQuality(
   const imported = transactions.filter((tx) => tx.origin === "IMPORT");
   const internalTransfers = transactions.filter(
     (tx) => tx.movementType === "TRANSFER" || Boolean(tx.internalTransferGroupId),
+  );
+  const provinciaMercadoPagoReview = buildProvinciaMercadoPagoReview(
+    duplicateGroups,
+    internalCandidates,
   );
   const catalogIssues = [
     ...findDuplicateKeys(accounts, (account) => account.accountKey ?? normalizeKey(account.name)),
@@ -475,6 +576,14 @@ function buildQuality(
       actionTo: `/profiles/${profileId}/categories#limpiar`,
     },
     {
+      title: "Provincia ↔ Mercado Pago",
+      count: provinciaMercadoPagoReview.length,
+      tone: provinciaMercadoPagoReview.length > 0 ? "watch" : "ok",
+      filterHint: "No inflar realidad",
+      actionLabel: "Revisar cola",
+      actionTo: transactionsPath,
+    },
+    {
       title: "Impactan balance",
       count: impacting.length,
       tone: "ok",
@@ -501,7 +610,87 @@ function buildQuality(
     impacting,
     neutral,
     catalogIssues,
+    provinciaMercadoPagoReview,
   };
+}
+
+function buildProvinciaMercadoPagoReview(
+  duplicateGroups: DuplicateGroup[],
+  internalCandidates: InternalTransferCandidate[],
+): ProvinciaMercadoPagoReviewItem[] {
+  const items: ProvinciaMercadoPagoReviewItem[] = [];
+  const seen = new Set<string>();
+
+  for (const candidate of internalCandidates) {
+    const pair = provinciaMercadoPagoPair([
+      candidate.debitLeg,
+      candidate.creditLeg,
+    ]);
+
+    if (!pair) continue;
+
+    const key = `transfer:${pair.banco.id}:${pair.mercadoPago.id}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    items.push({
+      key,
+      kind: "INTERNAL_TRANSFER",
+      amount: Number(candidate.debitLeg.amount ?? candidate.creditLeg.amount ?? 0),
+      currency: candidate.debitLeg.currency ?? candidate.creditLeg.currency ?? "ARS",
+      date: `${candidate.debitLeg.realDate} / ${candidate.creditLeg.realDate}`,
+      banco: pair.banco,
+      mercadoPago: pair.mercadoPago,
+      recommendation:
+        "Recomendación: a) vincular como transferencia interna si son dos patas reales entre cuentas propias; b) marcar como duplicado cross-source si representan el mismo pago; c) mantener ambos como reales solo si fueron hechos económicos distintos.",
+      candidate,
+    });
+  }
+
+  for (const group of duplicateGroups) {
+    if (group.groupType !== "POSSIBLE_CROSS_SOURCE_DUPLICATE") continue;
+
+    const pair = provinciaMercadoPagoPair(group.transactions);
+    if (!pair) continue;
+
+    const key = `duplicate:${group.key}:${pair.banco.id}:${pair.mercadoPago.id}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    items.push({
+      key,
+      kind: "CROSS_SOURCE_DUPLICATE",
+      amount: Number(group.amount ?? pair.banco.amount ?? pair.mercadoPago.amount ?? 0),
+      currency: group.currency ?? pair.banco.currency ?? pair.mercadoPago.currency ?? "ARS",
+      date: `${pair.banco.realDate} / ${pair.mercadoPago.realDate}`,
+      banco: pair.banco,
+      mercadoPago: pair.mercadoPago,
+      recommendation:
+        "Recomendación: b) marcar como duplicado cross-source si ambos registros son el mismo pago; a) vincular como transferencia interna si son salida y entrada entre cuentas propias; c) mantener ambos como reales solo si corresponden a pagos distintos.",
+      duplicateGroup: group,
+    });
+  }
+
+  return items;
+}
+
+function provinciaMercadoPagoPair(transactions: TransactionReviewItem[]) {
+  const banco = transactions.find((tx) => isBancoProvincia(tx.source));
+  const mercadoPago = transactions.find((tx) => isMercadoPago(tx.source));
+
+  if (!banco || !mercadoPago) {
+    return null;
+  }
+
+  return { banco, mercadoPago };
+}
+
+function isBancoProvincia(source?: string | null) {
+  return normalizeKey(source ?? "") === "bancoprovincia";
+}
+
+function isMercadoPago(source?: string | null) {
+  return normalizeKey(source ?? "") === "mercadopago";
 }
 
 function normalizeKey(value: string) {

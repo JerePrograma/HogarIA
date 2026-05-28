@@ -149,6 +149,22 @@ export function MonthlyPlanningChecklist({
           value={formatMoney(realVsPlanned?.realUnplannedAmount ?? 0)}
           tone={(realVsPlanned?.realUnplannedAmount ?? 0) > 0 ? 'warning' : 'neutral'}
         />
+
+        <CashItem
+          label="Excluidos/revisión"
+          value={formatMoney(
+            (realSummary?.excludedInternalTransferAmount ?? 0)
+              + (realSummary?.excludedDuplicateAmount ?? 0)
+              + (realSummary?.reviewAmount ?? 0),
+          )}
+          tone={
+            ((realSummary?.excludedInternalTransferAmount ?? 0)
+              + (realSummary?.excludedDuplicateAmount ?? 0)
+              + (realSummary?.reviewAmount ?? 0)) > 0
+              ? 'info'
+              : 'neutral'
+          }
+        />
       </div>
 
       <div className="mpc-action-list">

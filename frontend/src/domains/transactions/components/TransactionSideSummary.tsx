@@ -39,6 +39,16 @@ export function TransactionSideSummary({
         </div>
 
         <div>
+          <span>Internas excluidas</span>
+          <strong>{formatMoney(totals.excludedInternalTransfers)}</strong>
+        </div>
+
+        <div>
+          <span>Duplicados excluidos</span>
+          <strong>{formatMoney(totals.excludedDuplicates)}</strong>
+        </div>
+
+        <div>
           <span>Técnicos confirmados</span>
           <strong>{formatMoney(totals.technical)}</strong>
         </div>
@@ -46,7 +56,7 @@ export function TransactionSideSummary({
 
       <p className="muted">
         El resultado filtrado usa sólo movimientos confirmados y excluye
-        técnicos, transferencias, ajustes e ignorados.
+        técnicos, transferencias internas, duplicados, ajustes e ignorados.
       </p>
     </aside>
   );

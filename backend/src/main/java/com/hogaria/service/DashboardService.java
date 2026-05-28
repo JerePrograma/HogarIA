@@ -34,6 +34,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -128,8 +129,8 @@ public class DashboardService {
                 ? "EXCELLENT"
                 : (savings.signum() > 0 ? "HEALTHY" : "WARNING"));
 
-    var breakdown = buildBreakdown(txs, categories, income);
-    var budgetSummary = buildBudgetSummary(profileId, year, month, txs);
+    var breakdown = buildBreakdown(txs, categories, mappingByTx, income);
+    var budgetSummary = buildBudgetSummary(profileId, year, month, txs, categories, mappingByTx);
     var operational = buildOperational(cashFlowSummary, planning, txs.isEmpty());
     var alerts = buildDashboardAlerts(realConfirmedSummary, realVsPlanned, closingProjection, operational);
 
@@ -152,9 +153,16 @@ public class DashboardService {
   }
 
   private List<CategorySummaryResponse> buildBreakdown(
-      List<MoneyTransaction> txs, Map<UUID, Category> categories, BigDecimal income) {
+      List<MoneyTransaction> txs,
+      Map<UUID, Category> categories,
+      Map<UUID, String> externalEventTypeByTx,
+      BigDecimal income) {
     Map<UUID, List<MoneyTransaction>> byCategory = new LinkedHashMap<>();
     for (var tx : txs) {
+      var impact = impactService.analyze(tx, categories.get(tx.getCategoryId()), externalEventTypeByTx.get(tx.getId()));
+      if (impact.balanceImpact() != MoneyTransaction.BalanceImpact.CONSUMPTION_EXPENSE) {
+        continue;
+      }
       byCategory.computeIfAbsent(tx.getCategoryId(), ignored -> new ArrayList<>()).add(tx);
     }
 
@@ -175,7 +183,12 @@ public class DashboardService {
   }
 
   private BudgetSummaryResponse buildBudgetSummary(
-      UUID profileId, int year, int month, List<MoneyTransaction> txs) {
+      UUID profileId,
+      int year,
+      int month,
+      List<MoneyTransaction> txs,
+      Map<UUID, Category> categories,
+      Map<UUID, String> externalEventTypeByTx) {
     var budgetYear = budgetYearRepository.findByProfileIdAndYear(profileId, year);
     if (budgetYear.isEmpty()) {
       return null;
@@ -189,10 +202,17 @@ public class DashboardService {
     var itemMap =
         budgetCategoryItemRepository.findByBudgetMonthId(budgetMonth.get().getId()).stream()
             .collect(Collectors.toMap(BudgetCategoryItem::getCategoryId, BudgetCategoryItem::getBudgetAmount));
-    BigDecimal totalBudget = itemMap.values().stream().reduce(BigDecimal.ZERO, BigDecimal::add);
-    BigDecimal totalReal =
+    var comparableTxs =
         txs.stream()
             .filter(t -> itemMap.containsKey(t.getCategoryId()))
+            .filter(t -> {
+              var impact = impactService.analyze(t, categories.get(t.getCategoryId()), externalEventTypeByTx.get(t.getId()));
+              return impact.impactsOperationalBalance() && isOutflowImpact(impact.balanceImpact());
+            })
+            .toList();
+    BigDecimal totalBudget = itemMap.values().stream().reduce(BigDecimal.ZERO, BigDecimal::add);
+    BigDecimal totalReal =
+        comparableTxs.stream()
             .map(MoneyTransaction::getAmount)
             .reduce(BigDecimal.ZERO, BigDecimal::add);
     long exceeded =
@@ -200,7 +220,7 @@ public class DashboardService {
             .filter(
                 entry -> {
                   var real =
-                      txs.stream()
+                      comparableTxs.stream()
                           .filter(t -> t.getCategoryId() != null && t.getCategoryId().equals(entry.getKey()))
                           .map(MoneyTransaction::getAmount)
                           .reduce(BigDecimal.ZERO, BigDecimal::add);
@@ -222,7 +242,7 @@ public class DashboardService {
                     return false;
                   }
                   var real =
-                      txs.stream()
+                      comparableTxs.stream()
                           .filter(t -> t.getCategoryId() != null && t.getCategoryId().equals(entry.getKey()))
                           .map(MoneyTransaction::getAmount)
                           .reduce(BigDecimal.ZERO, BigDecimal::add);
@@ -332,12 +352,16 @@ public class DashboardService {
     BigDecimal confirmedIncome = BigDecimal.ZERO;
     BigDecimal confirmedExpenses = BigDecimal.ZERO;
     BigDecimal confirmedSavings = BigDecimal.ZERO;
+    BigDecimal operationalOutflows = BigDecimal.ZERO;
     BigDecimal operationalBalance = BigDecimal.ZERO;
     BigDecimal ignoredAmount = BigDecimal.ZERO;
     BigDecimal transfersAmount = BigDecimal.ZERO;
     BigDecimal adjustmentsAmount = BigDecimal.ZERO;
     BigDecimal technicalAmount = BigDecimal.ZERO;
     BigDecimal nonOperationalAmount = BigDecimal.ZERO;
+    BigDecimal excludedInternalTransferAmount = BigDecimal.ZERO;
+    BigDecimal excludedDuplicateAmount = BigDecimal.ZERO;
+    BigDecimal reviewAmount = BigDecimal.ZERO;
     long confirmedCount = 0;
     long pendingCount = 0;
     long ignoredCount = 0;
@@ -347,10 +371,15 @@ public class DashboardService {
     long transferCount = 0;
     long adjustmentCount = 0;
     long nonOperationalCount = 0;
+    long excludedInternalTransferCount = 0;
+    long excludedDuplicateCount = 0;
 
     for (var tx : transactions) {
       var amount = tx.getAmount() == null ? BigDecimal.ZERO : tx.getAmount();
       var classification = classificationStatus(tx);
+      var impact = impactService.analyze(tx, categories.get(tx.getCategoryId()), externalEventTypeByTx.get(tx.getId()));
+      boolean internalTransferExcluded = isInternalTransferExcluded(tx, impact);
+      boolean duplicateExcluded = isDuplicateExcluded(tx);
 
       if (tx.getStatus() == MoneyTransaction.Status.CONFIRMED) confirmedCount++;
       if (tx.getStatus() == MoneyTransaction.Status.PENDING) pendingCount++;
@@ -375,31 +404,48 @@ public class DashboardService {
         if (tx.getStatus() == MoneyTransaction.Status.CONFIRMED) adjustmentsAmount = adjustmentsAmount.add(amount);
       }
 
+      if (tx.getStatus() != MoneyTransaction.Status.PENDING && internalTransferExcluded) {
+        excludedInternalTransferCount++;
+        excludedInternalTransferAmount = excludedInternalTransferAmount.add(amount);
+      }
+
+      if (tx.getStatus() != MoneyTransaction.Status.PENDING && duplicateExcluded) {
+        excludedDuplicateCount++;
+        excludedDuplicateAmount = excludedDuplicateAmount.add(amount);
+      }
+
       if (tx.getStatus() != MoneyTransaction.Status.CONFIRMED) continue;
 
-      var impact = impactService.analyze(tx, categories.get(tx.getCategoryId()), externalEventTypeByTx.get(tx.getId()));
       if (!impact.impactsOperationalBalance()) {
         nonOperationalCount++;
         nonOperationalAmount = nonOperationalAmount.add(amount);
+        if (classification == MoneyTransaction.ClassificationStatus.REVIEW
+            && !internalTransferExcluded
+            && !duplicateExcluded) {
+          reviewAmount = reviewAmount.add(amount);
+        }
         continue;
       }
 
-      if (tx.getMovementType() == MoneyTransaction.MovementType.INCOME) {
+      if (isIncomeImpact(impact.balanceImpact())) {
         confirmedIncome = confirmedIncome.add(amount);
         operationalBalance = operationalBalance.add(amount);
-      } else if (tx.getMovementType() == MoneyTransaction.MovementType.EXPENSE) {
+      } else if (isExpenseImpact(impact.balanceImpact())) {
         confirmedExpenses = confirmedExpenses.add(amount);
         operationalBalance = operationalBalance.subtract(amount);
-      } else if (tx.getMovementType() == MoneyTransaction.MovementType.SAVING) {
+      } else if (isSavingImpact(impact.balanceImpact())) {
         confirmedSavings = confirmedSavings.add(amount);
         operationalBalance = operationalBalance.subtract(amount);
       }
+
+      operationalOutflows = confirmedExpenses.add(confirmedSavings);
     }
 
     return new RealConfirmedSummaryResponse(
         confirmedIncome,
         confirmedExpenses,
         confirmedSavings,
+        operationalOutflows,
         operationalBalance,
         confirmedCount,
         pendingCount,
@@ -414,7 +460,12 @@ public class DashboardService {
         transfersAmount,
         adjustmentsAmount,
         technicalAmount,
-        nonOperationalAmount);
+        nonOperationalAmount,
+        excludedInternalTransferCount,
+        excludedInternalTransferAmount,
+        excludedDuplicateCount,
+        excludedDuplicateAmount,
+        reviewAmount);
   }
 
   private RealVsPlannedResponse buildRealVsPlanned(
@@ -436,7 +487,7 @@ public class DashboardService {
             MonthlyPlanItem.Status.DUE);
 
     for (var item : planItems) {
-      if (!usesPlanItemForFinancialProjection(item)) continue;
+      if (!usesPlanItemForExecutionComparison(item)) continue;
 
       var row = accumulatorFor(byCategory, item.getCategoryId(), categories);
       var amount = plannedComparableAmount(item);
@@ -449,8 +500,11 @@ public class DashboardService {
     }
 
     for (var tx : allTransactions) {
+      if (tx.getStatus() != MoneyTransaction.Status.CONFIRMED) continue;
+
       var impact = impactService.analyze(tx, categories.get(tx.getCategoryId()), externalEventTypeByTx.get(tx.getId()));
       if (!impact.impactsOperationalBalance()) continue;
+      if (!isOutflowImpact(impact.balanceImpact())) continue;
 
       var row = accumulatorFor(byCategory, tx.getCategoryId(), categories);
       var amount = tx.getAmount() == null ? BigDecimal.ZERO : tx.getAmount();
@@ -718,16 +772,6 @@ public class DashboardService {
         row.realCount);
   }
 
-  private boolean countsInRealOperationalBalance(MoneyTransaction tx) {
-    if (tx.getStatus() != MoneyTransaction.Status.CONFIRMED) return false;
-    var classification = classificationStatus(tx);
-    if (classification == MoneyTransaction.ClassificationStatus.TECHNICAL) return false;
-    if (classification == MoneyTransaction.ClassificationStatus.IGNORED_BY_RULE) return false;
-    if (tx.getMovementType() == MoneyTransaction.MovementType.TRANSFER) return false;
-    if (tx.getMovementType() == MoneyTransaction.MovementType.ADJUSTMENT) return false;
-    return true;
-  }
-
   private MoneyTransaction.ClassificationStatus classificationStatus(MoneyTransaction tx) {
     if (tx.getClassificationStatus() != null) return tx.getClassificationStatus();
     return tx.getCategoryId() == null
@@ -735,8 +779,71 @@ public class DashboardService {
         : MoneyTransaction.ClassificationStatus.CLASSIFIED;
   }
 
+  private boolean isInternalTransferExcluded(MoneyTransaction tx, TransactionFinancialImpact impact) {
+    return tx.getInternalTransferGroupId() != null
+        || tx.getPaymentChannel() == MoneyTransaction.PaymentChannel.INTERNAL_TRANSFER
+        || impact.balanceImpact() == MoneyTransaction.BalanceImpact.INTERNAL_TRANSFER
+        || hasAnyReason(
+            tx,
+            "POSSIBLE_INTERNAL_TRANSFER",
+            "INTERNAL_TRANSFER_MATCHED",
+            "TRANSFER_UNMATCHED",
+            "USER_MARKED_INTERNAL_TRANSFER");
+  }
+
+  private boolean isDuplicateExcluded(MoneyTransaction tx) {
+    return hasAnyReason(
+        tx,
+        "POSSIBLE_CROSS_SOURCE_DUPLICATE",
+        "USER_IGNORED_CROSS_SOURCE",
+        "DUPLICATE_RESOLVED_KEEP",
+        "EXACT_DUPLICATE",
+        "SOURCE_DUPLICATE");
+  }
+
+  private boolean hasAnyReason(MoneyTransaction tx, String... needles) {
+    var reason = tx.getClassificationReason();
+    if (reason == null || reason.isBlank()) {
+      return false;
+    }
+
+    var normalized = reason.toUpperCase(Locale.ROOT);
+    for (var needle : needles) {
+      if (normalized.contains(needle)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private boolean isIncomeImpact(MoneyTransaction.BalanceImpact balanceImpact) {
+    return balanceImpact == MoneyTransaction.BalanceImpact.OPERATING_INCOME
+        || balanceImpact == MoneyTransaction.BalanceImpact.INTEREST_INCOME;
+  }
+
+  private boolean isExpenseImpact(MoneyTransaction.BalanceImpact balanceImpact) {
+    return balanceImpact == MoneyTransaction.BalanceImpact.CONSUMPTION_EXPENSE
+        || balanceImpact == MoneyTransaction.BalanceImpact.DEBT_OUTFLOW;
+  }
+
+  private boolean isSavingImpact(MoneyTransaction.BalanceImpact balanceImpact) {
+    return balanceImpact == MoneyTransaction.BalanceImpact.SAVING_OUTFLOW
+        || balanceImpact == MoneyTransaction.BalanceImpact.INVESTMENT_OUTFLOW;
+  }
+
+  private boolean isOutflowImpact(MoneyTransaction.BalanceImpact balanceImpact) {
+    return isExpenseImpact(balanceImpact) || isSavingImpact(balanceImpact);
+  }
+
   private boolean usesPlanItemForFinancialProjection(MonthlyPlanItem item) {
     return item.getStatus() != MonthlyPlanItem.Status.CANCELLED && item.getType() != MonthlyPlanItem.Type.TODO;
+  }
+
+  private boolean usesPlanItemForExecutionComparison(MonthlyPlanItem item) {
+    if (!usesPlanItemForFinancialProjection(item)) return false;
+    return item.getType() == MonthlyPlanItem.Type.EXPENSE
+        || item.getType() == MonthlyPlanItem.Type.SAVING
+        || item.getType() == MonthlyPlanItem.Type.DEBT;
   }
 
   private BigDecimal signedPlannedNet(MonthlyPlanItem item) {

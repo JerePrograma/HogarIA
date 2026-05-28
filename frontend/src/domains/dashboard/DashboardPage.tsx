@@ -163,6 +163,7 @@ export function DashboardPage() {
                   planning={planning}
                   operational={operational}
                   cashFlow={cashFlow}
+                  realSummary={realSummary}
                   realVsPlanned={realVsPlanned}
                   closingProjection={closingProjection}
                 />

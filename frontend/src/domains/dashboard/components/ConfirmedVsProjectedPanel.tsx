@@ -12,6 +12,7 @@ type Props = {
   planning: NonNullable<DashboardSummary['planningSummary']>;
   operational: NonNullable<DashboardSummary['operationalSummary']>;
   cashFlow: NonNullable<DashboardSummary['monthlyCashFlowSummary']>;
+  realSummary?: DashboardSummary['realConfirmedSummary'];
   realVsPlanned?: DashboardSummary['realVsPlanned'];
   closingProjection?: DashboardSummary['closingProjection'];
 };
@@ -20,6 +21,7 @@ export function ConfirmedVsProjectedPanel({
   planning,
   operational,
   cashFlow,
+  realSummary,
   realVsPlanned,
   closingProjection,
 }: Props) {
@@ -64,6 +66,30 @@ export function ConfirmedVsProjectedPanel({
             tone={(realVsPlanned?.realUnplannedAmount ?? 0) > 0 ? 'warning' : 'neutral'}
           />
         </div>
+        {realSummary ? (
+          <div className="transactions-filter-grid mt-4">
+            <BreakdownLine
+              label="Egresos operativos reales"
+              value={formatMoney(realSummary.operationalOutflows)}
+            />
+            <BreakdownLine
+              label="Transferencias internas excluidas"
+              value={formatMoney(realSummary.excludedInternalTransferAmount)}
+            />
+            <BreakdownLine
+              label="Duplicados excluidos"
+              value={formatMoney(realSummary.excludedDuplicateAmount)}
+            />
+            <BreakdownLine
+              label="En revisión"
+              value={formatMoney(realSummary.reviewAmount)}
+            />
+            <BreakdownLine
+              label="Neto operativo"
+              value={formatMoney(realSummary.operationalBalance)}
+            />
+          </div>
+        ) : null}
       </article>
       <article className="panel">
         <div className="section-title"><div><p className="eyebrow">Proyección de cierre</p><h2>Estimado</h2></div></div>
@@ -138,5 +164,14 @@ export function ConfirmedVsProjectedPanel({
         </article>
       ) : null}
     </section>
+  );
+}
+
+function BreakdownLine({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="surface-inset">
+      <p className="label-ui">{label}</p>
+      <strong>{value}</strong>
+    </div>
   );
 }

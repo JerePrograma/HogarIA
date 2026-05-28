@@ -430,6 +430,7 @@ export interface RealConfirmedSummary {
   confirmedIncome: number;
   confirmedExpenses: number;
   confirmedSavings: number;
+  operationalOutflows: number;
   operationalBalance: number;
   confirmedCount: number;
   pendingCount: number;
@@ -445,6 +446,11 @@ export interface RealConfirmedSummary {
   adjustmentsAmount: number;
   technicalAmount: number;
   nonOperationalAmount: number;
+  excludedInternalTransferCount: number;
+  excludedInternalTransferAmount: number;
+  excludedDuplicateCount: number;
+  excludedDuplicateAmount: number;
+  reviewAmount: number;
 }
 
 export interface CategoryDeviation {

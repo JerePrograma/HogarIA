@@ -64,7 +64,7 @@ export function PlanningSummaryCards({
           <MetricCard
             title="Real confirmado"
             value={formatMoney(realSummary.operationalBalance)}
-            helper="Balance operativo desde movimientos confirmados."
+            helper="Balance operativo sin transferencias internas, duplicados ni técnicos."
             tone={realSummary.operationalBalance >= 0 ? 'success' : 'danger'}
           />
         ) : null}

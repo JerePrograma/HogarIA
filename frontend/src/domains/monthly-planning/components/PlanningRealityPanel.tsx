@@ -77,6 +77,34 @@ export function PlanningRealityPanel({
         />
       </div>
 
+      <div className="transactions-filter-grid mt-4">
+        <RealityBreakdownItem
+          label="Egresos operativos reales"
+          value={formatMoney(realSummary.operationalOutflows)}
+          helper="Gastos, ahorro, inversión y deuda confirmados."
+        />
+        <RealityBreakdownItem
+          label="Excluidos por transferencia interna"
+          value={formatMoney(realSummary.excludedInternalTransferAmount)}
+          helper={`${realSummary.excludedInternalTransferCount} movimiento${realSummary.excludedInternalTransferCount === 1 ? "" : "s"} neutral${realSummary.excludedInternalTransferCount === 1 ? "" : "es"}.`}
+        />
+        <RealityBreakdownItem
+          label="Excluidos por duplicado"
+          value={formatMoney(realSummary.excludedDuplicateAmount)}
+          helper={`${realSummary.excludedDuplicateCount} movimiento${realSummary.excludedDuplicateCount === 1 ? "" : "s"} cross-source o exacto.`}
+        />
+        <RealityBreakdownItem
+          label="En revisión"
+          value={formatMoney(realSummary.reviewAmount)}
+          helper={`${realSummary.reviewCount} movimiento${realSummary.reviewCount === 1 ? "" : "s"} con clasificación pendiente.`}
+        />
+        <RealityBreakdownItem
+          label="Neto operativo"
+          value={formatMoney(realSummary.operationalBalance)}
+          helper="Resultado confirmado sin duplicados ni transferencias internas."
+        />
+      </div>
+
       <div className="tabla-ui mt-4">
         <table className="table-compact">
           <thead>
@@ -137,5 +165,23 @@ export function PlanningRealityPanel({
         </p>
       ) : null}
     </section>
+  );
+}
+
+function RealityBreakdownItem({
+  label,
+  value,
+  helper,
+}: {
+  label: string;
+  value: string;
+  helper: string;
+}) {
+  return (
+    <div className="surface-inset">
+      <p className="label-ui">{label}</p>
+      <strong>{value}</strong>
+      <p className="compact-muted">{helper}</p>
+    </div>
   );
 }

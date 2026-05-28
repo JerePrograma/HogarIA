@@ -200,6 +200,98 @@ class DashboardServiceTest {
     assertEquals(amount, res.monthlyBalance().totalExpenses());
   }
 
+  @Test
+  void possibleInternalTransferDoesNotCountAsDefinitiveRealExpense() {
+    var userId = UUID.randomUUID();
+    var profileId = UUID.randomUUID();
+    var expenseCat = UUID.randomUUID();
+    var amount = new BigDecimal("400000.00");
+    var possibleTransfer = tx(profileId, expenseCat, MoneyTransaction.MovementType.EXPENSE, "400000.00", "DB.DEBIN Mercado Pago");
+    possibleTransfer.setClassificationStatus(MoneyTransaction.ClassificationStatus.REVIEW);
+    possibleTransfer.setClassificationReason("POSSIBLE_INTERNAL_TRANSFER");
+    possibleTransfer.setBalanceImpact(MoneyTransaction.BalanceImpact.CONSUMPTION_EXPENSE);
+    var localService = serviceWithRealClassifier();
+
+    when(profileRepository.findByIdAndUserId(profileId, userId)).thenReturn(Optional.of(new FinancialProfile()));
+    when(transactionRepository.findByProfileIdAndBudgetDateBetween(eq(profileId), any(), any()))
+        .thenReturn(List.of(possibleTransfer));
+    when(categoryRepository.findAllById(any()))
+        .thenReturn(List.of(Category.builder().id(expenseCat).type(Category.Type.VARIABLE_EXPENSE).name("Gasto").build()));
+    when(externalSyncMappingRepository.findByProfileId(profileId)).thenReturn(List.of());
+    when(monthlyPlanItemRepository.findByProfileIdAndPeriodYearAndPeriodMonth(profileId, 2026, 5)).thenReturn(List.of());
+
+    var res = localService.getMonthlySummary(userId, profileId, 2026, 5);
+
+    assertEquals(BigDecimal.ZERO, res.realConfirmedSummary().confirmedExpenses());
+    assertEquals(BigDecimal.ZERO, res.realVsPlanned().totalRealConfirmed());
+    assertEquals(1, res.realConfirmedSummary().excludedInternalTransferCount());
+    assertEquals(amount, res.realConfirmedSummary().excludedInternalTransferAmount());
+  }
+
+  @Test
+  void bancoDebinExpenseAndMercadoPagoIncomeCandidateStayNeutral() {
+    var userId = UUID.randomUUID();
+    var profileId = UUID.randomUUID();
+    var technicalCat = UUID.randomUUID();
+    var amount = new BigDecimal("400000.00");
+    var bancoDebit = tx(profileId, technicalCat, MoneyTransaction.MovementType.EXPENSE, "400000.00", "DB.DEBIN");
+    bancoDebit.setSource("BANCO_PROVINCIA");
+    bancoDebit.setClassificationStatus(MoneyTransaction.ClassificationStatus.REVIEW);
+    bancoDebit.setClassificationReason("POSSIBLE_INTERNAL_TRANSFER");
+    var mpCredit = tx(profileId, technicalCat, MoneyTransaction.MovementType.INCOME, "400000.00", "Pago Debin | Bank Transfer");
+    mpCredit.setSource("MERCADO_PAGO");
+    mpCredit.setClassificationStatus(MoneyTransaction.ClassificationStatus.REVIEW);
+    mpCredit.setClassificationReason("POSSIBLE_INTERNAL_TRANSFER");
+    var localService = serviceWithRealClassifier();
+
+    when(profileRepository.findByIdAndUserId(profileId, userId)).thenReturn(Optional.of(new FinancialProfile()));
+    when(transactionRepository.findByProfileIdAndBudgetDateBetween(eq(profileId), any(), any()))
+        .thenReturn(List.of(bancoDebit, mpCredit));
+    when(categoryRepository.findAllById(any()))
+        .thenReturn(List.of(Category.builder().id(technicalCat).type(Category.Type.VARIABLE_EXPENSE).name("Fondeo").build()));
+    when(externalSyncMappingRepository.findByProfileId(profileId)).thenReturn(List.of());
+    when(monthlyPlanItemRepository.findByProfileIdAndPeriodYearAndPeriodMonth(profileId, 2026, 5)).thenReturn(List.of());
+
+    var res = localService.getMonthlySummary(userId, profileId, 2026, 5);
+
+    assertEquals(BigDecimal.ZERO, res.realConfirmedSummary().confirmedIncome());
+    assertEquals(BigDecimal.ZERO, res.realConfirmedSummary().confirmedExpenses());
+    assertEquals(BigDecimal.ZERO, res.realVsPlanned().totalRealConfirmed());
+    assertEquals(2, res.realConfirmedSummary().excludedInternalTransferCount());
+    assertEquals(new BigDecimal("800000.00"), res.realConfirmedSummary().excludedInternalTransferAmount());
+  }
+
+  @Test
+  void crossSourceDuplicateCountsOnlyConfirmedEconomicLegInRealVsPlanned() {
+    var userId = UUID.randomUUID();
+    var profileId = UUID.randomUUID();
+    var expenseCat = UUID.randomUUID();
+    var amount = new BigDecimal("56654.12");
+    var bancoPurchase = tx(profileId, expenseCat, MoneyTransaction.MovementType.EXPENSE, "56654.12", "PAGO CON TARJETA DEBITO");
+    bancoPurchase.setSource("BANCO_PROVINCIA");
+    var mpDuplicate = tx(profileId, expenseCat, MoneyTransaction.MovementType.EXPENSE, "56654.12", "Compra final | Tarjeta de débito Visa");
+    mpDuplicate.setSource("MERCADO_PAGO");
+    mpDuplicate.setClassificationStatus(MoneyTransaction.ClassificationStatus.REVIEW);
+    mpDuplicate.setClassificationReason("POSSIBLE_CROSS_SOURCE_DUPLICATE");
+    var localService = serviceWithRealClassifier();
+
+    when(profileRepository.findByIdAndUserId(profileId, userId)).thenReturn(Optional.of(new FinancialProfile()));
+    when(transactionRepository.findByProfileIdAndBudgetDateBetween(eq(profileId), any(), any()))
+        .thenReturn(List.of(bancoPurchase, mpDuplicate));
+    when(categoryRepository.findAllById(any()))
+        .thenReturn(List.of(Category.builder().id(expenseCat).type(Category.Type.VARIABLE_EXPENSE).name("Compras").build()));
+    when(externalSyncMappingRepository.findByProfileId(profileId)).thenReturn(List.of());
+    when(monthlyPlanItemRepository.findByProfileIdAndPeriodYearAndPeriodMonth(profileId, 2026, 5)).thenReturn(List.of());
+
+    var res = localService.getMonthlySummary(userId, profileId, 2026, 5);
+
+    assertEquals(amount, res.realConfirmedSummary().confirmedExpenses());
+    assertEquals(amount, res.realConfirmedSummary().operationalOutflows());
+    assertEquals(amount, res.realVsPlanned().totalRealConfirmed());
+    assertEquals(amount, res.realConfirmedSummary().excludedDuplicateAmount());
+    assertEquals(res.realConfirmedSummary().operationalOutflows(), res.realVsPlanned().totalRealConfirmed());
+  }
+
   private DashboardService serviceWithRealClassifier() {
     return new DashboardService(
         profileRepository,
