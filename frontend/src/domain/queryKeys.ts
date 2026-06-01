@@ -116,6 +116,9 @@ export const queryKeys = {
 
   externalLoans: (profileId: string) => ["external-loans", profileId] as const,
 
+  externalLoanHealth: (profileId: string) =>
+    ["external-loans", profileId, "health"] as const,
+
   externalLoanSyncConfig: (profileId: string) =>
     ["external-loans", profileId, "sync-config"] as const,
 };

@@ -67,15 +67,97 @@ export type ExternalLoanSyncConfigPayload = {
   enabled: boolean;
 };
 
+export type ExternalIntegrationDiagnosticResponse = {
+  status: string;
+  message: string;
+  integrationEnabled: boolean;
+  syncEnabled: boolean;
+  baseUrl: string;
+  apiPrefix: string;
+  hasUsername: boolean;
+  hasPassword: boolean;
+  connectTimeoutMs: number;
+  readTimeoutMs: number;
+  remoteCheckExecuted: boolean;
+  missingFields: string[];
+};
+
 export type ExternalLoanManualSyncResponse = {
   dryRun: boolean;
   loansSynced: number;
   paymentsSynced: number;
   movementsCreated: number;
   skippedDuplicates: number;
+  detectedExistingWithoutMapping: number;
+  backfillRecommended: boolean;
   errors: string[];
   detectedLoans: string[];
   detectedPayments: string[];
   plannedMovements: string[];
   summaryByType: Record<string, number>;
+};
+
+export type ExternalLoanBackfillCandidate = {
+  transactionId: string;
+  description: string;
+  amount: number;
+  realDate: string;
+  inferredEntityType: string;
+  inferredEntityId: string;
+  inferredEventType: string;
+  confidence: 'HIGH' | 'MEDIUM' | 'LOW' | string;
+  warning: string | null;
+  wouldCreateMapping: boolean;
+};
+
+export type ExternalLoanBackfillDryRunResponse = {
+  candidates: ExternalLoanBackfillCandidate[];
+};
+
+export type ExternalLoanBackfillApplyRequest = {
+  includeLowConfidence: boolean;
+};
+
+export type ExternalLoanBackfillApplyResponse = {
+  createdMappings: number;
+  skipped: string[];
+  errors: string[];
+};
+
+export type DuplicateTransactionSample = {
+  transactionId: string;
+  realDate: string;
+  description: string | null;
+  amount: number;
+};
+
+export type DuplicateSourceOperationGroup = {
+  profileId: string;
+  source: string;
+  sourceOperationId: string;
+  count: number;
+  transactions: DuplicateTransactionSample[];
+};
+
+export type DuplicateSourceHashGroup = {
+  profileId: string;
+  sourceHash: string;
+  count: number;
+  transactions: DuplicateTransactionSample[];
+};
+
+export type ExternalLoanIdempotencyDiagnosticsResponse = {
+  cjTransactions: number;
+  mappedTransactions: number;
+  unmappedCandidates: number;
+  backfillRecommended: boolean;
+  canRunSync: boolean;
+  hasIndexBlockingDuplicates: boolean;
+  requiresManualReview: boolean;
+  candidateCountsByConfidence: Record<string, number>;
+  wouldCreateMappings: number;
+  alreadyMappedEvents: number;
+  alreadyMappedTransactions: number;
+  duplicateSourceOperationGroups: DuplicateSourceOperationGroup[];
+  duplicateSourceHashGroups: DuplicateSourceHashGroup[];
 };
