@@ -17,6 +17,22 @@ Aplicación financiera full-stack (Spring Boot + React/TypeScript) para gestión
 - `cd frontend && npm run build`
 - `cd frontend && npm run dev`
 
+## Migraciones Flyway en desarrollo
+El proyecto sigue en etapa pre-producción/desarrollo, por eso la cadena histórica `V1` a `V17` fue consolidada en una única migración base: `backend/src/main/resources/db/migration/V1__baseline_schema_and_seed.sql`.
+
+Esta base crea el esquema final desde cero y carga las categorías globales estándar ya corregidas. No es compatible con conservar `flyway_schema_history` anterior: las bases locales existentes deben eliminarse y recrearse antes de levantar el backend.
+
+Reset local destructivo:
+
+```sql
+DROP DATABASE hogaria;
+CREATE DATABASE hogaria;
+```
+
+Los SQL de diagnóstico que no sean migraciones deben vivir fuera de Flyway, en `backend/src/main/resources/db/diagnostics`.
+
+Nota CJPrestamos: `CJ - Capital recuperado` queda con `budgetable=false` porque representa recuperación de principal, no capacidad presupuestaria operativa. La visibilidad de planificación debe venir por `MonthlyPlanItem` de tipo `RECOVERY`.
+
 ## URLs
 - Frontend: http://localhost:5174
 - Backend: http://localhost:8080

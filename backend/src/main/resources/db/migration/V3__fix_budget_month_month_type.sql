@@ -1,2 +1,0 @@
-﻿ALTER TABLE budget_month
-ALTER COLUMN month TYPE INTEGER;
