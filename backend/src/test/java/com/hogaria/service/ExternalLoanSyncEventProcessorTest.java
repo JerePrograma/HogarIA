@@ -6,6 +6,7 @@ import static org.mockito.Mockito.*;
 import com.hogaria.entity.ExternalLoanSyncConfig;
 import com.hogaria.entity.MoneyTransaction;
 import com.hogaria.repository.MoneyTransactionRepository;
+import com.hogaria.service.ExternalLoanEventDuplicateDetector.DuplicateDetectionResult;
 import java.math.BigDecimal;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -23,14 +24,22 @@ import org.springframework.dao.DataIntegrityViolationException;
 class ExternalLoanSyncEventProcessorTest {
   @Mock MoneyTransactionRepository transactionRepository;
   @Mock ExternalSyncIdempotencyService idempotencyService;
+  @Mock ExternalLoanEventDuplicateDetector duplicateDetector;
   ExternalLoanSyncEventProcessor processor;
 
-  @BeforeEach void setUp() { processor = new ExternalLoanSyncEventProcessor(transactionRepository, idempotencyService); }
+  @BeforeEach
+  void setUp() {
+    processor =
+        new ExternalLoanSyncEventProcessor(
+            transactionRepository, idempotencyService, duplicateDetector);
+    lenient()
+        .when(duplicateDetector.detect(any(), any(), any(), any(), any(), any(), any(), any(), any()))
+        .thenReturn(DuplicateDetectionResult.notDuplicate("source-op", "source-hash"));
+  }
 
   @Test void disbursementCreatesRecoverableAdjustmentConfirmedSystem() {
     UUID userId = UUID.randomUUID(); UUID profileId = UUID.randomUUID();
     var cfg = ExternalLoanSyncConfig.builder().accountId(UUID.randomUUID()).loanDisbursementCategoryId(UUID.randomUUID()).build();
-    when(idempotencyService.isAlreadyProcessed(any(), any(), any(), any(), any(), any())).thenReturn(false);
     when(transactionRepository.save(any())).thenAnswer(i -> { var tx=i.getArgument(0, MoneyTransaction.class); tx.setId(UUID.randomUUID()); return tx;});
 
     assertTrue(processor.processDisbursement(userId, profileId, cfg, "1", "Ana", LocalDate.now(), new BigDecimal("100")));
@@ -50,7 +59,6 @@ class ExternalLoanSyncEventProcessorTest {
   }
 
   @Test void paymentPrincipalCreatesAdjustment() {
-    when(idempotencyService.isAlreadyProcessed(any(), any(), any(), any(), any(), any())).thenReturn(false);
     when(transactionRepository.save(any())).thenAnswer(i -> { var tx=i.getArgument(0, MoneyTransaction.class); tx.setId(UUID.randomUUID()); return tx;});
     var cfg = ExternalLoanSyncConfig.builder().accountId(UUID.randomUUID()).principalRecoveryCategoryId(UUID.randomUUID()).build();
 
@@ -61,7 +69,6 @@ class ExternalLoanSyncEventProcessorTest {
   }
 
   @Test void paymentInterestCreatesIncomeAndSkipsZero() {
-    when(idempotencyService.isAlreadyProcessed(any(), any(), any(), any(), any(), any())).thenReturn(false);
     when(transactionRepository.save(any())).thenAnswer(i -> { var tx=i.getArgument(0, MoneyTransaction.class); tx.setId(UUID.randomUUID()); return tx;});
     var cfg = ExternalLoanSyncConfig.builder().accountId(UUID.randomUUID()).interestIncomeCategoryId(UUID.randomUUID()).build();
 
@@ -71,7 +78,6 @@ class ExternalLoanSyncEventProcessorTest {
   }
 
   @Test void markProcessedFailurePropagates() {
-    when(idempotencyService.isAlreadyProcessed(any(), any(), any(), any(), any(), any())).thenReturn(false);
     when(transactionRepository.save(any())).thenAnswer(i -> { var tx=i.getArgument(0, MoneyTransaction.class); tx.setId(UUID.randomUUID()); return tx;});
     doThrow(new DataIntegrityViolationException("dup")).when(idempotencyService).markProcessed(any(), any(), any(), any(), any(), any(), any(), any());
     var cfg = ExternalLoanSyncConfig.builder().accountId(UUID.randomUUID()).loanDisbursementCategoryId(UUID.randomUUID()).build();
@@ -80,7 +86,13 @@ class ExternalLoanSyncEventProcessorTest {
   }
 
   @Test void processedEventDoesNotCreateTransaction() {
-    when(idempotencyService.isAlreadyProcessed(any(), any(), any(), any(), any(), any())).thenReturn(true);
+    when(duplicateDetector.detect(any(), any(), any(), any(), any(), any(), any(), any(), any()))
+        .thenReturn(
+            DuplicateDetectionResult.duplicate(
+                ExternalLoanEventDuplicateDetector.REASON_MAPPING_PROCESSED,
+                UUID.randomUUID(),
+                "source-op",
+                "source-hash"));
     var cfg = ExternalLoanSyncConfig.builder().accountId(UUID.randomUUID()).loanDisbursementCategoryId(UUID.randomUUID()).build();
 
     assertFalse(processor.processDisbursement(UUID.randomUUID(), UUID.randomUUID(), cfg, "1", "Ana", LocalDate.now(), BigDecimal.ONE));
