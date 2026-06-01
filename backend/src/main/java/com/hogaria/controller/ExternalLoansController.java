@@ -6,10 +6,12 @@ import com.hogaria.integration.cjprestamos.dto.ExternalIntegrationDiagnosticResp
 import com.hogaria.integration.cjprestamos.dto.ExternalLoanBackfillDtos.BackfillApplyRequest;
 import com.hogaria.integration.cjprestamos.dto.ExternalLoanBackfillDtos.BackfillApplyResponse;
 import com.hogaria.integration.cjprestamos.dto.ExternalLoanBackfillDtos.BackfillDryRunResponse;
+import com.hogaria.integration.cjprestamos.dto.ExternalLoanIdempotencyDiagnosticsResponse;
 import com.hogaria.integration.cjprestamos.dto.ExternalLoanManualSyncResponse;
 import com.hogaria.integration.cjprestamos.dto.ExternalLoansSummaryResponse;
 import com.hogaria.security.CurrentUserResolver;
 import com.hogaria.service.ExternalLoanBackfillService;
+import com.hogaria.service.ExternalLoanIdempotencyDiagnosticsService;
 import com.hogaria.service.ExternalLoanSyncConfigService;
 import com.hogaria.service.ExternalLoansService;
 import jakarta.validation.Valid;
@@ -30,16 +32,19 @@ public class ExternalLoansController {
   private final ExternalLoanSyncConfigService syncConfigService;
   private final CurrentUserResolver currentUserResolver;
   private final ExternalLoanBackfillService backfillService;
+  private final ExternalLoanIdempotencyDiagnosticsService diagnosticsService;
 
   public ExternalLoansController(
       ExternalLoansService service,
       ExternalLoanSyncConfigService syncConfigService,
       CurrentUserResolver currentUserResolver,
-      ExternalLoanBackfillService backfillService) {
+      ExternalLoanBackfillService backfillService,
+      ExternalLoanIdempotencyDiagnosticsService diagnosticsService) {
     this.service = service;
     this.syncConfigService = syncConfigService;
     this.currentUserResolver = currentUserResolver;
     this.backfillService = backfillService;
+    this.diagnosticsService = diagnosticsService;
   }
 
   @GetMapping("/summary")
@@ -68,6 +73,13 @@ public class ExternalLoansController {
       @PathVariable UUID profileId,
       @RequestHeader(value = "X-User-Id", required = false) String xUserId) {
     return service.dryRunSync(currentUserResolver.parse(xUserId), profileId);
+  }
+
+  @GetMapping("/idempotency/diagnostics")
+  public ExternalLoanIdempotencyDiagnosticsResponse idempotencyDiagnostics(
+      @PathVariable UUID profileId,
+      @RequestHeader(value = "X-User-Id", required = false) String xUserId) {
+    return diagnosticsService.diagnose(currentUserResolver.parse(xUserId), profileId);
   }
 
   @GetMapping("/sync-config")

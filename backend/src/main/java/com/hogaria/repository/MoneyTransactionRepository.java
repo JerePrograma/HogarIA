@@ -6,11 +6,25 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface MoneyTransactionRepository extends JpaRepository<MoneyTransaction, UUID> {
+
+    interface DuplicateSourceOperationGroupProjection {
+        UUID getProfileId();
+        String getSource();
+        String getSourceOperationId();
+        long getTransactionCount();
+    }
+
+    interface DuplicateSourceHashGroupProjection {
+        UUID getProfileId();
+        String getSourceHash();
+        long getTransactionCount();
+    }
 
     List<MoneyTransaction> findByProfileId(UUID profileId);
 
@@ -58,6 +72,66 @@ public interface MoneyTransactionRepository extends JpaRepository<MoneyTransacti
             UUID profileId,
             String source,
             String sourceOperationId
+    );
+
+    @Query("""
+            select t.profileId as profileId,
+                   t.source as source,
+                   t.sourceOperationId as sourceOperationId,
+                   count(t) as transactionCount
+            from MoneyTransaction t
+            where t.profileId = :profileId
+              and t.source is not null
+              and t.sourceOperationId is not null
+            group by t.profileId, t.source, t.sourceOperationId
+            having count(t) > 1
+            order by count(t) desc, t.source asc, t.sourceOperationId asc
+            """)
+    List<DuplicateSourceOperationGroupProjection> findDuplicateSourceOperationGroups(
+            @Param("profileId") UUID profileId,
+            Pageable pageable
+    );
+
+    @Query("""
+            select t.profileId as profileId,
+                   t.sourceHash as sourceHash,
+                   count(t) as transactionCount
+            from MoneyTransaction t
+            where t.profileId = :profileId
+              and t.sourceHash is not null
+            group by t.profileId, t.sourceHash
+            having count(t) > 1
+            order by count(t) desc, t.sourceHash asc
+            """)
+    List<DuplicateSourceHashGroupProjection> findDuplicateSourceHashGroups(
+            @Param("profileId") UUID profileId,
+            Pageable pageable
+    );
+
+    @Query("""
+            select t from MoneyTransaction t
+            where t.profileId = :profileId
+              and t.source = :source
+              and t.sourceOperationId = :sourceOperationId
+            order by t.realDate asc, t.id asc
+            """)
+    List<MoneyTransaction> findDuplicateSourceOperationSamples(
+            @Param("profileId") UUID profileId,
+            @Param("source") String source,
+            @Param("sourceOperationId") String sourceOperationId,
+            Pageable pageable
+    );
+
+    @Query("""
+            select t from MoneyTransaction t
+            where t.profileId = :profileId
+              and t.sourceHash = :sourceHash
+            order by t.realDate asc, t.id asc
+            """)
+    List<MoneyTransaction> findDuplicateSourceHashSamples(
+            @Param("profileId") UUID profileId,
+            @Param("sourceHash") String sourceHash,
+            Pageable pageable
     );
 
     List<MoneyTransaction> findByProfileIdAndRealDateBetweenAndAmount(
