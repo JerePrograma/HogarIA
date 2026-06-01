@@ -17,6 +17,7 @@ import com.hogaria.integration.cjprestamos.remote.CjPrestamosDashboardRemoteResp
 import com.hogaria.integration.cjprestamos.remote.CjPrestamosLoanActiveRemoteResponse;
 import com.hogaria.integration.cjprestamos.remote.CjPrestamosPaymentRemoteResponse;
 import com.hogaria.repository.*;
+import com.hogaria.service.ExternalLoanEventDuplicateDetector.DuplicateDetectionResult;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -39,11 +40,23 @@ class ExternalLoansServiceTest {
   @Mock CategoryRepository categoryRepository;
   @Mock ExternalLoanSyncEventProcessor eventProcessor;
   @Mock CjPrestamosIntegrationConfigValidator configValidator;
+  @Mock ExternalLoanEventDuplicateDetector duplicateDetector;
 
   ExternalLoansService service;
 
   @BeforeEach void setUp() {
-    service = new ExternalLoansService(client, properties, profileRepository, new CjPrestamosBridgeMapper(), syncConfigRepository, accountRepository, categoryRepository, eventProcessor, configValidator);
+    service =
+        new ExternalLoansService(
+            client,
+            properties,
+            profileRepository,
+            new CjPrestamosBridgeMapper(),
+            syncConfigRepository,
+            accountRepository,
+            categoryRepository,
+            eventProcessor,
+            configValidator,
+            duplicateDetector);
     lenient().when(properties.syncEnabled()).thenReturn(true);
   }
 
@@ -173,17 +186,111 @@ class ExternalLoansServiceTest {
     when(categoryRepository.findById(any())).thenAnswer(inv -> Optional.of(Category.builder().id(inv.getArgument(0)).profileId(profileId).build()));
     when(client.getActiveLoans(profileId, userId)).thenReturn(List.of(new CjPrestamosLoanActiveRemoteResponse(1L, 1L, "Ana", new BigDecimal("100"), 1, "MENSUAL", "ACTIVE", BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, LocalDateTime.now(), LocalDateTime.now())));
     when(client.getLoanPayments(profileId, userId, 1L)).thenReturn(List.of(new CjPrestamosPaymentRemoteResponse(9L, 1L, LocalDate.now(), new BigDecimal("50"), new BigDecimal("30"), new BigDecimal("20"), "r", null, "OK")));
-    when(eventProcessor.isAlreadyProcessed(any(), any(), eq("LOAN"), eq("1"), eq("DISBURSEMENT"))).thenReturn(true);
-    when(eventProcessor.isAlreadyProcessed(any(), any(), eq("PAYMENT"), eq("9"), eq("PAYMENT_PRINCIPAL_RECOVERY"))).thenReturn(false);
-    when(eventProcessor.isAlreadyProcessed(any(), any(), eq("PAYMENT"), eq("9"), eq("PAYMENT_INTEREST_INCOME"))).thenReturn(false);
+    when(duplicateDetector.detect(eq(userId), eq(profileId), eq(accountId), eq(c1), eq("LOAN"), eq("1"), eq("DISBURSEMENT"), any(), eq(new BigDecimal("100"))))
+        .thenReturn(
+            DuplicateDetectionResult.duplicate(
+                ExternalLoanEventDuplicateDetector.REASON_MAPPING_PROCESSED,
+                UUID.randomUUID(),
+                "LOAN:1:DISBURSEMENT",
+                "loan-hash"));
+    when(duplicateDetector.detect(eq(userId), eq(profileId), eq(accountId), eq(c2), eq("PAYMENT"), eq("9"), eq("PAYMENT_PRINCIPAL_RECOVERY"), any(), eq(new BigDecimal("30"))))
+        .thenReturn(DuplicateDetectionResult.notDuplicate("PAYMENT:9:PRINCIPAL", "principal-hash"));
+    when(duplicateDetector.detect(eq(userId), eq(profileId), eq(accountId), eq(c3), eq("PAYMENT"), eq("9"), eq("PAYMENT_INTEREST_INCOME"), any(), eq(new BigDecimal("20"))))
+        .thenReturn(DuplicateDetectionResult.notDuplicate("PAYMENT:9:INTEREST", "interest-hash"));
 
     var response = service.dryRunSync(userId, profileId);
     assertTrue(response.dryRun());
     assertEquals(2, response.movementsCreated());
     assertEquals(1, response.skippedDuplicates());
+    assertEquals(0, response.detectedExistingWithoutMapping());
+    assertFalse(response.backfillRecommended());
     verify(eventProcessor, never()).processDisbursement(any(), any(), any(), any(), any(), any(), any());
     verify(eventProcessor, never()).processPaymentPrincipal(any(), any(), any(), any(), any(), any());
     verify(eventProcessor, never()).processPaymentInterest(any(), any(), any(), any(), any(), any());
+  }
+
+  @Test
+  void dryRunDetectsExistingWithoutMappingForLoanPrincipalAndInterest() {
+    UUID userId = UUID.randomUUID();
+    UUID profileId = UUID.randomUUID();
+    UUID accountId = UUID.randomUUID();
+    UUID c1 = UUID.randomUUID();
+    UUID c2 = UUID.randomUUID();
+    UUID c3 = UUID.randomUUID();
+    when(profileRepository.existsByIdAndUserId(profileId, userId)).thenReturn(true);
+    when(syncConfigRepository.findByProfileId(profileId))
+        .thenReturn(
+            Optional.of(
+                ExternalLoanSyncConfig.builder()
+                    .profileId(profileId)
+                    .enabled(true)
+                    .accountId(accountId)
+                    .loanDisbursementCategoryId(c1)
+                    .principalRecoveryCategoryId(c2)
+                    .interestIncomeCategoryId(c3)
+                    .build()));
+    when(accountRepository.existsByIdAndProfileId(accountId, profileId)).thenReturn(true);
+    when(categoryRepository.findById(any()))
+        .thenAnswer(inv -> Optional.of(Category.builder().id(inv.getArgument(0)).profileId(profileId).build()));
+    when(client.getActiveLoans(profileId, userId))
+        .thenReturn(
+            List.of(
+                new CjPrestamosLoanActiveRemoteResponse(
+                    1L,
+                    1L,
+                    "Ana",
+                    new BigDecimal("100"),
+                    1,
+                    "MENSUAL",
+                    "ACTIVE",
+                    BigDecimal.ZERO,
+                    BigDecimal.ZERO,
+                    BigDecimal.ZERO,
+                    BigDecimal.ZERO,
+                    LocalDateTime.now(),
+                    LocalDateTime.now())));
+    when(client.getLoanPayments(profileId, userId, 1L))
+        .thenReturn(
+            List.of(
+                new CjPrestamosPaymentRemoteResponse(
+                    9L,
+                    1L,
+                    LocalDate.now(),
+                    new BigDecimal("50"),
+                    new BigDecimal("30"),
+                    new BigDecimal("20"),
+                    "r",
+                    null,
+                    "OK")));
+    when(duplicateDetector.detect(eq(userId), eq(profileId), eq(accountId), eq(c1), eq("LOAN"), eq("1"), eq("DISBURSEMENT"), any(), eq(new BigDecimal("100"))))
+        .thenReturn(
+            DuplicateDetectionResult.duplicate(
+                ExternalLoanEventDuplicateDetector.REASON_SOURCE_OPERATION_ID,
+                UUID.randomUUID(),
+                "LOAN:1:DISBURSEMENT",
+                "loan-hash"));
+    when(duplicateDetector.detect(eq(userId), eq(profileId), eq(accountId), eq(c2), eq("PAYMENT"), eq("9"), eq("PAYMENT_PRINCIPAL_RECOVERY"), any(), eq(new BigDecimal("30"))))
+        .thenReturn(
+            DuplicateDetectionResult.duplicate(
+                ExternalLoanEventDuplicateDetector.REASON_SOURCE_OPERATION_ID,
+                UUID.randomUUID(),
+                "PAYMENT:9:PRINCIPAL",
+                "principal-hash"));
+    when(duplicateDetector.detect(eq(userId), eq(profileId), eq(accountId), eq(c3), eq("PAYMENT"), eq("9"), eq("PAYMENT_INTEREST_INCOME"), any(), eq(new BigDecimal("20"))))
+        .thenReturn(
+            DuplicateDetectionResult.duplicate(
+                ExternalLoanEventDuplicateDetector.REASON_SOURCE_HASH,
+                UUID.randomUUID(),
+                "PAYMENT:9:INTEREST",
+                "interest-hash"));
+
+    var response = service.dryRunSync(userId, profileId);
+
+    assertTrue(response.dryRun());
+    assertEquals(0, response.movementsCreated());
+    assertEquals(3, response.skippedDuplicates());
+    assertEquals(3, response.detectedExistingWithoutMapping());
+    assertTrue(response.backfillRecommended());
   }
 
 
