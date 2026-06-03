@@ -5,9 +5,10 @@ Aplicación financiera full-stack (Spring Boot + React/TypeScript) para gestión
 
 ## Integración HogarIA ↔ cjprestamos (estado actual)
 - HogarIA incluye el módulo `external-loans` para consultar información de préstamos desde cjprestamos.
-- Endpoints expuestos en HogarIA: `summary`, `sync-config` y `sync` bajo `/api/profiles/{profileId}/external-loans`.
+- Endpoints expuestos en HogarIA: `summary`, `health`, `sync-config`, `sync/dry-run`, `sync`, `backfill/*` e `idempotency/diagnostics` bajo `/api/profiles/{profileId}/external-loans`.
 - La integración debe tratarse como **read-only por defecto**; `sync` existe en fase 2 y requiere habilitación explícita (`CJP_SYNC_ENABLED=true`).
 - Documentación detallada: [docs/integracion-hogaria-cjprestamos.md](docs/integracion-hogaria-cjprestamos.md).
+- Runbook de idempotencia/backfill: [docs/cjprestamos-idempotencia-backfill.md](docs/cjprestamos-idempotencia-backfill.md).
 
 ## Comandos
 - `docker compose up -d`

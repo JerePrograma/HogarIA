@@ -6,6 +6,7 @@ import com.hogaria.repository.MoneyTransactionRepository;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.UUID;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -53,7 +54,16 @@ public class ExternalLoanSyncEventProcessor {
       return false;
     }
     MoneyTransaction loanTx =
-        transactionRepository.save(
+        saveOrSkipDuplicate(
+            userId,
+            profileId,
+            cfg.getAccountId(),
+            cfg.getLoanDisbursementCategoryId(),
+            LOAN_ENTITY,
+            loanId,
+            DISBURSEMENT_EVENT,
+            date,
+            amount,
             MoneyTransaction.builder()
                 .profileId(profileId)
                 .accountId(cfg.getAccountId())
@@ -71,6 +81,9 @@ public class ExternalLoanSyncEventProcessor {
                 .classificationReason("CJPRESTAMOS_DISBURSEMENT")
                 .status(MoneyTransaction.Status.CONFIRMED)
                 .build());
+    if (loanTx == null) {
+      return false;
+    }
     markProcessed(profileId, LOAN_ENTITY, loanId, DISBURSEMENT_EVENT, duplicate.sourceHash(), loanTx.getId());
     return true;
   }
@@ -93,7 +106,16 @@ public class ExternalLoanSyncEventProcessor {
       return false;
     }
     MoneyTransaction principalTx =
-        transactionRepository.save(
+        saveOrSkipDuplicate(
+            userId,
+            profileId,
+            cfg.getAccountId(),
+            cfg.getPrincipalRecoveryCategoryId(),
+            PAYMENT_ENTITY,
+            paymentId,
+            PAYMENT_PRINCIPAL_RECOVERY_EVENT,
+            date,
+            principalRecovered,
             MoneyTransaction.builder()
                 .profileId(profileId)
                 .accountId(cfg.getAccountId())
@@ -111,6 +133,9 @@ public class ExternalLoanSyncEventProcessor {
                 .classificationReason("CJPRESTAMOS_PAYMENT_PRINCIPAL_RECOVERY")
                 .status(MoneyTransaction.Status.CONFIRMED)
                 .build());
+    if (principalTx == null) {
+      return false;
+    }
     markProcessed(
         profileId,
         PAYMENT_ENTITY,
@@ -139,7 +164,16 @@ public class ExternalLoanSyncEventProcessor {
       return false;
     }
     MoneyTransaction interestTx =
-        transactionRepository.save(
+        saveOrSkipDuplicate(
+            userId,
+            profileId,
+            cfg.getAccountId(),
+            cfg.getInterestIncomeCategoryId(),
+            PAYMENT_ENTITY,
+            paymentId,
+            PAYMENT_INTEREST_INCOME_EVENT,
+            date,
+            interestCollected,
             MoneyTransaction.builder()
                 .profileId(profileId)
                 .accountId(cfg.getAccountId())
@@ -157,6 +191,9 @@ public class ExternalLoanSyncEventProcessor {
                 .classificationReason("CJPRESTAMOS_PAYMENT_INTEREST_INCOME")
                 .status(MoneyTransaction.Status.CONFIRMED)
                 .build());
+    if (interestTx == null) {
+      return false;
+    }
     markProcessed(
         profileId,
         PAYMENT_ENTITY,
@@ -165,6 +202,30 @@ public class ExternalLoanSyncEventProcessor {
         duplicate.sourceHash(),
         interestTx.getId());
     return true;
+  }
+
+  private MoneyTransaction saveOrSkipDuplicate(
+      UUID userId,
+      UUID profileId,
+      UUID accountId,
+      UUID categoryId,
+      String entityType,
+      String entityId,
+      String eventType,
+      LocalDate date,
+      BigDecimal amount,
+      MoneyTransaction transaction) {
+    try {
+      return transactionRepository.saveAndFlush(transaction);
+    } catch (DataIntegrityViolationException ex) {
+      var duplicate =
+          duplicateDetector.detect(
+              userId, profileId, accountId, categoryId, entityType, entityId, eventType, date, amount);
+      if (duplicate.duplicate()) {
+        return null;
+      }
+      throw ex;
+    }
   }
 
   private void markProcessed(UUID profileId, String entityType, String entityId, String eventType, String eventHash, UUID transactionId) {

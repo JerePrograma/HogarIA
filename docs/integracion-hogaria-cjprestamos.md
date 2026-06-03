@@ -9,6 +9,7 @@ Estado actual en HogarIA:
 - Existe endpoint de `summary` (consulta).
 - Existe `sync-config` (configuración por perfil para eventual sincronización contable).
 - Existe endpoint de `sync` manual, con guardas por feature flag y validaciones.
+- Existe consola operativa para health, dry-run, diagnóstico de idempotencia y backfill seguro.
 
 ## 2) Dueño de cada dominio
 **HogarIA (system of record):**
@@ -44,6 +45,9 @@ Base: `/api/profiles/{profileId}/external-loans`
 - `POST /api/profiles/{profileId}/external-loans/sync`
 - `POST /api/profiles/{profileId}/external-loans/sync/dry-run`
 - `GET /api/profiles/{profileId}/external-loans/health`
+- `GET /api/profiles/{profileId}/external-loans/idempotency/diagnostics`
+- `POST /api/profiles/{profileId}/external-loans/backfill/dry-run`
+- `POST /api/profiles/{profileId}/external-loans/backfill/apply`
 
 ## 5) Endpoints remotos de cjprestamos consumidos
 - `GET /api/integration/hogaria/loans/active`
@@ -78,7 +82,7 @@ Uso esperado hoy:
 
 ## 9) Riesgos conocidos
 - **Spoofing de identidad**: `X-User-Id` es spoofeable si no hay auth real/end-to-end.
-- **Duplicación de movimientos**: riesgo por reintentos o eventos externos repetidos; se mitiga con idempotencia, pero requiere monitoreo.
+- **Duplicación de movimientos**: riesgo por reintentos o eventos externos repetidos; se mitiga con `external_sync_mapping`, `sourceOperationId`, `sourceHash`, diagnóstico operativo y backfill de históricos sin mapping.
 - **Split contable incorrecto**: diferencia entre capital recuperado e interés debe mantenerse explícita para evitar distorsión en KPIs.
 - **Dependencia de disponibilidad**: caída o degradación de cjprestamos impacta summary/sync en HogarIA.
 
@@ -99,9 +103,11 @@ cd /workspace/HogarIA && sed -n '1,260p' docs/integracion-hogaria-cjprestamos.md
 
 ## 11) Operación mínima para fase 2 (manual/dry-run)
 1. **Habilitar read-only**: `CJP_INTEGRATION_ENABLED=true` y `CJP_SYNC_ENABLED=false`.
-2. **Ejecutar dry-run**: `POST /api/profiles/{profileId}/external-loans/sync/dry-run` y revisar `movementsCreated`, `skippedDuplicates`, `errors`.
-3. **Habilitar sync real manual**: cambiar a `CJP_SYNC_ENABLED=true` y ejecutar `POST /api/profiles/{profileId}/external-loans/sync`.
-4. **Diagnóstico previo**: ejecutar `GET /api/profiles/{profileId}/external-loans/health`.
+2. **Diagnóstico previo**: ejecutar `GET /api/profiles/{profileId}/external-loans/health`.
+3. **Diagnóstico de idempotencia**: ejecutar `GET /api/profiles/{profileId}/external-loans/idempotency/diagnostics`.
+4. **Ejecutar dry-run**: `POST /api/profiles/{profileId}/external-loans/sync/dry-run` y revisar `movementsCreated`, `skippedDuplicates`, `detectedExistingWithoutMapping`, `backfillRecommended` y `errors`.
+5. **Backfill seguro si corresponde**: ejecutar `POST /api/profiles/{profileId}/external-loans/backfill/dry-run` y luego `POST /api/profiles/{profileId}/external-loans/backfill/apply` con `includeLowConfidence=false`.
+6. **Habilitar sync real manual**: cambiar a `CJP_SYNC_ENABLED=true` y ejecutar `POST /api/profiles/{profileId}/external-loans/sync`.
 
 ### Si falla Basic Auth
 - Verificar `CJP_USERNAME` y `CJP_PASSWORD` en backend HogarIA.
@@ -111,6 +117,8 @@ cd /workspace/HogarIA && sed -n '1,260p' docs/integracion-hogaria-cjprestamos.md
 ### Si aparecen duplicados
 - Revisar `skippedDuplicates` en dry-run/sync.
 - Confirmar que las claves de idempotencia por `profileId` se estén registrando en `external_sync_mapping`.
+- Si `detectedExistingWithoutMapping > 0`, ejecutar backfill dry-run antes de volver a sincronizar.
+- Si `hasIndexBlockingDuplicates=true`, resolver los duplicados reportados antes de sync real.
 - Ejecutar primero dry-run y comparar `plannedMovements` antes de sync real.
 
 ### Checklist previa a fase 2

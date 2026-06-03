@@ -1,18 +1,22 @@
 package com.hogaria.controller;
 
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.hogaria.dto.ExternalLoanSyncConfigDtos.ExternalLoanSyncConfigResponse;
 import com.hogaria.dto.ExternalLoanSyncConfigDtos.ExternalLoanSyncConfigUpsertRequest;
+import com.hogaria.exception.ForbiddenException;
 import com.hogaria.integration.cjprestamos.dto.ExternalIntegrationDiagnosticResponse;
+import com.hogaria.integration.cjprestamos.dto.ExternalLoanIdempotencyDiagnosticsResponse;
 import com.hogaria.integration.cjprestamos.dto.ExternalLoanManualSyncResponse;
 import com.hogaria.integration.cjprestamos.dto.ExternalLoansSummaryResponse;
 import com.hogaria.security.CurrentUserResolver;
 import com.hogaria.service.ExternalLoanSyncConfigService;
 import com.hogaria.service.ExternalLoansService;
 import com.hogaria.service.ExternalLoanBackfillService;
+import com.hogaria.service.ExternalLoanIdempotencyDiagnosticsService;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -27,12 +31,15 @@ class ExternalLoansControllerTest {
   @Mock ExternalLoanSyncConfigService syncConfigService;
   @Mock CurrentUserResolver currentUserResolver;
   @Mock ExternalLoanBackfillService backfillService;
+  @Mock ExternalLoanIdempotencyDiagnosticsService diagnosticsService;
 
   private ExternalLoansController controller;
 
   @BeforeEach
   void setUp() {
-    controller = new ExternalLoansController(service, syncConfigService, currentUserResolver, backfillService);
+    controller =
+        new ExternalLoansController(
+            service, syncConfigService, currentUserResolver, backfillService, diagnosticsService);
   }
 
   @Test
@@ -66,6 +73,42 @@ class ExternalLoansControllerTest {
     when(service.dryRunSync(userId, profileId)).thenReturn(response);
 
     assertSame(response, controller.dryRunSync(profileId, header));
+  }
+
+  @Test
+  void idempotencyDiagnosticsDelegatesToService() {
+    UUID profileId = UUID.randomUUID(); UUID userId = UUID.randomUUID();
+    String header = userId.toString();
+    var response =
+        new ExternalLoanIdempotencyDiagnosticsResponse(
+            0,
+            0,
+            0,
+            false,
+            true,
+            false,
+            false,
+            java.util.Map.of("HIGH", 0, "MEDIUM", 0, "LOW", 0),
+            0,
+            0,
+            0,
+            List.of(),
+            List.of());
+    when(currentUserResolver.parse(header)).thenReturn(userId);
+    when(diagnosticsService.diagnose(userId, profileId)).thenReturn(response);
+
+    assertSame(response, controller.idempotencyDiagnostics(profileId, header));
+  }
+
+  @Test
+  void idempotencyDiagnosticsRejectsProfileNotOwnedByUser() {
+    UUID profileId = UUID.randomUUID(); UUID userId = UUID.randomUUID();
+    String header = userId.toString();
+    when(currentUserResolver.parse(header)).thenReturn(userId);
+    when(diagnosticsService.diagnose(userId, profileId))
+        .thenThrow(new ForbiddenException("Profile no pertenece al usuario"));
+
+    assertThrows(ForbiddenException.class, () -> controller.idempotencyDiagnostics(profileId, header));
   }
 
   @Test

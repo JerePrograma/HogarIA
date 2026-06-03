@@ -12,10 +12,14 @@ import { queryKeys } from '../../domain/queryKeys';
 import type { Category } from '../../domain/types';
 import { ExternalLoansActiveTable } from './components/ExternalLoansActiveTable';
 import { ExternalLoansCashControlCards } from './components/ExternalLoansCashControlCards';
+import { ExternalLoanOperationsPanel } from './components/ExternalLoanOperationsPanel';
 import { ExternalLoansSummaryCards } from './components/ExternalLoansSummaryCards';
-import { ExternalLoanSyncResultPanel } from './components/ExternalLoanSyncResultPanel';
 import {
+  useApplyExternalLoanBackfill,
+  useBackfillDryRunExternalLoans,
   useDryRunExternalLoans,
+  useExternalLoanHealth,
+  useExternalLoanIdempotencyDiagnostics,
   useExternalLoanSyncConfig,
   useSaveExternalLoanSyncConfig,
   useSyncExternalLoans,
@@ -56,10 +60,14 @@ export function ExternalLoansPage() {
   const { profileId = '' } = useParams();
 
   const summaryQuery = useExternalLoansSummary(profileId);
+  const healthQuery = useExternalLoanHealth(profileId);
   const syncConfigQuery = useExternalLoanSyncConfig(profileId);
   const saveConfigMutation = useSaveExternalLoanSyncConfig(profileId);
   const syncMutation = useSyncExternalLoans(profileId);
   const dryRunMutation = useDryRunExternalLoans(profileId);
+  const diagnosticsMutation = useExternalLoanIdempotencyDiagnostics(profileId);
+  const backfillDryRunMutation = useBackfillDryRunExternalLoans(profileId);
+  const backfillApplyMutation = useApplyExternalLoanBackfill(profileId);
 
   const accountsQuery = useQuery({
     queryKey: queryKeys.accounts(profileId),
@@ -330,24 +338,6 @@ export function ExternalLoansPage() {
                 >
                   {saveConfigMutation.isPending ? 'Guardando...' : 'Guardar configuración'}
                 </button>
-
-                <button
-                  type="button"
-                  className="boton-secundario"
-                  onClick={() => dryRunMutation.mutate()}
-                  disabled={dryRunMutation.isPending || !hasSyncConfig}
-                >
-                  {dryRunMutation.isPending ? 'Simulando...' : 'Simular sincronización'}
-                </button>
-
-                <button
-                  type="button"
-                  className="boton-principal"
-                  onClick={() => syncMutation.mutate()}
-                  disabled={syncMutation.isPending || !canSync}
-                >
-                  {syncMutation.isPending ? 'Sincronizando...' : 'Sincronizar movimientos'}
-                </button>
               </div>
 
               {saveConfigMutation.isError ? (
@@ -357,25 +347,42 @@ export function ExternalLoansPage() {
               {saveConfigMutation.isSuccess ? (
                 <p className="mensaje-exito">Configuración guardada correctamente.</p>
               ) : null}
-
-              {dryRunMutation.isError ? (
-                <p className="mensaje-error">{getApiErrorMessage(dryRunMutation.error)}</p>
-              ) : null}
-
-              {syncMutation.isError ? (
-                <p className="mensaje-error">{getApiErrorMessage(syncMutation.error)}</p>
-              ) : null}
-
-              {dryRunMutation.data ? (
-                <ExternalLoanSyncResultPanel title="Resultado de simulación" result={dryRunMutation.data} />
-              ) : null}
-
-              {syncMutation.data ? (
-                <ExternalLoanSyncResultPanel title="Resultado de sincronización" result={syncMutation.data} />
-              ) : null}
             </div>
           ) : null}
         </section>
+
+        <ExternalLoanOperationsPanel
+          health={healthQuery.data}
+          healthLoading={healthQuery.isLoading}
+          healthError={healthQuery.error}
+          hasSyncConfig={hasSyncConfig}
+          canSync={canSync}
+          readOnlyMode={readOnlyMode}
+          configEnabled={Boolean(form?.enabled)}
+          missingConfigItems={missingConfigItems as string[]}
+          dryRunResult={dryRunMutation.data}
+          dryRunPending={dryRunMutation.isPending}
+          dryRunError={dryRunMutation.error}
+          syncResult={syncMutation.data}
+          syncPending={syncMutation.isPending}
+          syncError={syncMutation.error}
+          diagnostics={diagnosticsMutation.data}
+          diagnosticsPending={diagnosticsMutation.isPending}
+          diagnosticsError={diagnosticsMutation.error}
+          backfillDryRun={backfillDryRunMutation.data}
+          backfillDryRunPending={backfillDryRunMutation.isPending}
+          backfillDryRunError={backfillDryRunMutation.error}
+          backfillApply={backfillApplyMutation.data}
+          backfillApplyPending={backfillApplyMutation.isPending}
+          backfillApplyError={backfillApplyMutation.error}
+          onAnalyzeSync={() => dryRunMutation.mutate()}
+          onSync={() => syncMutation.mutate()}
+          onDiagnose={() => diagnosticsMutation.mutate()}
+          onAnalyzeBackfill={() => backfillDryRunMutation.mutate()}
+          onApplyBackfill={(includeLowConfidence) =>
+            backfillApplyMutation.mutate({ includeLowConfidence })
+          }
+        />
 
         {summary && !integrationDisabled ? (
           <>

@@ -40,11 +40,11 @@ class ExternalLoanSyncEventProcessorTest {
   @Test void disbursementCreatesRecoverableAdjustmentConfirmedSystem() {
     UUID userId = UUID.randomUUID(); UUID profileId = UUID.randomUUID();
     var cfg = ExternalLoanSyncConfig.builder().accountId(UUID.randomUUID()).loanDisbursementCategoryId(UUID.randomUUID()).build();
-    when(transactionRepository.save(any())).thenAnswer(i -> { var tx=i.getArgument(0, MoneyTransaction.class); tx.setId(UUID.randomUUID()); return tx;});
+    when(transactionRepository.saveAndFlush(any())).thenAnswer(i -> { var tx=i.getArgument(0, MoneyTransaction.class); tx.setId(UUID.randomUUID()); return tx;});
 
     assertTrue(processor.processDisbursement(userId, profileId, cfg, "1", "Ana", LocalDate.now(), new BigDecimal("100")));
     ArgumentCaptor<MoneyTransaction> captor = ArgumentCaptor.forClass(MoneyTransaction.class);
-    verify(transactionRepository).save(captor.capture());
+    verify(transactionRepository).saveAndFlush(captor.capture());
     assertEquals(MoneyTransaction.MovementType.ADJUSTMENT, captor.getValue().getMovementType());
     assertEquals("CJPRESTAMOS_DISBURSEMENT", captor.getValue().getClassificationReason());
     assertEquals(MoneyTransaction.Origin.SYSTEM, captor.getValue().getOrigin());
@@ -57,30 +57,48 @@ class ExternalLoanSyncEventProcessorTest {
   }
 
   @Test void paymentPrincipalCreatesAdjustment() {
-    when(transactionRepository.save(any())).thenAnswer(i -> { var tx=i.getArgument(0, MoneyTransaction.class); tx.setId(UUID.randomUUID()); return tx;});
+    when(transactionRepository.saveAndFlush(any())).thenAnswer(i -> { var tx=i.getArgument(0, MoneyTransaction.class); tx.setId(UUID.randomUUID()); return tx;});
     var cfg = ExternalLoanSyncConfig.builder().accountId(UUID.randomUUID()).principalRecoveryCategoryId(UUID.randomUUID()).build();
 
     processor.processPaymentPrincipal(UUID.randomUUID(), UUID.randomUUID(), cfg, "9", LocalDate.now(), new BigDecimal("20"));
     ArgumentCaptor<MoneyTransaction> captor = ArgumentCaptor.forClass(MoneyTransaction.class);
-    verify(transactionRepository).save(captor.capture());
+    verify(transactionRepository).saveAndFlush(captor.capture());
     assertEquals(MoneyTransaction.MovementType.ADJUSTMENT, captor.getValue().getMovementType());
   }
 
   @Test void paymentInterestCreatesIncomeAndSkipsZero() {
-    when(transactionRepository.save(any())).thenAnswer(i -> { var tx=i.getArgument(0, MoneyTransaction.class); tx.setId(UUID.randomUUID()); return tx;});
+    when(transactionRepository.saveAndFlush(any())).thenAnswer(i -> { var tx=i.getArgument(0, MoneyTransaction.class); tx.setId(UUID.randomUUID()); return tx;});
     var cfg = ExternalLoanSyncConfig.builder().accountId(UUID.randomUUID()).interestIncomeCategoryId(UUID.randomUUID()).build();
 
     assertTrue(processor.processPaymentInterest(UUID.randomUUID(), UUID.randomUUID(), cfg, "9", LocalDate.now(), new BigDecimal("2")));
     assertFalse(processor.processPaymentInterest(UUID.randomUUID(), UUID.randomUUID(), cfg, "10", LocalDate.now(), BigDecimal.ZERO));
-    verify(transactionRepository, times(1)).save(any());
+    verify(transactionRepository, times(1)).saveAndFlush(any());
   }
 
   @Test void markProcessedFailurePropagates() {
-    when(transactionRepository.save(any())).thenAnswer(i -> { var tx=i.getArgument(0, MoneyTransaction.class); tx.setId(UUID.randomUUID()); return tx;});
+    when(transactionRepository.saveAndFlush(any())).thenAnswer(i -> { var tx=i.getArgument(0, MoneyTransaction.class); tx.setId(UUID.randomUUID()); return tx;});
     doThrow(new DataIntegrityViolationException("dup")).when(idempotencyService).markProcessed(any(), any(), any(), any(), any(), any(), any(), any());
     var cfg = ExternalLoanSyncConfig.builder().accountId(UUID.randomUUID()).loanDisbursementCategoryId(UUID.randomUUID()).build();
 
     assertThrows(DataIntegrityViolationException.class, () -> processor.processDisbursement(UUID.randomUUID(), UUID.randomUUID(), cfg, "1", "Ana", LocalDate.now(), BigDecimal.ONE));
+  }
+
+  @Test void concurrentUniqueConstraintDuplicateIsSkippedAfterRecheck() {
+    UUID existingTransactionId = UUID.randomUUID();
+    when(transactionRepository.saveAndFlush(any()))
+        .thenThrow(new DataIntegrityViolationException("duplicate source operation"));
+    when(duplicateDetector.detect(any(), any(), any(), any(), any(), any(), any(), any(), any()))
+        .thenReturn(DuplicateDetectionResult.notDuplicate("source-op", "source-hash"))
+        .thenReturn(
+            DuplicateDetectionResult.duplicate(
+                ExternalLoanEventDuplicateDetector.REASON_SOURCE_OPERATION_ID,
+                existingTransactionId,
+                "source-op",
+                "source-hash"));
+    var cfg = ExternalLoanSyncConfig.builder().accountId(UUID.randomUUID()).loanDisbursementCategoryId(UUID.randomUUID()).build();
+
+    assertFalse(processor.processDisbursement(UUID.randomUUID(), UUID.randomUUID(), cfg, "1", "Ana", LocalDate.now(), BigDecimal.ONE));
+    verify(idempotencyService, never()).markProcessed(any(), any(), any(), any(), any(), any(), any(), any());
   }
 
   @Test void processedEventDoesNotCreateTransaction() {
