@@ -3,8 +3,8 @@ spring:
     default: local
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/hogaria}
-    username: ${DB_USER:postgres}
-    password: ${DB_PASSWORD:postgres}
+    username: ${DB_USER:}
+    password: ${DB_PASSWORD:}
   jpa:
     hibernate:
       ddl-auto: validate
@@ -37,6 +37,10 @@ spring:
   config:
     activate:
       on-profile: local
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/hogaria}
+    username: ${DB_USER:postgres}
+    password: ${DB_PASSWORD:postgres}
 
 app:
   security:
