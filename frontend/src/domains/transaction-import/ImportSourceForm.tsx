@@ -7,6 +7,11 @@ const SOURCES: Array<{
   description: string;
 }> = [
   {
+    value: 'AUTO',
+    label: 'Detectar automáticamente',
+    description: 'Lee los encabezados y elige la plantilla compatible.',
+  },
+  {
     value: 'BANCO_PROVINCIA',
     label: 'Banco Provincia',
     description: 'Extractos bancarios y movimientos de cuenta.',

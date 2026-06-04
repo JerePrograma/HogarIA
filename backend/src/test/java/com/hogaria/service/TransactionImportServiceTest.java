@@ -5,15 +5,22 @@ import com.hogaria.dto.TransactionCreateRequest;
 import com.hogaria.dto.TransactionImportDtos.*;
 import com.hogaria.entity.*;
 import com.hogaria.repository.*;
+import com.hogaria.service.transactionimport.DetectedExcelImportFormat;
+import com.hogaria.service.transactionimport.ExcelImportTemplate;
+import com.hogaria.service.transactionimport.ImportedMovementCandidate;
+import com.hogaria.service.transactionimport.TransactionExcelImportFormatDetector;
+import com.hogaria.service.transactionimport.TransactionExcelMovementParser;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.*;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.mock.web.MockMultipartFile;
 
 import java.lang.reflect.Method;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.Map;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -30,8 +37,10 @@ class TransactionImportServiceTest {
   @Mock MoneyTransactionRepository txRepository;
   @Mock ExcelImportBatchRepository batchRepository;
   @Mock ExcelImportRowRepository rowRepository;
+  @Mock TransactionImportReferenceRepository referenceRepository;
   @Mock TransactionService txService;
   @Mock TransactionCategorySuggestionService suggestionService;
+  @Mock TransactionExcelImportFormatDetector excelFormatDetector;
 
   TransactionImportService service;
   UUID userId = UUID.randomUUID();
@@ -40,9 +49,10 @@ class TransactionImportServiceTest {
 
   @BeforeEach
   void setup() {
-    service = new TransactionImportService(profileRepository, accountRepository, categoryRepository, txRepository, batchRepository, rowRepository, txService, suggestionService, new ObjectMapper().findAndRegisterModules());
+    service = new TransactionImportService(profileRepository, accountRepository, categoryRepository, txRepository, batchRepository, rowRepository, referenceRepository, txService, suggestionService, excelFormatDetector, List.<TransactionExcelMovementParser>of(), new ObjectMapper().findAndRegisterModules());
     lenient().when(profileRepository.findByIdAndUserId(eq(profileId), eq(userId))).thenReturn(Optional.of(FinancialProfile.builder().id(profileId).userId(userId).build()));
     lenient().when(accountRepository.existsByIdAndProfileId(eq(accountId), eq(profileId))).thenReturn(true);
+    lenient().when(batchRepository.findById(any())).thenReturn(Optional.empty());
   }
 
   @Test
@@ -141,6 +151,136 @@ class TransactionImportServiceTest {
   }
 
   @Test
+  void previewDoesNotCreateMoneyTransactions() {
+    var parser = mock(TransactionExcelMovementParser.class);
+    service = new TransactionImportService(profileRepository, accountRepository, categoryRepository, txRepository, batchRepository, rowRepository, referenceRepository, txService, suggestionService, excelFormatDetector, List.of(parser), new ObjectMapper().findAndRegisterModules());
+    var batchId = UUID.randomUUID();
+    var categoryId = UUID.randomUUID();
+    var detection = new DetectedExcelImportFormat(
+            ExcelImportTemplate.MERCADO_PAGO_SETTLEMENT,
+            "sheet0",
+            0,
+            List.of("FECHA DE ORIGEN", "MONTO NETO DE LA OPERACIÓN QUE IMPACTÓ TU DINERO"),
+            Map.of()
+    );
+    var candidate = ImportedMovementCandidate.builder()
+            .source(TransactionImportSource.MERCADO_PAGO)
+            .detectedFormat("MERCADO_PAGO_SETTLEMENT")
+            .sourceOperationId("op-1")
+            .sourceHash("hash")
+            .realDate(LocalDate.of(2026, 5, 1))
+            .budgetDate(LocalDate.of(2026, 5, 1))
+            .operationDateTime(LocalDate.of(2026, 5, 1).atStartOfDay())
+            .operationDateTimePrecision(MoneyTransaction.OperationDateTimePrecision.DATE_TIME)
+            .signedAmount(new BigDecimal("-100"))
+            .amountAbs(new BigDecimal("100"))
+            .currency("ARS")
+            .rawDescription("Uber")
+            .normalizedDescription("uber")
+            .paymentChannel(MoneyTransaction.PaymentChannel.MERCADO_PAGO)
+            .movementType(MoneyTransaction.MovementType.EXPENSE)
+            .balanceImpact(MoneyTransaction.BalanceImpact.CONSUMPTION_EXPENSE)
+            .categorySuggestionKey("taxiyapps")
+            .categorySuggestionName("Taxi y apps")
+            .classificationStatus(MoneyTransaction.ClassificationStatus.CLASSIFIED)
+            .classificationReason("RULE_UBER")
+            .confidence(Confidence.HIGH)
+            .rawJson("{\"DETALLE DE LA VENTA\":\"Uber\"}")
+            .rowNumber(2)
+            .sheetName("sheet0")
+            .targetEntity(ImportTargetEntity.EXPENSE)
+            .rowStatus(RowStatus.READY)
+            .build();
+    var file = new MockMultipartFile("file", "mp.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", new byte[]{'P', 'K'});
+    when(excelFormatDetector.detect(any())).thenReturn(detection);
+    when(parser.template()).thenReturn(ExcelImportTemplate.MERCADO_PAGO_SETTLEMENT);
+    when(parser.parse(any(), eq(detection), eq(profileId), eq(accountId))).thenReturn(List.of(candidate));
+    when(categoryRepository.findByProfileIdAndActiveTrue(profileId)).thenReturn(List.of());
+    when(categoryRepository.findByProfileIdIsNullAndActiveTrue()).thenReturn(List.of(
+            Category.builder().id(categoryId).name("Taxi y apps").categoryKey("taxiyapps").type(Category.Type.VARIABLE_EXPENSE).active(true).build()
+    ));
+    when(batchRepository.save(any())).thenAnswer(invocation -> {
+      ExcelImportBatch batch = invocation.getArgument(0);
+      batch.setId(batchId);
+      return batch;
+    });
+    when(rowRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+    var preview = service.preview(userId, profileId, accountId, TransactionImportSource.AUTO, file, null, null);
+
+    assertEquals(batchId, preview.batchId());
+    assertEquals("MERCADO_PAGO_SETTLEMENT", preview.detectedFormat());
+    assertEquals(1, preview.importableRows());
+    verify(txService, never()).create(any(), any(), any());
+  }
+
+  @Test
+  void commitCreatesTransactionImportReference() throws Exception {
+    UUID batchId = UUID.randomUUID();
+    UUID categoryId = UUID.randomUUID();
+    var row = new TransactionImportPreviewRow(
+            3,
+            TransactionImportSource.BANCO_PROVINCIA,
+            "9332",
+            "abc123hash",
+            LocalDate.of(2026, 1, 30),
+            LocalDate.of(2026, 1, 30),
+            "PAGO CON TARJETA DEBITO",
+            "pago con tarjeta debito payu*ar*uber",
+            new BigDecimal("-5378"),
+            new BigDecimal("5378"),
+            "ARS",
+            MoneyTransaction.MovementType.EXPENSE,
+            categoryId,
+            "Taxi y apps",
+            Confidence.HIGH,
+            RowStatus.READY,
+            null,
+            "{}",
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            "BANCO_PROVINCIA_MOVIMIENTOS",
+            LocalDate.of(2026, 1, 30).atStartOfDay(),
+            MoneyTransaction.OperationDateTimePrecision.DATE_ONLY,
+            "COMPRA TARJETA 29/01/26 23:43",
+            "PAYU*AR*UBER",
+            "PAYU*AR*UBER",
+            MoneyTransaction.PaymentChannel.DEBIT_CARD,
+            MoneyTransaction.BalanceImpact.CONSUMPTION_EXPENSE,
+            MoneyTransaction.ClassificationStatus.CLASSIFIED,
+            "RULE_UBER",
+            "taxiyapps",
+            "9332",
+            "Hoja 1",
+            ImportTargetEntity.EXPENSE,
+            "{\"Número Secuencia\":\"9332\"}"
+    );
+    when(rowRepository.findByBatchIdOrderByRowNumber(batchId)).thenReturn(List.of(toEntity(row)));
+    when(categoryRepository.findById(categoryId)).thenReturn(Optional.of(Category.builder().id(categoryId).type(Category.Type.VARIABLE_EXPENSE).active(true).build()));
+    when(txService.create(any(TransactionCreateRequest.class), eq(userId), any(TransactionService.TransactionMetadata.class)))
+            .thenReturn(response(categoryId, MoneyTransaction.MovementType.EXPENSE, "PAGO CON TARJETA DEBITO", new BigDecimal("5378")));
+
+    var response = service.commit(userId, profileId, batchId, new TransactionImportCommitRequest(List.of(
+            new TransactionImportCommitRow(3, categoryId, accountId, MoneyTransaction.MovementType.EXPENSE, new BigDecimal("5378"), RowStatus.READY, "PAGO CON TARJETA DEBITO")
+    ), false, true));
+
+    assertEquals(1, response.createdCount());
+    var captor = ArgumentCaptor.forClass(TransactionImportReference.class);
+    verify(referenceRepository).save(captor.capture());
+    assertEquals(profileId, captor.getValue().getProfileId());
+    assertEquals(accountId, captor.getValue().getAccountId());
+    assertEquals("BANCO_PROVINCIA", captor.getValue().getImportSource());
+    assertEquals("9332", captor.getValue().getSourceOperationId());
+    assertEquals("abc123hash", captor.getValue().getSourceHash());
+    assertEquals("9332", captor.getValue().getExternalSequence());
+    assertEquals("PAYU*AR*UBER", captor.getValue().getMerchantName());
+  }
+
+  @Test
   void bancoDebinAndMercadoPagoPagoDebinSameAmountNearDateIsInternalTransfer() throws Exception {
     var date = LocalDate.of(2026, 5, 7);
     var amount = new BigDecimal("400000.00");
@@ -198,7 +338,7 @@ class TransactionImportServiceTest {
   }
 
   private ExcelImportRow toEntity(TransactionImportPreviewRow row) throws Exception {
-    return ExcelImportRow.builder().batchId(UUID.randomUUID()).rowNumber(row.rowNumber()).rawJson(new ObjectMapper().findAndRegisterModules().writeValueAsString(row)).build();
+    return ExcelImportRow.builder().id(UUID.randomUUID()).batchId(UUID.randomUUID()).rowNumber(row.rowNumber()).rawJson(new ObjectMapper().findAndRegisterModules().writeValueAsString(row)).build();
   }
 
   @SuppressWarnings("unchecked")

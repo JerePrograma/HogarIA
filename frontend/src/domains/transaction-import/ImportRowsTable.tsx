@@ -10,7 +10,11 @@ import { ImportRowCategorySelect } from "./ImportRowCategorySelect";
 import {
   getImportRowIssueMessage,
   getSuggestedCategoryName,
+  importBalanceImpactLabels,
+  importClassificationStatusLabels,
+  importConfidenceLabels,
   importMovementLabels,
+  importPaymentChannelLabels,
   getImportRowStatusTone,
   importRowStatusLabels,
 } from "./utils/importUtils";
@@ -57,6 +61,20 @@ function getExistingMovementNote(row: TransactionImportRow) {
   }
 
   return null;
+}
+
+function compactMeta(row: TransactionImportRow) {
+  return [
+    row.paymentChannel
+      ? `Canal: ${importPaymentChannelLabels[row.paymentChannel] ?? row.paymentChannel}`
+      : null,
+    row.balanceImpact
+      ? `Impacto: ${importBalanceImpactLabels[row.balanceImpact] ?? row.balanceImpact}`
+      : null,
+    row.classificationStatus
+      ? `Clasificación: ${importClassificationStatusLabels[row.classificationStatus] ?? row.classificationStatus}`
+      : null,
+  ].filter(Boolean).join(" · ");
 }
 
 export function ImportRowsTable({
@@ -139,6 +157,22 @@ export function ImportRowsTable({
                         <span className="muted">Match: {row.matchReason}</span>
                       ) : null}
 
+                      {row.merchantName ? (
+                        <span className="muted">Comercio: {row.merchantName}</span>
+                      ) : null}
+
+                      {row.counterparty && row.counterparty !== row.merchantName ? (
+                        <span className="muted">Contraparte: {row.counterparty}</span>
+                      ) : null}
+
+                      {compactMeta(row) ? (
+                        <span className="muted">{compactMeta(row)}</span>
+                      ) : null}
+
+                      {row.classificationReason ? (
+                        <span className="muted">Regla: {row.classificationReason}</span>
+                      ) : null}
+
                       {existingMovementNote ? (
                         <small className="import-row-note">
                           {existingMovementNote}
@@ -198,6 +232,14 @@ export function ImportRowsTable({
 
                       {categoryName ? (
                         <span className="muted">Sugerida: {categoryName}</span>
+                      ) : null}
+
+                      {row.confidence ? (
+                        <span className="muted">
+                          Confianza:{" "}
+                          {importConfidenceLabels[row.confidence] ??
+                            row.confidence}
+                        </span>
                       ) : null}
 
                       {issueMessage ? (

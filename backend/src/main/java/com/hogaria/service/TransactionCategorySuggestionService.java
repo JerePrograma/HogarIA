@@ -122,6 +122,45 @@ public class TransactionCategorySuggestionService {
                     false
             ),
             rule(
+                    "\\b(PAYU\\*AR\\*UBER|PAYU\\s+AR\\s+UBER|UBER|CABIFY|DIDI|TAXI)\\b",
+                    "Taxi y apps",
+                    "taxiyapps",
+                    MoneyTransaction.MovementType.EXPENSE,
+                    Category.Type.VARIABLE_EXPENSE,
+                    Confidence.HIGH,
+                    MoneyTransaction.PaymentChannel.DEBIT_CARD,
+                    MoneyTransaction.ClassificationStatus.CLASSIFIED,
+                    "RULE_UBER",
+                    null,
+                    false
+            ),
+            rule(
+                    "\\b(BUSPLUS)\\b",
+                    "Transporte público",
+                    "transportepublico",
+                    MoneyTransaction.MovementType.EXPENSE,
+                    Category.Type.VARIABLE_EXPENSE,
+                    Confidence.HIGH,
+                    MoneyTransaction.PaymentChannel.DEBIT_CARD,
+                    MoneyTransaction.ClassificationStatus.CLASSIFIED,
+                    "RULE_BUSPLUS_TRANSPORTE_PUBLICO",
+                    "BUSPLUS se clasifica como transporte público porque el comercio corresponde a recarga/pasaje de movilidad masiva.",
+                    false
+            ),
+            rule(
+                    "\\b(SUPERDIA|MINIMERCADO|SUPERMERCADO)\\b",
+                    "Supermercado",
+                    "supermercado",
+                    MoneyTransaction.MovementType.EXPENSE,
+                    Category.Type.VARIABLE_EXPENSE,
+                    Confidence.HIGH,
+                    MoneyTransaction.PaymentChannel.DEBIT_CARD,
+                    MoneyTransaction.ClassificationStatus.CLASSIFIED,
+                    "RULE_SUPERMARKET",
+                    null,
+                    false
+            ),
+            rule(
                     "\\b(PAGO\\s+CON\\s+TARJETA\\s+DEBITO|PAGO\\s+CON\\s+T\\.D\\.|TARJETA\\s+DEBITO|TARJETA\\s+DÉBITO)\\b",
                     "Gastos generales",
                     "gastos_generales",
@@ -144,6 +183,19 @@ public class TransactionCategorySuggestionService {
                     MoneyTransaction.PaymentChannel.BANK_TRANSFER,
                     MoneyTransaction.ClassificationStatus.CLASSIFIED,
                     "RULE_SALARY",
+                    null,
+                    false
+            ),
+            rule(
+                    "\\b(ACREDITACION\\s+INTERESES|ACREDIT\\.\\s+INTERESES|INTERESES\\s+GANADOS)\\b",
+                    "Intereses ganados",
+                    "interesesganados",
+                    MoneyTransaction.MovementType.INCOME,
+                    Category.Type.INCOME,
+                    Confidence.HIGH,
+                    MoneyTransaction.PaymentChannel.BANK_TRANSFER,
+                    MoneyTransaction.ClassificationStatus.CLASSIFIED,
+                    "RULE_INTEREST_INCOME",
                     null,
                     false
             ),
@@ -188,8 +240,8 @@ public class TransactionCategorySuggestionService {
             ),
             rule(
                     "\\b(PAYMENT\\s+LINKED\\s+TO\\s+A\\s+LOAN\\s+ORIGINATION|MERCADOCREDITO|MERCADOCRÉDITO)\\b",
-                    "Créditos y financiación",
-                    "creditos_y_financiacion",
+                    "Mercado Crédito",
+                    "mercadocredito",
                     MoneyTransaction.MovementType.ADJUSTMENT,
                     Category.Type.DEBT,
                     Confidence.MEDIUM,

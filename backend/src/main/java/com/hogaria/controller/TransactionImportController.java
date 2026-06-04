@@ -30,7 +30,7 @@ public class TransactionImportController {
   public TransactionImportPreviewResponse preview(
           @RequestHeader(value = "X-User-Id", required = false) String userHeader,
           @PathVariable UUID profileId,
-          @RequestParam TransactionImportSource source,
+          @RequestParam(defaultValue = "AUTO") TransactionImportSource source,
           @RequestParam UUID accountId,
           @RequestParam(required = false) Integer year,
           @RequestParam(required = false) Integer month,

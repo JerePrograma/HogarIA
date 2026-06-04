@@ -80,8 +80,20 @@ public class TransactionFinancialImpactService {
                 case "CJPRESTAMOS_PAYMENT_INTEREST_INCOME" -> {
                     return CashFlowTreatment.INTEREST_INCOME;
                 }
+                case "RULE_INTEREST_INCOME" -> {
+                    return CashFlowTreatment.INTEREST_INCOME;
+                }
+                case "RULE_BENEFIT_REIMBURSEMENT" -> {
+                    return CashFlowTreatment.REFUND_OR_REIMBURSEMENT;
+                }
+                case "RULE_LOAN_CAPITAL_RECOVERY" -> {
+                    return CashFlowTreatment.PRINCIPAL_RECOVERY;
+                }
+                case "RULE_MERCADO_CREDITO_DEBT_PAYMENT" -> {
+                    return CashFlowTreatment.DEBT_OUTFLOW;
+                }
                 case "POSSIBLE_INTERNAL_TRANSFER", "INTERNAL_TRANSFER_MATCHED", "USER_MARKED_INTERNAL_TRANSFER",
-                        "TRANSFER_UNMATCHED" -> {
+                        "TRANSFER_UNMATCHED", "RULE_MP_FUNDING_TRANSFER", "RULE_INTERNAL_TRANSFER_TRASPASO" -> {
                     return CashFlowTreatment.INTERNAL_TRANSFER;
                 }
                 case "POSSIBLE_CROSS_SOURCE_DUPLICATE", "USER_IGNORED_CROSS_SOURCE" -> {

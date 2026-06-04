@@ -4,7 +4,17 @@ import { labelOrFallback, movementTypeTones } from '../../domain/financeLabels';
 import { formatMoney } from '../../domain/formatters';
 import type { TransactionImportMovementType, TransactionImportRow } from './types';
 import { ImportRowCategorySelect } from './ImportRowCategorySelect';
-import { getImportRowIssueMessage, getSuggestedCategoryName, importMovementLabels, getImportRowStatusTone, importRowStatusLabels } from './utils/importUtils';
+import {
+  getImportRowIssueMessage,
+  getSuggestedCategoryName,
+  importBalanceImpactLabels,
+  importClassificationStatusLabels,
+  importConfidenceLabels,
+  importMovementLabels,
+  importPaymentChannelLabels,
+  getImportRowStatusTone,
+  importRowStatusLabels,
+} from './utils/importUtils';
 
 
 interface Props {
@@ -13,6 +23,23 @@ interface Props {
   categoriesById: Map<string, Category>;
   createMissingFallbackCategory: boolean;
   onUpdateRow: (rowNumber: number, patch: Partial<TransactionImportRow>) => void;
+}
+
+function compactMeta(row: TransactionImportRow) {
+  return [
+    row.paymentChannel
+      ? `Canal: ${importPaymentChannelLabels[row.paymentChannel] ?? row.paymentChannel}`
+      : null,
+    row.balanceImpact
+      ? `Impacto: ${importBalanceImpactLabels[row.balanceImpact] ?? row.balanceImpact}`
+      : null,
+    row.classificationStatus
+      ? `Clasificación: ${importClassificationStatusLabels[row.classificationStatus] ?? row.classificationStatus}`
+      : null,
+    row.confidence
+      ? `Confianza: ${importConfidenceLabels[row.confidence] ?? row.confidence}`
+      : null,
+  ].filter(Boolean).join(' · ');
 }
 
 export function ImportRowsMobileList({
@@ -88,6 +115,14 @@ export function ImportRowsMobileList({
             </div>
 
             {categoryName ? <p className="muted">Sugerida: {categoryName}</p> : null}
+            {row.merchantName ? <p className="muted">Comercio: {row.merchantName}</p> : null}
+            {row.counterparty && row.counterparty !== row.merchantName ? (
+              <p className="muted">Contraparte: {row.counterparty}</p>
+            ) : null}
+            {compactMeta(row) ? <p className="muted">{compactMeta(row)}</p> : null}
+            {row.classificationReason ? (
+              <p className="muted">Regla: {row.classificationReason}</p>
+            ) : null}
             {issueMessage ? <p className="import-row-note">{issueMessage}</p> : null}
           </article>
         );

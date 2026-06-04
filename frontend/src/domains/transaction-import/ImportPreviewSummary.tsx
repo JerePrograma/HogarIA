@@ -4,6 +4,8 @@ interface Props {
   duplicateRows: number;
   invalidRows: number;
   ignoredRows: number;
+  reviewRows?: number;
+  suggestedCategoryRows?: number;
 }
 
 function SummaryItem({
@@ -32,6 +34,8 @@ export function ImportPreviewSummary({
   duplicateRows,
   invalidRows,
   ignoredRows,
+  reviewRows = 0,
+  suggestedCategoryRows = 0,
 }: Props) {
   const blockedRows = invalidRows + ignoredRows;
 
@@ -56,6 +60,20 @@ export function ImportPreviewSummary({
         value={duplicateRows}
         helper="Se omiten para evitar repetidos."
         tone="neutral"
+      />
+
+      <SummaryItem
+        title="Sugeridas"
+        value={suggestedCategoryRows}
+        helper="Tienen categoría candidata."
+        tone="info"
+      />
+
+      <SummaryItem
+        title="Review"
+        value={reviewRows}
+        helper="Necesitan mirada manual."
+        tone={reviewRows > 0 ? 'warning' : 'neutral'}
       />
 
       <SummaryItem

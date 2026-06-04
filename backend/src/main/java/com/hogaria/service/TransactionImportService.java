@@ -8,7 +8,9 @@ import com.hogaria.entity.ExcelImportBatch;
 import com.hogaria.entity.ExcelImportRow;
 import com.hogaria.entity.ImportBatchStatus;
 import com.hogaria.entity.ImportRowStatus;
+import com.hogaria.entity.ImportTargetEntity;
 import com.hogaria.entity.MoneyTransaction;
+import com.hogaria.entity.TransactionImportReference;
 import com.hogaria.exception.BadRequestException;
 import com.hogaria.exception.ForbiddenException;
 import com.hogaria.exception.NotFoundException;
@@ -18,6 +20,11 @@ import com.hogaria.repository.ExcelImportBatchRepository;
 import com.hogaria.repository.ExcelImportRowRepository;
 import com.hogaria.repository.FinancialProfileRepository;
 import com.hogaria.repository.MoneyTransactionRepository;
+import com.hogaria.repository.TransactionImportReferenceRepository;
+import com.hogaria.service.transactionimport.ExcelImportTemplate;
+import com.hogaria.service.transactionimport.ImportedMovementCandidate;
+import com.hogaria.service.transactionimport.TransactionExcelImportFormatDetector;
+import com.hogaria.service.transactionimport.TransactionExcelMovementParser;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -254,8 +261,11 @@ public class TransactionImportService {
   private final MoneyTransactionRepository txRepository;
   private final ExcelImportBatchRepository batchRepository;
   private final ExcelImportRowRepository rowRepository;
+  private final TransactionImportReferenceRepository referenceRepository;
   private final TransactionService txService;
   private final TransactionCategorySuggestionService suggestionService;
+  private final TransactionExcelImportFormatDetector excelFormatDetector;
+  private final List<TransactionExcelMovementParser> excelMovementParsers;
   private final ObjectMapper objectMapper;
 
   public TransactionImportService(
@@ -265,8 +275,11 @@ public class TransactionImportService {
           MoneyTransactionRepository txRepository,
           ExcelImportBatchRepository batchRepository,
           ExcelImportRowRepository rowRepository,
+          TransactionImportReferenceRepository referenceRepository,
           TransactionService txService,
           TransactionCategorySuggestionService suggestionService,
+          TransactionExcelImportFormatDetector excelFormatDetector,
+          List<TransactionExcelMovementParser> excelMovementParsers,
           ObjectMapper objectMapper
   ) {
     this.profileRepository = profileRepository;
@@ -275,8 +288,11 @@ public class TransactionImportService {
     this.txRepository = txRepository;
     this.batchRepository = batchRepository;
     this.rowRepository = rowRepository;
+    this.referenceRepository = referenceRepository;
     this.txService = txService;
     this.suggestionService = suggestionService;
+    this.excelFormatDetector = excelFormatDetector;
+    this.excelMovementParsers = excelMovementParsers;
     this.objectMapper = objectMapper;
   }
 
@@ -293,27 +309,44 @@ public class TransactionImportService {
     ensureProfileBelongsToUser(profileId, userId);
     ensureAccountBelongsToProfile(accountId, profileId);
 
-    var rows = parse(source, file, profileId, accountId, year, month);
+    var requestedSource = source == null ? TransactionImportSource.AUTO : source;
+    var rows = parse(requestedSource, file, profileId, accountId, year, month);
     rows = applyDuplicateStatus(profileId, accountId, rows);
+    var actualSource = rows.isEmpty() || rows.get(0).source() == null || rows.get(0).source() == TransactionImportSource.AUTO
+            ? requestedSource
+            : rows.get(0).source();
+    var detectedFormat = rows
+            .stream()
+            .map(TransactionImportPreviewRow::detectedFormat)
+            .filter(Objects::nonNull)
+            .findFirst()
+            .orElse(null);
 
     var batch = batchRepository.save(
             ExcelImportBatch.builder()
                     .profileId(profileId)
+                    .accountId(accountId)
+                    .source(actualSource == TransactionImportSource.AUTO ? null : actualSource.name())
                     .originalFileName(file.getOriginalFilename())
                     .currency(DEFAULT_CURRENCY)
                     .status(ImportBatchStatus.PREVIEWED)
                     .year(year)
-                    .summaryJson("{}")
+                    .month(month)
+                    .summaryJson(writeJson(Map.of(
+                            "detectedFormat", detectedFormat == null ? "" : detectedFormat,
+                            "requestedSource", requestedSource.name(),
+                            "actualSource", actualSource.name()
+                    )))
                     .warningsJson("[]")
                     .errorsJson("[]")
                     .build()
     );
 
     for (var row : rows) {
-      savePreviewRow(batch.getId(), source, row);
+      savePreviewRow(batch.getId(), actualSource, row);
     }
 
-    return summarize(batch.getId(), source, accountId, rows);
+    return summarize(batch.getId(), actualSource, accountId, rows);
   }
 
   @Transactional(readOnly = true)
@@ -346,16 +379,17 @@ public class TransactionImportService {
   ) {
     ensureProfileBelongsToUser(profileId, userId);
 
-    var previewRows = loadRows(batchId);
+    var loadedRows = loadRowSnapshots(batchId);
+    var previewRows = loadedRows.stream().map(LoadedPreviewRow::previewRow).toList();
 
     if (previewRows.isEmpty()) {
       throw new BadRequestException("El batch no tiene filas importables.");
     }
 
-    var rowsByNumber = new HashMap<Integer, TransactionImportPreviewRow>();
+    var rowsByNumber = new HashMap<Integer, LoadedPreviewRow>();
 
-    for (var row : previewRows) {
-      rowsByNumber.put(row.rowNumber(), row);
+    for (var row : loadedRows) {
+      rowsByNumber.put(row.previewRow().rowNumber(), row);
     }
 
     int created = 0;
@@ -380,6 +414,22 @@ public class TransactionImportService {
       }
     }
 
+    int finalCreated = created;
+    int finalSkipped = skipped;
+    int finalDuplicates = duplicates;
+    int finalFailed = failed;
+
+    batchRepository.findById(batchId).ifPresent(batch -> {
+      batch.setStatus(finalFailed > 0 && finalCreated == 0 ? ImportBatchStatus.FAILED : ImportBatchStatus.COMPLETED);
+      batch.setSummaryJson(writeJson(Map.of(
+              "created", finalCreated,
+              "skipped", finalSkipped,
+              "duplicates", finalDuplicates,
+              "failed", finalFailed
+      )));
+      batchRepository.save(batch);
+    });
+
     return new TransactionImportCommitResponse(
             created,
             skipped,
@@ -395,13 +445,14 @@ public class TransactionImportService {
           UUID userId,
           UUID profileId,
           UUID batchId,
-          Map<Integer, TransactionImportPreviewRow> rowsByNumber,
+          Map<Integer, LoadedPreviewRow> rowsByNumber,
           TransactionImportCommitRow commitRow,
           TransactionImportCommitRequest request,
           List<String> warnings,
           List<String> errors
   ) {
-    var previewRow = rowsByNumber.get(commitRow.rowNumber());
+    var loadedRow = rowsByNumber.get(commitRow.rowNumber());
+    var previewRow = loadedRow == null ? null : loadedRow.previewRow();
 
     if (previewRow == null) {
       errors.add("Fila " + commitRow.rowNumber() + ": no existe en el batch.");
@@ -409,6 +460,7 @@ public class TransactionImportService {
     }
 
     if (commitRow.status() == RowStatus.SKIPPED || previewRow.status() == RowStatus.SKIPPED) {
+      markImportRow(loadedRow.entity(), ImportRowStatus.SKIPPED, firstNonBlank(previewRow.skipReason(), "Omitida por regla de preview."));
       return skippedResult();
     }
     if (commitRow.status() == RowStatus.DUPLICATE || commitRow.status() == RowStatus.DUPLICATE_EXACT
@@ -416,6 +468,7 @@ public class TransactionImportService {
             || previewRow.status() == RowStatus.DUPLICATE || previewRow.status() == RowStatus.DUPLICATE_EXACT
             || previewRow.status() == RowStatus.POSSIBLE_CROSS_SOURCE_DUPLICATE) {
       if (request.skipDuplicates()) {
+        markImportRow(loadedRow.entity(), ImportRowStatus.SKIPPED, "Omitida por duplicado detectado.");
         return duplicateResult();
       }
       warnings.add("Fila " + commitRow.rowNumber() + ": marcada como duplicada, se intenta importar.");
@@ -423,10 +476,12 @@ public class TransactionImportService {
     if (commitRow.status() == RowStatus.POSSIBLE_INTERNAL_TRANSFER || commitRow.status() == RowStatus.INTERNAL_TRANSFER_MATCHED
             || previewRow.status() == RowStatus.POSSIBLE_INTERNAL_TRANSFER || previewRow.status() == RowStatus.INTERNAL_TRANSFER_MATCHED) {
       warnings.add("Fila " + commitRow.rowNumber() + ": omitida por posible transferencia interna.");
+      markImportRow(loadedRow.entity(), ImportRowStatus.SKIPPED, "Omitida por posible transferencia interna.");
       return skippedResult();
     }
     if (commitRow.status() == RowStatus.ERROR || previewRow.status() == RowStatus.ERROR) {
       errors.add("Fila " + commitRow.rowNumber() + ": fila inválida en preview.");
+      markImportRow(loadedRow.entity(), ImportRowStatus.ERROR, "Fila inválida en preview.");
       return failedResult();
     }
 
@@ -434,6 +489,7 @@ public class TransactionImportService {
 
     if (amount == null || amount.signum() <= 0) {
       errors.add("Fila " + commitRow.rowNumber() + ": monto inválido.");
+      markImportRow(loadedRow.entity(), ImportRowStatus.ERROR, "Monto inválido.");
       return failedResult();
     }
 
@@ -441,6 +497,7 @@ public class TransactionImportService {
 
     if (accountId == null) {
       errors.add("Fila " + commitRow.rowNumber() + ": falta accountId.");
+      markImportRow(loadedRow.entity(), ImportRowStatus.ERROR, "Falta accountId.");
       return failedResult();
     }
 
@@ -448,6 +505,7 @@ public class TransactionImportService {
       ensureAccountBelongsToProfile(accountId, profileId);
     } catch (Exception ex) {
       errors.add("Fila " + commitRow.rowNumber() + ": la cuenta no pertenece al perfil.");
+      markImportRow(loadedRow.entity(), ImportRowStatus.ERROR, "La cuenta no pertenece al perfil.");
       return failedResult();
     }
 
@@ -461,20 +519,24 @@ public class TransactionImportService {
       categoryId = resolveCategoryId(profileId, commitRow, previewRow, request, movementType);
     } catch (Exception ex) {
       errors.add("Fila " + commitRow.rowNumber() + ": " + ex.getMessage());
+      markImportRow(loadedRow.entity(), ImportRowStatus.ERROR, ex.getMessage());
       return failedResult();
     }
 
     if (categoryId == null) {
       errors.add("Fila " + commitRow.rowNumber() + ": falta categoría.");
+      markImportRow(loadedRow.entity(), ImportRowStatus.ERROR, "Falta categoría.");
       return failedResult();
     }
     var category = categoryRepository.findById(categoryId).orElse(null);
     if (category == null) {
       errors.add("Fila " + commitRow.rowNumber() + ": categoría inexistente.");
+      markImportRow(loadedRow.entity(), ImportRowStatus.ERROR, "Categoría inexistente.");
       return failedResult();
     }
     if (!isMovementCategoryCompatible(movementType, category.getType())) {
       errors.add("Fila " + commitRow.rowNumber() + ": tipo de movimiento/categoría incompatible.");
+      markImportRow(loadedRow.entity(), ImportRowStatus.ERROR, "Tipo de movimiento/categoría incompatible.");
       return failedResult();
     }
 
@@ -488,6 +550,7 @@ public class TransactionImportService {
     if (findImportMatch(profileId, accountId, previewRow).type() != ImportMatchType.NONE) {
       if (request.skipDuplicates()) {
         warnings.add("Fila " + commitRow.rowNumber() + ": omitida por duplicado.");
+        markImportRow(loadedRow.entity(), ImportRowStatus.SKIPPED, "Omitida por duplicado.");
         return duplicateResult();
       }
 
@@ -503,7 +566,7 @@ public class TransactionImportService {
                       movementType,
                       previewRow.realDate(),
                       previewRow.budgetDate(),
-                      null,
+                      previewRow.operationDateTime(),
                       amount,
                       firstNonBlank(previewRow.currency(), DEFAULT_CURRENCY).toUpperCase(Locale.ROOT),
                       description,
@@ -512,8 +575,8 @@ public class TransactionImportService {
                       previewRow.source().name(),
                       previewRow.sourceOperationId(),
                       previewRow.sourceHash(),
-                      inferPaymentChannel(previewRow.source(), description),
-                      null,
+                      previewRow.paymentChannel() == null ? inferPaymentChannel(previewRow.source(), description) : previewRow.paymentChannel(),
+                      previewRow.counterparty(),
                       inferClassificationStatus(previewRow, categoryId),
                       inferClassificationReason(previewRow),
                       batchId,
@@ -524,8 +587,8 @@ public class TransactionImportService {
                       previewRow.source().name(),
                       previewRow.sourceOperationId(),
                       previewRow.sourceHash(),
-                      inferPaymentChannel(previewRow.source(), description),
-                      null,
+                      previewRow.paymentChannel() == null ? inferPaymentChannel(previewRow.source(), description) : previewRow.paymentChannel(),
+                      previewRow.counterparty(),
                       inferClassificationStatus(previewRow, categoryId),
                       inferClassificationReason(previewRow),
                       batchId,
@@ -533,9 +596,13 @@ public class TransactionImportService {
               )
       );
 
+      saveImportReference(profileId, accountId, batchId, loadedRow.entity(), previewRow, response.id());
+      markImportRow(loadedRow.entity(), ImportRowStatus.IMPORTED, null);
+
       return createdResult(response.id());
     } catch (Exception ex) {
       errors.add("Fila " + commitRow.rowNumber() + ": " + ex.getMessage());
+      markImportRow(loadedRow.entity(), ImportRowStatus.ERROR, ex.getMessage());
       return failedResult();
     }
   }
@@ -554,8 +621,15 @@ public class TransactionImportService {
 
     try {
       return switch (source) {
-        case BANCO_PROVINCIA -> parseBancoProvincia(file, profileId, accountId, year, month);
-        case MERCADO_PAGO -> parseMercadoPago(file, profileId, accountId, year, month);
+        case AUTO -> parseDetectedExcel(file, profileId, accountId, null);
+        case BANCO_PROVINCIA -> parseDetectedExcel(file, profileId, accountId, ExcelImportTemplate.BANCO_PROVINCIA_MOVIMIENTOS);
+        case MERCADO_PAGO -> {
+          var bytes = file.getBytes();
+          if (looksLikeExcelFile(bytes, file.getOriginalFilename())) {
+            yield parseDetectedExcel(bytes, profileId, accountId, ExcelImportTemplate.MERCADO_PAGO_SETTLEMENT);
+          }
+          yield parseMercadoPagoDelimited(bytes, profileId, accountId, year, month);
+        }
         case TARJETA_CREDITO_GENERICA -> parseGenericCard(file, profileId, accountId, year, month, false);
         case DEUDAS_TARJETA_GENERICA -> parseGenericCard(file, profileId, accountId, year, month, true);
       };
@@ -564,6 +638,47 @@ public class TransactionImportService {
     } catch (Exception ex) {
       throw new BadRequestException("Cannot parse file: " + ex.getMessage());
     }
+  }
+
+  private List<TransactionImportPreviewRow> parseDetectedExcel(
+          MultipartFile file,
+          UUID profileId,
+          UUID accountId,
+          ExcelImportTemplate expectedTemplate
+  ) throws Exception {
+    return parseDetectedExcel(file.getBytes(), profileId, accountId, expectedTemplate);
+  }
+
+  private List<TransactionImportPreviewRow> parseDetectedExcel(
+          byte[] bytes,
+          UUID profileId,
+          UUID accountId,
+          ExcelImportTemplate expectedTemplate
+  ) {
+    var detection = excelFormatDetector.detect(bytes);
+
+    if (expectedTemplate != null && detection.template() != expectedTemplate) {
+      throw new BadRequestException(
+              "El archivo detectado es " + detection.template().name()
+                      + ", pero se esperaba " + expectedTemplate.name()
+                      + ". Headers detectados en fila " + detection.headerRowNumber()
+                      + ": " + String.join(" | ", detection.headers())
+      );
+    }
+
+    var parser = excelMovementParsers
+            .stream()
+            .filter(candidate -> candidate.template() == detection.template())
+            .findFirst()
+            .orElseThrow(() -> new BadRequestException("No hay parser registrado para " + detection.template().name()));
+
+    var categories = loadVisibleCategories(profileId);
+
+    return parser
+            .parse(bytes, detection, profileId, accountId)
+            .stream()
+            .map(candidate -> toPreviewRow(profileId, categories, candidate))
+            .toList();
   }
 
   private List<TransactionImportPreviewRow> parseBancoProvincia(
@@ -1374,22 +1489,116 @@ public class TransactionImportService {
     throw new IllegalArgumentException("Fecha MercadoPago inválida: " + value);
   }
 
+  private TransactionImportPreviewRow toPreviewRow(
+          UUID profileId,
+          List<Category> categories,
+          ImportedMovementCandidate candidate
+  ) {
+    var category = findCategoryByNameOrKeyAndCompatibleType(
+            categories,
+            candidate.categorySuggestionName(),
+            candidate.categorySuggestionKey(),
+            candidate.movementType()
+    );
+    var status = candidate.rowStatus() == null ? RowStatus.NEEDS_CATEGORY : candidate.rowStatus();
+
+    if (status == RowStatus.READY && candidate.categorySuggestionName() != null && category == null) {
+      status = RowStatus.NEEDS_CATEGORY;
+    }
+
+    if (status == RowStatus.NEEDS_CATEGORY && category != null
+            && candidate.classificationStatus() != MoneyTransaction.ClassificationStatus.REVIEW) {
+      status = RowStatus.READY;
+    }
+
+    var suggestedCategoryName = category == null
+            ? candidate.categorySuggestionName()
+            : category.getName();
+
+    return new TransactionImportPreviewRow(
+            candidate.rowNumber(),
+            candidate.source(),
+            candidate.sourceOperationId(),
+            candidate.sourceHash(),
+            candidate.realDate(),
+            candidate.budgetDate(),
+            candidate.rawDescription(),
+            candidate.normalizedDescription(),
+            candidate.signedAmount(),
+            candidate.amountAbs(),
+            firstNonBlank(candidate.currency(), DEFAULT_CURRENCY).toUpperCase(Locale.ROOT),
+            candidate.movementType(),
+            category == null ? null : category.getId(),
+            suggestedCategoryName,
+            candidate.confidence() == null ? Confidence.LOW : candidate.confidence(),
+            status,
+            candidate.warning(),
+            candidate.rawJson(),
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            candidate.detectedFormat(),
+            candidate.operationDateTime(),
+            candidate.operationDateTimePrecision(),
+            candidate.extendedDescription(),
+            candidate.merchantName(),
+            candidate.counterparty(),
+            candidate.paymentChannel(),
+            candidate.balanceImpact(),
+            candidate.classificationStatus(),
+            candidate.classificationReason(),
+            candidate.categorySuggestionKey(),
+            candidate.externalSequence(),
+            candidate.sheetName(),
+            candidate.targetEntity(),
+            candidate.rawJson()
+    );
+  }
+
   private List<TransactionImportPreviewRow> applyDuplicateStatus(
           UUID profileId,
           UUID accountId,
           List<TransactionImportPreviewRow> rows
   ) {
-    return rows
-            .stream()
-            .map(row -> {
-              var match = findImportMatch(profileId, accountId, row);
-              if (match.type() != ImportMatchType.NONE) {
-                return copyWithStatus(row, match);
-              }
+    var seenHashes = new java.util.HashSet<String>();
+    var seenOperations = new java.util.HashSet<String>();
+    var resolved = new ArrayList<TransactionImportPreviewRow>();
 
-              return row;
-            })
-            .toList();
+    for (var row : rows) {
+      if (row.status() == RowStatus.ERROR || row.status() == RowStatus.SKIPPED) {
+        resolved.add(row);
+        continue;
+      }
+
+      if (row.sourceHash() != null && !seenHashes.add(row.sourceHash())) {
+        resolved.add(copyWithStatus(row, new ImportMatch(
+                ImportMatchType.EXACT_DUPLICATE,
+                null,
+                "Duplicado dentro del archivo: mismo source_hash."
+        )));
+        continue;
+      }
+
+      if (row.source() != null && row.sourceOperationId() != null) {
+        var operationKey = row.source().name() + "|" + row.sourceOperationId();
+        if (!seenOperations.add(operationKey)) {
+          resolved.add(copyWithStatus(row, new ImportMatch(
+                  ImportMatchType.SOURCE_DUPLICATE,
+                  null,
+                  "Duplicado dentro del archivo: mismo source + sourceOperationId."
+          )));
+          continue;
+        }
+      }
+
+      var match = findImportMatch(profileId, accountId, row);
+      resolved.add(match.type() == ImportMatchType.NONE ? row : copyWithStatus(row, match));
+    }
+
+    return resolved;
   }
 
   private TransactionImportPreviewRow copyWithStatus(
@@ -1436,7 +1645,22 @@ public class TransactionImportService {
                     ? null
                     : categoryRepository.findById(matchedTransaction.getCategoryId()).map(Category::getName).orElse(null),
             match.type().name(),
-            match.reason()
+            match.reason(),
+            row.detectedFormat(),
+            row.operationDateTime(),
+            row.operationDateTimePrecision(),
+            row.extendedDescription(),
+            row.merchantName(),
+            row.counterparty(),
+            row.paymentChannel(),
+            row.balanceImpact(),
+            row.classificationStatus(),
+            row.classificationReason(),
+            row.categorySuggestionKey(),
+            row.externalSequence(),
+            row.sheetName(),
+            row.targetEntity(),
+            row.rawJson()
     );
   }
 
@@ -1445,9 +1669,9 @@ public class TransactionImportService {
       rowRepository.save(
               ExcelImportRow.builder()
                       .batchId(batchId)
-                      .sheetName(source.name())
+                      .sheetName(firstNonBlank(row.sheetName(), source.name()))
                       .rowNumber(row.rowNumber())
-                      .concept(row.rawDescription())
+                      .concept(truncate(row.rawDescription(), 255))
                       .month(row.budgetDate() == null ? null : row.budgetDate().getMonthValue())
                       .realDate(row.realDate())
                       .budgetDate(row.budgetDate())
@@ -1455,8 +1679,12 @@ public class TransactionImportService {
                       .movementType(row.movementType())
                       .sourceOperationId(row.sourceOperationId())
                       .sourceHash(row.sourceHash())
-                      .rawDescription(row.rawDescription())
-                      .normalizedDescription(row.normalizedDescription())
+                      .externalSequence(row.externalSequence())
+                      .rawDescription(truncate(row.rawDescription(), 255))
+                      .normalizedDescription(truncate(row.normalizedDescription(), 500))
+                      .extendedDescription(truncate(row.extendedDescription(), 500))
+                      .merchantName(truncate(row.merchantName(), 255))
+                      .targetEntity(row.targetEntity())
                       .status(toImportRowStatus(row.status()))
                       .errorMessage(row.skipReason())
                       .rawJson(objectMapper.writeValueAsString(row))
@@ -1478,23 +1706,100 @@ public class TransactionImportService {
       case READY -> ImportRowStatus.READY;
       case SKIPPED -> ImportRowStatus.SKIPPED;
       case ERROR -> ImportRowStatus.ERROR;
-      case NEEDS_CATEGORY, DUPLICATE, DUPLICATE_EXACT, POSSIBLE_INTERNAL_TRANSFER, INTERNAL_TRANSFER_MATCHED, POSSIBLE_CROSS_SOURCE_DUPLICATE -> ImportRowStatus.WARNING;
+      case NEEDS_CATEGORY, DUPLICATE, DUPLICATE_EXACT, POSSIBLE_INTERNAL_TRANSFER, INTERNAL_TRANSFER_MATCHED, POSSIBLE_CROSS_SOURCE_DUPLICATE, REVIEW -> ImportRowStatus.WARNING;
     };
   }
 
   private List<TransactionImportPreviewRow> loadRows(UUID batchId) {
+    return loadRowSnapshots(batchId)
+            .stream()
+            .map(LoadedPreviewRow::previewRow)
+            .toList();
+  }
+
+  private List<LoadedPreviewRow> loadRowSnapshots(UUID batchId) {
     return rowRepository
             .findByBatchIdOrderByRowNumber(batchId)
             .stream()
-            .map(row -> {
+            .map(entity -> {
               try {
-                return objectMapper.readValue(row.getRawJson(), TransactionImportPreviewRow.class);
+                var previewRow = objectMapper.readValue(entity.getRawJson(), TransactionImportPreviewRow.class);
+                return new LoadedPreviewRow(previewRow, entity);
               } catch (Exception ignored) {
                 return null;
               }
             })
             .filter(Objects::nonNull)
             .toList();
+  }
+
+  private void markImportRow(ExcelImportRow row, ImportRowStatus status, String message) {
+    if (row == null) {
+      return;
+    }
+
+    row.setStatus(status);
+    row.setErrorMessage(message == null ? null : truncate(message, 1000));
+    rowRepository.save(row);
+  }
+
+  private void saveImportReference(
+          UUID profileId,
+          UUID accountId,
+          UUID batchId,
+          ExcelImportRow importRow,
+          TransactionImportPreviewRow previewRow,
+          UUID transactionId
+  ) {
+    referenceRepository.save(
+            TransactionImportReference.builder()
+                    .transactionId(transactionId)
+                    .profileId(profileId)
+                    .accountId(accountId)
+                    .importBatchId(batchId)
+                    .importRowId(importRow == null ? null : importRow.getId())
+                    .importSource(previewRow.source().name())
+                    .sourceOperationId(previewRow.sourceOperationId())
+                    .sourceHash(previewRow.sourceHash())
+                    .externalSequence(previewRow.externalSequence())
+                    .rawDescription(truncate(previewRow.rawDescription(), 255))
+                    .normalizedDescription(truncate(previewRow.normalizedDescription(), 500))
+                    .extendedDescription(truncate(previewRow.extendedDescription(), 500))
+                    .merchantName(truncate(previewRow.merchantName(), 255))
+                    .rawPayload(safeJsonPayload(firstNonBlank(previewRow.rawJson(), previewRow.rawPayload())))
+                    .build()
+    );
+  }
+
+  private String safeJsonPayload(String payload) {
+    var clean = firstNonBlank(payload);
+
+    if (clean.isBlank()) {
+      return "{}";
+    }
+
+    try {
+      objectMapper.readTree(clean);
+      return clean;
+    } catch (Exception ignored) {
+      return writeJson(Map.of("raw", clean));
+    }
+  }
+
+  private String writeJson(Object value) {
+    try {
+      return objectMapper.writeValueAsString(value);
+    } catch (Exception ex) {
+      return "{}";
+    }
+  }
+
+  private String truncate(String value, int maxLength) {
+    if (value == null || value.length() <= maxLength) {
+      return value;
+    }
+
+    return value.substring(0, maxLength);
   }
 
   private TransactionImportPreviewResponse summarize(
@@ -1507,20 +1812,42 @@ public class TransactionImportService {
     int skipped = 0;
     int unresolved = 0;
     int importable = 0;
+    int suggested = 0;
+    int review = 0;
+    int errors = 0;
 
     for (var row : rows) {
+      if (row.suggestedCategoryId() != null) {
+        suggested++;
+      }
       if (row.status() == RowStatus.DUPLICATE || row.status() == RowStatus.DUPLICATE_EXACT
               || row.status() == RowStatus.POSSIBLE_INTERNAL_TRANSFER || row.status() == RowStatus.INTERNAL_TRANSFER_MATCHED
               || row.status() == RowStatus.POSSIBLE_CROSS_SOURCE_DUPLICATE) {
         duplicates++;
       } else if (row.status() == RowStatus.SKIPPED) {
         skipped++;
+      } else if (row.status() == RowStatus.ERROR) {
+        errors++;
       } else if (row.status() == RowStatus.NEEDS_CATEGORY) {
         unresolved++;
+      } else if (row.status() == RowStatus.REVIEW) {
+        review++;
+        if (row.suggestedCategoryId() == null) {
+          unresolved++;
+        } else {
+          importable++;
+        }
       } else if (row.status() == RowStatus.READY) {
         importable++;
       }
     }
+
+    var detectedFormat = rows
+            .stream()
+            .map(TransactionImportPreviewRow::detectedFormat)
+            .filter(Objects::nonNull)
+            .findFirst()
+            .orElse(null);
 
     return new TransactionImportPreviewResponse(
             batchId,
@@ -1533,7 +1860,12 @@ public class TransactionImportService {
             unresolved,
             rows,
             List.of(),
-            List.of()
+            List.of(),
+            detectedFormat,
+            suggested,
+            unresolved,
+            review,
+            errors
     );
   }
 
@@ -1575,7 +1907,13 @@ public class TransactionImportService {
     if (categoryId == null) {
       return MoneyTransaction.ClassificationStatus.NEEDS_CATEGORY;
     }
+    if (row.classificationStatus() != null) {
+      return row.classificationStatus();
+    }
     if (row.status() == RowStatus.POSSIBLE_CROSS_SOURCE_DUPLICATE) {
+      return MoneyTransaction.ClassificationStatus.REVIEW;
+    }
+    if (row.status() == RowStatus.REVIEW) {
       return MoneyTransaction.ClassificationStatus.REVIEW;
     }
     if (row.status() == RowStatus.POSSIBLE_INTERNAL_TRANSFER
@@ -1591,6 +1929,9 @@ public class TransactionImportService {
   }
 
   private String inferClassificationReason(TransactionImportPreviewRow row) {
+    if (row.classificationReason() != null && !row.classificationReason().isBlank()) {
+      return row.classificationReason();
+    }
     if (row.status() == RowStatus.POSSIBLE_CROSS_SOURCE_DUPLICATE) {
       return "POSSIBLE_CROSS_SOURCE_DUPLICATE";
     }
@@ -1652,9 +1993,21 @@ public class TransactionImportService {
   }
 
   private ImportMatch findImportMatch(UUID profileId, UUID accountId, TransactionImportPreviewRow row) {
+    if (row.realDate() == null || row.amount() == null) {
+      return new ImportMatch(ImportMatchType.NONE, null, null);
+    }
     if (row.sourceHash() != null && txRepository.existsByProfileIdAndSourceHash(profileId, row.sourceHash())) {
       var tx = txRepository.findByProfileIdAndSourceHash(profileId, row.sourceHash()).orElse(null);
       return new ImportMatch(ImportMatchType.EXACT_DUPLICATE, tx == null ? null : tx.getId(), "Duplicado exacto: ya existe una operación con el mismo origen/hash.");
+    }
+    if (row.sourceHash() != null && row.source() != null
+            && referenceRepository.findByProfileIdAndAccountIdAndImportSourceAndSourceHash(
+            profileId,
+            accountId,
+            row.source().name(),
+            row.sourceHash()
+    ).isPresent()) {
+      return new ImportMatch(ImportMatchType.EXACT_DUPLICATE, null, "Duplicado exacto: ya existe una referencia de importación con el mismo source_hash.");
     }
     if (row.source() != null && row.sourceOperationId() != null) {
       var tx = txRepository.findByProfileIdAndSourceAndSourceOperationId(profileId, row.source().name(), row.sourceOperationId());
@@ -1796,12 +2149,17 @@ public class TransactionImportService {
               suggestion.reason(),
               suggestion.warning());
     }
-    var fallbackName = fallbackCategoryName(movementType);
-    var fallback = findCategoryByName(categories, fallbackName);
-    if (fallback != null) {
-      return new CategorySuggestion(fallback.getId(), fallback.getName(), Confidence.LOW, RowStatus.READY, fallback.getType(), movementType, null, null, null);
-    }
-    return new CategorySuggestion(null, fallbackName, Confidence.LOW, RowStatus.NEEDS_CATEGORY, inferCategoryType(fallbackName, movementType), movementType, null, null, null);
+    return new CategorySuggestion(
+            null,
+            fallbackCategoryName(movementType),
+            Confidence.LOW,
+            RowStatus.NEEDS_CATEGORY,
+            inferCategoryType(fallbackCategoryName(movementType), movementType),
+            movementType,
+            MoneyTransaction.ClassificationStatus.NEEDS_CATEGORY,
+            "NO_IMPORT_RULE",
+            "No hay regla confiable. Requiere categoría manual."
+    );
   }
 
   private Category findCategoryByName(List<Category> categories, String name) {
@@ -1822,16 +2180,44 @@ public class TransactionImportService {
             .orElse(null);
   }
 
+  private Category findCategoryByNameOrKeyAndCompatibleType(
+          List<Category> categories,
+          String name,
+          String key,
+          MoneyTransaction.MovementType movementType
+  ) {
+    if ((name == null || name.isBlank()) && (key == null || key.isBlank())) {
+      return null;
+    }
+
+    return categories
+            .stream()
+            .filter(Category::getActive)
+            .filter(category -> sameCategoryName(category.getName(), name) || sameCategoryKey(category.getCategoryKey(), key))
+            .filter(category -> isMovementCategoryCompatible(movementType, category.getType()))
+            .findFirst()
+            .orElse(null);
+  }
+
   private boolean sameCategoryName(String left, String right) {
     return normalizeCategoryName(left).equals(normalizeCategoryName(right));
   }
 
+  private boolean sameCategoryKey(String left, String right) {
+    return normalizeCategoryName(left).equals(normalizeCategoryName(right));
+  }
+
   private String normalizeCategoryName(String value) {
-    return value == null
-            ? ""
-            : value.replace('\u00A0', ' ')
-              .trim()
-              .toLowerCase(Locale.ROOT);
+    if (value == null) {
+      return "";
+    }
+
+    var clean = Normalizer.normalize(value.replace('\u00A0', ' ').trim(), Normalizer.Form.NFD)
+            .replaceAll("\\p{M}", "");
+
+    return clean
+            .toLowerCase(Locale.ROOT)
+            .replaceAll("[^a-z0-9]+", "");
   }
 
   private Category.Type inferCategoryType(String categoryName, MoneyTransaction.MovementType movementType) {
@@ -2420,6 +2806,9 @@ public class TransactionImportService {
           int failedCount,
           UUID createdTransactionId
   ) {
+  }
+
+  private record LoadedPreviewRow(TransactionImportPreviewRow previewRow, ExcelImportRow entity) {
   }
 
   private CommitRowResult createdResult(UUID id) {

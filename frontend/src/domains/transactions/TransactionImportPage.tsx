@@ -37,6 +37,7 @@ interface RowFilters {
 const ALL = "ALL";
 
 const sourceLabels: Record<string, string> = {
+  AUTO: "Detectar automáticamente",
   BANCO_PROVINCIA: "Banco Provincia",
   MERCADO_PAGO: "Mercado Pago",
   TARJETA_CREDITO_GENERICA: "Tarjeta de crédito",
@@ -51,6 +52,7 @@ const rowStatusLabels: Record<string, string> = {
   POSSIBLE_INTERNAL_TRANSFER: "Posibles transferencias internas",
   INTERNAL_TRANSFER_MATCHED: "Transferencias internas",
   POSSIBLE_CROSS_SOURCE_DUPLICATE: "Posibles duplicados entre cuentas",
+  REVIEW: "Requieren revisión",
   ERROR: "Con error",
   SKIPPED: "Omitidas",
 };
@@ -69,7 +71,7 @@ function getRowStatusTone(
   status: RowStatus,
 ): "ok" | "watch" | "critical" | "neutral" {
   if (status === "READY") return "ok";
-  if (status === "NEEDS_CATEGORY") return "watch";
+  if (status === "NEEDS_CATEGORY" || status === "REVIEW") return "watch";
   if (status === "ERROR") return "critical";
   return "neutral";
 }
@@ -132,7 +134,7 @@ export function TransactionImportPage() {
   const qc = useQueryClient();
 
   const [source, setSource] =
-    useState<TransactionImportSource>("BANCO_PROVINCIA");
+    useState<TransactionImportSource>("AUTO");
   const [accountId, setAccountId] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<TransactionImportPreview | null>(null);
@@ -238,6 +240,7 @@ export function TransactionImportPage() {
           POSSIBLE_INTERNAL_TRANSFER: 0,
           INTERNAL_TRANSFER_MATCHED: 0,
           POSSIBLE_CROSS_SOURCE_DUPLICATE: 0,
+          REVIEW: 0,
           ERROR: 0,
           SKIPPED: 0,
         } as Record<RowStatus | "total", number>,
@@ -249,9 +252,10 @@ export function TransactionImportPage() {
     () =>
       rows.filter(
         (row) =>
-          row.status === "NEEDS_CATEGORY" &&
-          !row.suggestedCategoryId &&
-          !createMissingFallbackCategory,
+          (row.status === "NEEDS_CATEGORY" &&
+            !row.suggestedCategoryId &&
+            !createMissingFallbackCategory) ||
+          (row.status === "REVIEW" && !row.suggestedCategoryId),
       ).length,
     [rows, createMissingFallbackCategory],
   );
@@ -260,7 +264,9 @@ export function TransactionImportPage() {
     () =>
       rows.filter(
         (row) =>
-          (row.status === "READY" || row.status === "NEEDS_CATEGORY") &&
+          (row.status === "READY" ||
+            row.status === "NEEDS_CATEGORY" ||
+            row.status === "REVIEW") &&
           (createMissingFallbackCategory || Boolean(row.suggestedCategoryId)),
       ).length,
     [rows, createMissingFallbackCategory],
@@ -278,6 +284,7 @@ export function TransactionImportPage() {
     0;
   const exactDuplicateRows = rowCounters.DUPLICATE_EXACT ?? 0;
   const needsCategoryRows = rowCounters.NEEDS_CATEGORY ?? 0;
+  const reviewRows = rowCounters.REVIEW ?? preview?.reviewRows ?? 0;
 
   const duplicateSuggestionGroups = useMemo(() => {
     const duplicates = rows.filter(
@@ -331,7 +338,9 @@ export function TransactionImportPage() {
     () =>
       rows.filter(
         (row) =>
-          (row.status === "READY" || row.status === "NEEDS_CATEGORY") &&
+          (row.status === "READY" ||
+            row.status === "NEEDS_CATEGORY" ||
+            row.status === "REVIEW") &&
           !isCategoryCompatibleWithImportedMovement(row, categoriesById),
       ).length,
     [categoriesById, rows],
@@ -423,6 +432,7 @@ export function TransactionImportPage() {
       (rowCounters.POSSIBLE_INTERNAL_TRANSFER ?? 0) +
       (rowCounters.INTERNAL_TRANSFER_MATCHED ?? 0),
     needsCategoryRows,
+    reviewRows,
     incompatibleRows,
     importableRows,
     hasPreview: Boolean(preview),
@@ -483,6 +493,9 @@ export function TransactionImportPage() {
               <span className="badge badge-info">{getSourceLabel(source)}</span>
               {file ? (
                 <span className="badge badge-muted">{file.name}</span>
+              ) : null}
+              {preview?.detectedFormat ? (
+                <span className="badge badge-ok">{preview.detectedFormat}</span>
               ) : null}
             </div>
           </aside>
@@ -579,6 +592,11 @@ export function TransactionImportPage() {
                   duplicateRows={duplicateRows}
                   invalidRows={invalidRows}
                   ignoredRows={ignoredRows}
+                  reviewRows={reviewRows}
+                  suggestedCategoryRows={
+                    preview.suggestedCategoryRows ??
+                    rows.filter((row) => row.suggestedCategoryId).length
+                  }
                 />
 
                 <section className="transaction-import-rules-card">
@@ -633,9 +651,9 @@ export function TransactionImportPage() {
 
                     {unresolvedRows > 0 ? (
                       <div className="mensaje-warning">
-                        <strong>{unresolvedRows} fila(s) sin categoría.</strong>
+                        <strong>{unresolvedRows} fila(s) sin categoría o en revisión.</strong>
                         <span>
-                          Asigná una categoría o activá la categoría fallback
+                          Asigná una categoría y revisá las filas ambiguas
                           para continuar.
                         </span>
                       </div>
@@ -963,6 +981,11 @@ export function TransactionImportPage() {
                   <strong>{needsCategoryRows}</strong>
                 </div>
 
+                <div className={reviewRows > 0 ? "tone-warning" : ""}>
+                  <span>En revisión</span>
+                  <strong>{reviewRows}</strong>
+                </div>
+
                 <div className={duplicateRows > 0 ? "tone-neutral" : ""}>
                   <span>Duplicadas</span>
                   <strong>{duplicateRows}</strong>
@@ -1009,6 +1032,7 @@ function buildWizardSteps({
   exactDuplicateRows,
   internalRows,
   needsCategoryRows,
+  reviewRows,
   incompatibleRows,
   importableRows,
   hasPreview,
@@ -1022,6 +1046,7 @@ function buildWizardSteps({
   exactDuplicateRows: number;
   internalRows: number;
   needsCategoryRows: number;
+  reviewRows: number;
   incompatibleRows: number;
   importableRows: number;
   hasPreview: boolean;
@@ -1066,13 +1091,13 @@ function buildWizardSteps({
     {
       id: 5,
       title: "Categorías",
-      counter: `${needsCategoryRows} sin resolver`,
+      counter: `${needsCategoryRows + reviewRows} sin resolver`,
       description: "Las categorías mantienen entendibles los gráficos.",
       action:
-        needsCategoryRows > 0 || incompatibleRows > 0
+        needsCategoryRows > 0 || reviewRows > 0 || incompatibleRows > 0
           ? "Elegí categorías compatibles antes de confirmar."
           : "Categorías listas.",
-      blocked: needsCategoryRows > 0 || incompatibleRows > 0,
+      blocked: needsCategoryRows > 0 || reviewRows > 0 || incompatibleRows > 0,
     },
     {
       id: 6,
