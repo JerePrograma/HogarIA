@@ -1008,6 +1008,7 @@ public class TransactionService {
                 .counterparty(firstNonBlank(metadata == null ? null : metadata.counterparty(), request.counterparty()))
                 .classificationStatus(classificationStatus)
                 .classificationReason(firstNonBlank(metadata == null ? null : metadata.classificationReason(), request.classificationReason()))
+                .classificationExplanationJson(firstNonBlank(metadata == null ? null : metadata.classificationExplanationJson(), request.classificationExplanationJson()))
                 .importBatchId(metadata != null && metadata.importBatchId() != null ? metadata.importBatchId() : request.importBatchId())
                 .internalTransferGroupId(metadata != null && metadata.internalTransferGroupId() != null ? metadata.internalTransferGroupId() : request.internalTransferGroupId())
                 .build();
@@ -1425,6 +1426,7 @@ public class TransactionService {
                 transaction.getCounterparty(),
                 transaction.getClassificationStatus(),
                 transaction.getClassificationReason(),
+                transaction.getClassificationExplanationJson(),
                 transaction.getImportBatchId(),
                 transaction.getInternalTransferGroupId(),
                 transaction.getCreatedAt(),
@@ -1499,6 +1501,7 @@ public class TransactionService {
             String counterparty,
             MoneyTransaction.ClassificationStatus classificationStatus,
             String classificationReason,
+            String classificationExplanationJson,
             MoneyTransaction.BalanceImpact balanceImpact,
             UUID importBatchId,
             UUID internalTransferGroupId

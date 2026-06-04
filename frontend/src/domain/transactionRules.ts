@@ -89,8 +89,9 @@ export function getCompatibleCategories(
 
 export function getCategoryDisplayName(category?: Category | null) {
   if (!category) return "Sin categoría";
-  if (category.technical) return `${category.name} · técnica`;
-  return category.name;
+  const label = category.displayPath || category.name;
+  if (category.technical) return `${label} · técnica`;
+  return label;
 }
 
 export function isTransactionConfirmed(

@@ -80,6 +80,27 @@ public class ExcelImportRow {
     @Column(name = "merchant_name", length = 255)
     private String merchantName;
 
+    @Column(name = "counterparty_name", length = 255)
+    private String counterpartyName;
+
+    @Column(name = "counterparty_document_hash", length = 64)
+    private String counterpartyDocumentHash;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "payment_channel", length = 40)
+    private MoneyTransaction.PaymentChannel paymentChannel;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "classification_status", length = 40)
+    private MoneyTransaction.ClassificationStatus classificationStatus;
+
+    @Column(name = "classification_reason", length = 255)
+    private String classificationReason;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "classification_explanation_json", columnDefinition = "jsonb")
+    private String classificationExplanationJson;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "target_entity", length = 40)
     private ImportTargetEntity targetEntity;

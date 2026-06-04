@@ -27,6 +27,7 @@ public record ImportedMovementCandidate(
         String extendedDescription,
         String merchantName,
         String counterparty,
+        String counterpartyDocumentHash,
         MoneyTransaction.PaymentChannel paymentChannel,
         MoneyTransaction.MovementType movementType,
         MoneyTransaction.BalanceImpact balanceImpact,
@@ -34,6 +35,10 @@ public record ImportedMovementCandidate(
         String categorySuggestionName,
         MoneyTransaction.ClassificationStatus classificationStatus,
         String classificationReason,
+        ClassificationLayer classificationLayer,
+        String classificationMatchedField,
+        String classificationMatchedValue,
+        String classificationExplanationJson,
         Confidence confidence,
         String rawJson,
         Integer rowNumber,
@@ -64,6 +69,7 @@ public record ImportedMovementCandidate(
     private String extendedDescription;
     private String merchantName;
     private String counterparty;
+    private String counterpartyDocumentHash;
     private MoneyTransaction.PaymentChannel paymentChannel;
     private MoneyTransaction.MovementType movementType;
     private MoneyTransaction.BalanceImpact balanceImpact;
@@ -71,6 +77,10 @@ public record ImportedMovementCandidate(
     private String categorySuggestionName;
     private MoneyTransaction.ClassificationStatus classificationStatus;
     private String classificationReason;
+    private ClassificationLayer classificationLayer;
+    private String classificationMatchedField;
+    private String classificationMatchedValue;
+    private String classificationExplanationJson;
     private Confidence confidence;
     private String rawJson;
     private Integer rowNumber;
@@ -96,6 +106,7 @@ public record ImportedMovementCandidate(
     public Builder extendedDescription(String extendedDescription) { this.extendedDescription = extendedDescription; return this; }
     public Builder merchantName(String merchantName) { this.merchantName = merchantName; return this; }
     public Builder counterparty(String counterparty) { this.counterparty = counterparty; return this; }
+    public Builder counterpartyDocumentHash(String counterpartyDocumentHash) { this.counterpartyDocumentHash = counterpartyDocumentHash; return this; }
     public Builder paymentChannel(MoneyTransaction.PaymentChannel paymentChannel) { this.paymentChannel = paymentChannel; return this; }
     public Builder movementType(MoneyTransaction.MovementType movementType) { this.movementType = movementType; return this; }
     public Builder balanceImpact(MoneyTransaction.BalanceImpact balanceImpact) { this.balanceImpact = balanceImpact; return this; }
@@ -103,6 +114,10 @@ public record ImportedMovementCandidate(
     public Builder categorySuggestionName(String categorySuggestionName) { this.categorySuggestionName = categorySuggestionName; return this; }
     public Builder classificationStatus(MoneyTransaction.ClassificationStatus classificationStatus) { this.classificationStatus = classificationStatus; return this; }
     public Builder classificationReason(String classificationReason) { this.classificationReason = classificationReason; return this; }
+    public Builder classificationLayer(ClassificationLayer classificationLayer) { this.classificationLayer = classificationLayer; return this; }
+    public Builder classificationMatchedField(String classificationMatchedField) { this.classificationMatchedField = classificationMatchedField; return this; }
+    public Builder classificationMatchedValue(String classificationMatchedValue) { this.classificationMatchedValue = classificationMatchedValue; return this; }
+    public Builder classificationExplanationJson(String classificationExplanationJson) { this.classificationExplanationJson = classificationExplanationJson; return this; }
     public Builder confidence(Confidence confidence) { this.confidence = confidence; return this; }
     public Builder rawJson(String rawJson) { this.rawJson = rawJson; return this; }
     public Builder rowNumber(Integer rowNumber) { this.rowNumber = rowNumber; return this; }
@@ -130,6 +145,7 @@ public record ImportedMovementCandidate(
               extendedDescription,
               merchantName,
               counterparty,
+              counterpartyDocumentHash,
               paymentChannel,
               movementType,
               balanceImpact,
@@ -137,6 +153,10 @@ public record ImportedMovementCandidate(
               categorySuggestionName,
               classificationStatus,
               classificationReason,
+              classificationLayer,
+              classificationMatchedField,
+              classificationMatchedValue,
+              classificationExplanationJson,
               confidence,
               rawJson,
               rowNumber,

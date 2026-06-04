@@ -8,6 +8,7 @@ import type {
 } from "./types";
 import { ImportRowCategorySelect } from "./ImportRowCategorySelect";
 import {
+  getClassificationExplanationSummary,
   getImportRowIssueMessage,
   getSuggestedCategoryName,
   importBalanceImpactLabels,
@@ -74,6 +75,7 @@ function compactMeta(row: TransactionImportRow) {
     row.classificationStatus
       ? `Clasificación: ${importClassificationStatusLabels[row.classificationStatus] ?? row.classificationStatus}`
       : null,
+    row.classificationLayer ? `Capa: ${row.classificationLayer}` : null,
   ].filter(Boolean).join(" · ");
 }
 
@@ -171,6 +173,12 @@ export function ImportRowsTable({
 
                       {row.classificationReason ? (
                         <span className="muted">Regla: {row.classificationReason}</span>
+                      ) : null}
+
+                      {getClassificationExplanationSummary(row) ? (
+                        <span className="muted">
+                          Match: {getClassificationExplanationSummary(row)}
+                        </span>
                       ) : null}
 
                       {existingMovementNote ? (

@@ -14,6 +14,39 @@ public record ImportClassificationResult(
         String classificationReason,
         Confidence confidence,
         RowStatus rowStatus,
-        String warning
+        String warning,
+        ClassificationLayer classificationLayer,
+        String matchedField,
+        String matchedValue,
+        String explanationJson
 ) {
+  public ImportClassificationResult(
+          MoneyTransaction.MovementType movementType,
+          MoneyTransaction.BalanceImpact balanceImpact,
+          MoneyTransaction.PaymentChannel paymentChannel,
+          String categorySuggestionKey,
+          String categorySuggestionName,
+          MoneyTransaction.ClassificationStatus classificationStatus,
+          String classificationReason,
+          Confidence confidence,
+          RowStatus rowStatus,
+          String warning
+  ) {
+    this(
+            movementType,
+            balanceImpact,
+            paymentChannel,
+            categorySuggestionKey,
+            categorySuggestionName,
+            classificationStatus,
+            classificationReason,
+            confidence,
+            rowStatus,
+            warning,
+            null,
+            null,
+            null,
+            null
+    );
+  }
 }

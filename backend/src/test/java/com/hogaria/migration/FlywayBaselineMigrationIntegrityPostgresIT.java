@@ -18,7 +18,8 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 @Testcontainers(disabledWithoutDocker = true)
 class FlywayBaselineMigrationIntegrityPostgresIT {
 
-    private static final int EXPECTED_ACTIVE_GLOBAL_CATEGORY_COUNT = 172;
+    private static final int EXPECTED_ACTIVE_GLOBAL_CATEGORY_COUNT = 56;
+    private static final int EXPECTED_GLOBAL_MERCHANT_ALIAS_COUNT = 15;
 
     @Container
     static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16-alpine")
@@ -60,6 +61,10 @@ class FlywayBaselineMigrationIntegrityPostgresIT {
                 "inflation_index",
                 "excel_import_batch",
                 "excel_import_row",
+                "merchant_alias",
+                "counterparty_alias",
+                "classification_rule",
+                "transaction_classification_audit",
                 "monthly_plan_item",
                 "monthly_plan_transaction_match",
                 "external_loan_sync_config",
@@ -68,6 +73,15 @@ class FlywayBaselineMigrationIntegrityPostgresIT {
         ));
 
         assertColumnNullable("money_transaction", "category_id");
+        assertColumnExists("money_transaction", "classification_explanation_json");
+        assertColumnExists("excel_import_row", "raw_json");
+        assertColumnExists("excel_import_row", "merchant_name");
+        assertColumnExists("excel_import_row", "extended_description");
+        assertColumnExists("excel_import_row", "normalized_description");
+        assertColumnExists("excel_import_row", "source_hash");
+        assertColumnExists("excel_import_row", "counterparty_document_hash");
+        assertColumnExists("excel_import_row", "classification_explanation_json");
+        assertColumnExists("transaction_import_reference", "classification_explanation_json");
         assertColumnNullable("external_loan_sync_config", "account_id");
         assertColumnNullable("external_loan_sync_config", "loan_disbursement_category_id");
         assertColumnNullable("external_loan_sync_config", "principal_recovery_category_id");
@@ -76,8 +90,17 @@ class FlywayBaselineMigrationIntegrityPostgresIT {
         assertIndexExists("ux_category_profile_key_type");
         assertIndexExists("ux_category_global_key_type");
         assertIndexExists("ux_account_profile_key_currency_active");
-        assertIndexExists("ux_money_tx_profile_source_operation_strict");
         assertIndexExists("ux_money_tx_profile_source_hash");
+        assertIndexExists("ux_money_tx_profile_source_operation_idempotent");
+        assertIndexExists("idx_transaction_import_reference_profile_source_hash");
+        assertIndexExists("ux_merchant_alias_global_source_alias");
+        assertIndexExists("ux_merchant_alias_profile_source_alias");
+        assertIndexExists("ux_counterparty_alias_profile_source_document");
+        assertIndexExists("ux_classification_rule_profile_reason");
+
+        assertIndexDoesNotExist("ux_money_tx_profile_source_operation_strict");
+        assertIndexDefinitionContains("ux_money_tx_profile_source_hash", "status <> 'IGNORED'");
+        assertIndexDefinitionContains("ux_money_tx_profile_source_operation_idempotent", "classification_status <> 'IGNORED_BY_RULE'");
     }
 
     @Test
@@ -98,19 +121,6 @@ class FlywayBaselineMigrationIntegrityPostgresIT {
                     WHERE profile_id IS NULL
                       AND active = TRUE
                     GROUP BY category_key, type
-                    HAVING count(*) > 1
-                ) duplicates
-                """))
-                .isZero();
-
-        assertThat(count("""
-                SELECT count(*)
-                FROM (
-                    SELECT name, type
-                    FROM category
-                    WHERE profile_id IS NULL
-                      AND active = TRUE
-                    GROUP BY name, type
                     HAVING count(*) > 1
                 ) duplicates
                 """))
@@ -141,42 +151,97 @@ class FlywayBaselineMigrationIntegrityPostgresIT {
     }
 
     @Test
-    void requiredRootAndCjPrestamosCategoriesExist() {
-        assertRootCategoryExists("CJ - Ingresos de préstamos", "INCOME");
-        assertRootCategoryExists("CJ - Préstamos otorgados", "INVESTMENT");
+    void requiredCategoryTreeExistsWithParentLinks() {
+        for (var root : List.of(
+                "Ingresos",
+                "Alimentación",
+                "Transporte",
+                "Servicios",
+                "Impuestos",
+                "Seguros y mutuales",
+                "Bancos y comisiones",
+                "Deudas",
+                "Transferencias",
+                "Familia y personales",
+                "Operaciones técnicas"
+        )) {
+            assertRootCategoryExists(root);
+        }
 
-        assertGlobalCategoryExists("CJ - Interés cobrado", "INCOME");
-        assertGlobalCategoryExists("CJ - Mora cobrada", "INCOME");
-        assertGlobalCategoryExists("CJ - Comisión cobrada", "INCOME");
-        assertGlobalCategoryExists("CJ - Capital prestado", "INVESTMENT");
-        assertGlobalCategoryExists("CJ - Capital recuperado", "INVESTMENT");
-        assertGlobalCategoryExists("CJ - Ajuste de préstamo", "INVESTMENT");
+        assertChildCategoryExists("Ingresos", "Sueldo");
+        assertChildCategoryExists("Ingresos", "Intereses y rendimientos");
+        assertChildCategoryExists("Ingresos", "Rendimiento Mercado Pago");
+        assertChildCategoryExists("Alimentación", "Supermercado");
+        assertChildCategoryExists("Alimentación", "Delivery y restaurantes");
+        assertChildCategoryExists("Transporte", "Transporte público");
+        assertChildCategoryExists("Transporte", "Taxi y apps");
+        assertChildCategoryExists("Servicios", "Telefonía móvil");
+        assertChildCategoryExists("Servicios", "Meli+");
+        assertChildCategoryExists("Impuestos", "Monotributo");
+        assertChildCategoryExists("Impuestos", "Percepciones RG 4815");
+        assertChildCategoryExists("Deudas", "Préstamo Banco Provincia");
+        assertChildCategoryExists("Deudas", "Mercado Crédito");
+        assertChildCategoryExists("Transferencias", "Fondeo Mercado Pago");
+        assertChildCategoryExists("Transferencias", "Cuenta DNI / DEBIN");
+        assertChildCategoryExists("Operaciones técnicas", "Movimiento ignorado");
     }
 
     @Test
-    void cjCapitalPrestadoUsesRecoverableOutflowAccountingSemantics() {
-        var category = globalCategory("CJ - Capital prestado", "INVESTMENT");
+    void globalAliasesAndClassificationRulesAreSeededWithoutPrivateCounterparties() {
+        assertThat(count("""
+                SELECT count(*)
+                FROM merchant_alias
+                WHERE profile_id IS NULL
+                  AND active = TRUE
+                """))
+                .isEqualTo(EXPECTED_GLOBAL_MERCHANT_ALIAS_COUNT);
 
-        assertThat(category.get("category_key")).isEqualTo("cjcapitalprestado");
-        assertThat(category.get("default_movement_type")).isEqualTo("ADJUSTMENT");
-        assertThat(category.get("budgetable")).isEqualTo(false);
-        assertThat(category.get("technical")).isEqualTo(false);
+        for (var alias : List.of(
+                "PAYU*AR*UBER",
+                "MERPAGO*SUBE",
+                "BUSPLUS",
+                "DIA TIENDA",
+                "PEDIDOSYA",
+                "MERPAGO*TUENTI",
+                "EDEA",
+                "CAMUZZI",
+                "SHELL BOX",
+                "MELI+",
+                "MERCADO CREDITO",
+                "MERCADOCRÉDITO",
+                "EMOVA"
+        )) {
+            assertMerchantAliasExists(alias);
+        }
+
+        assertThat(count("SELECT count(*) FROM counterparty_alias")).isZero();
+        assertClassificationRuleExists("RULE_DEBIT_CARD_PURCHASE_REVIEW", "REVIEW");
+        assertClassificationRuleExists("RULE_DIRECT_DEBIT_REVIEW", "REVIEW");
+        assertClassificationRuleExists("RULE_ARCA_AFIP_MONOTRIBUTO", "CLASSIFIED");
+        assertClassificationRuleExists("RULE_MP_YIELD_EMPTY_DETAIL", "CLASSIFIED");
+        assertClassificationRuleExists("RULE_MP_PAYMENT_LINK_REVIEW", "REVIEW");
     }
 
     @Test
-    void cjCapitalRecuperadoIsNotBudgetableBecausePrincipalRecoveryIsARecoveryFlow() {
-        var category = globalCategory("CJ - Capital recuperado", "INVESTMENT");
-
-        assertThat(category.get("category_key")).isEqualTo("cjcapitalrecuperado");
-        assertThat(category.get("default_movement_type")).isEqualTo("SAVING");
-        assertThat(category.get("budgetable")).isEqualTo(false);
-        assertThat(category.get("technical")).isEqualTo(false);
-    }
-
-    @Test
-    void cjPrestamosStrictIdempotencyIndexesExist() {
-        assertIndexExists("ux_money_tx_profile_source_operation_strict");
-        assertIndexExists("ux_money_tx_profile_source_hash");
+    void schemaDoesNotContainDuplicateEquivalentIndexes() {
+        assertThat(count("""
+                SELECT count(*)
+                FROM (
+                    SELECT
+                        indrelid,
+                        indkey::text,
+                        coalesce(pg_get_expr(indexprs, indrelid), '') AS indexprs,
+                        coalesce(pg_get_expr(indpred, indrelid), '') AS indpred,
+                        indisunique
+                    FROM pg_index
+                    JOIN pg_class idx ON idx.oid = indexrelid
+                    JOIN pg_namespace ns ON ns.oid = idx.relnamespace
+                    WHERE ns.nspname = 'public'
+                    GROUP BY indrelid, indkey::text, coalesce(pg_get_expr(indexprs, indrelid), ''), coalesce(pg_get_expr(indpred, indrelid), ''), indisunique
+                    HAVING count(*) > 1
+                ) duplicates
+                """))
+                .isZero();
     }
 
     @Test
@@ -197,6 +262,18 @@ class FlywayBaselineMigrationIntegrityPostgresIT {
                 WHERE table_schema = 'public'
                   AND table_type = 'BASE TABLE'
                 """, String.class));
+    }
+
+    private static void assertColumnExists(String tableName, String columnName) {
+        assertThat(count("""
+                SELECT count(*)
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = ?
+                  AND column_name = ?
+                """, tableName, columnName))
+                .as("%s.%s should exist", tableName, columnName)
+                .isEqualTo(1);
     }
 
     private static void assertColumnNullable(String tableName, String columnName) {
@@ -222,7 +299,28 @@ class FlywayBaselineMigrationIntegrityPostgresIT {
                 .isEqualTo(1);
     }
 
-    private static void assertRootCategoryExists(String name, String type) {
+    private static void assertIndexDoesNotExist(String indexName) {
+        assertThat(count("""
+                SELECT count(*)
+                FROM pg_indexes
+                WHERE schemaname = 'public'
+                  AND indexname = ?
+                """, indexName))
+                .as("index %s should not exist", indexName)
+                .isZero();
+    }
+
+    private static void assertIndexDefinitionContains(String indexName, String expected) {
+        assertThat(jdbc.queryForObject("""
+                SELECT indexdef
+                FROM pg_indexes
+                WHERE schemaname = 'public'
+                  AND indexname = ?
+                """, String.class, indexName))
+                .contains(expected);
+    }
+
+    private static void assertRootCategoryExists(String name) {
         assertThat(count("""
                 SELECT count(*)
                 FROM category
@@ -230,34 +328,50 @@ class FlywayBaselineMigrationIntegrityPostgresIT {
                   AND parent_id IS NULL
                   AND active = TRUE
                   AND name = ?
-                  AND type = ?
-                """, name, type))
-                .as("root category %s/%s should exist", name, type)
+                """, name))
+                .as("root category %s should exist", name)
                 .isEqualTo(1);
     }
 
-    private static void assertGlobalCategoryExists(String name, String type) {
+    private static void assertChildCategoryExists(String parentName, String childName) {
         assertThat(count("""
                 SELECT count(*)
-                FROM category
-                WHERE profile_id IS NULL
-                  AND active = TRUE
-                  AND name = ?
-                  AND type = ?
-                """, name, type))
-                .as("global category %s/%s should exist", name, type)
+                FROM category child
+                JOIN category parent ON parent.id = child.parent_id
+                WHERE child.profile_id IS NULL
+                  AND child.active = TRUE
+                  AND parent.profile_id IS NULL
+                  AND parent.active = TRUE
+                  AND parent.name = ?
+                  AND child.name = ?
+                """, parentName, childName))
+                .as("child category %s / %s should exist", parentName, childName)
                 .isEqualTo(1);
     }
 
-    private static Map<String, Object> globalCategory(String name, String type) {
-        return jdbc.queryForMap("""
-                SELECT category_key, default_movement_type, budgetable, technical
-                FROM category
+    private static void assertMerchantAliasExists(String aliasRaw) {
+        assertThat(count("""
+                SELECT count(*)
+                FROM merchant_alias
                 WHERE profile_id IS NULL
                   AND active = TRUE
-                  AND name = ?
-                  AND type = ?
-                """, name, type);
+                  AND alias_raw = ?
+                """, aliasRaw))
+                .as("global merchant alias %s should exist", aliasRaw)
+                .isEqualTo(1);
+    }
+
+    private static void assertClassificationRuleExists(String reasonCode, String status) {
+        assertThat(count("""
+                SELECT count(*)
+                FROM classification_rule
+                WHERE profile_id IS NULL
+                  AND active = TRUE
+                  AND reason_code = ?
+                  AND classification_status = ?
+                """, reasonCode, status))
+                .as("classification rule %s/%s should exist", reasonCode, status)
+                .isEqualTo(1);
     }
 
     private static int count(String sql, Object... args) {

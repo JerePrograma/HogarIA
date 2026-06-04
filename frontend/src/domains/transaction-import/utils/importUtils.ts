@@ -1,4 +1,7 @@
-import { getCompatibleCategories } from "../../../domain/transactionRules";
+import {
+  getCategoryDisplayName,
+  getCompatibleCategories,
+} from "../../../domain/transactionRules";
 import { Category } from "../../../domain/types";
 import {
   TransactionImportBalanceImpact,
@@ -44,6 +47,13 @@ export const importPaymentChannelLabels: Record<TransactionImportPaymentChannel,
     CUENTA_DNI: "Cuenta DNI",
     DEBIT_CARD: "Tarjeta de débito",
     CREDIT_CARD: "Tarjeta de crédito",
+    DIRECT_DEBIT: "Débito directo",
+    POS_TRANSFER: "Transferencia POS",
+    ATM: "Cajero / punto efectivo",
+    MONEY_MARKET_YIELD: "Rendimiento diario",
+    TRANSPORT_CARD: "Tarjeta transporte",
+    QR_PAYMENT: "Pago QR",
+    CARD_FOREIGN_CURRENCY: "Tarjeta moneda extranjera",
     MERCADO_PAGO: "Mercado Pago",
     MERCADO_CREDITO: "Mercado Crédito",
     INTERNAL_TRANSFER: "Transferencia interna",
@@ -152,11 +162,38 @@ export function getSuggestedCategoryName(
   row: TransactionImportRow,
   categoriesById: Map<string, Category>,
 ) {
+  const category = categoriesById.get(row.suggestedCategoryId ?? "");
+
   return (
+    (category ? getCategoryDisplayName(category) : null) ??
     row.suggestedCategoryName ??
-    categoriesById.get(row.suggestedCategoryId ?? "")?.name ??
     null
   );
+}
+
+export function getClassificationExplanationSummary(row: TransactionImportRow) {
+  if (row.classificationMatchedField && row.classificationMatchedValue) {
+    return `${row.classificationMatchedField}: ${row.classificationMatchedValue}`;
+  }
+
+  if (!row.classificationExplanationJson) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(row.classificationExplanationJson) as {
+      matchedField?: string;
+      matchedValue?: string;
+      warning?: string;
+    };
+    const matched = [parsed.matchedField, parsed.matchedValue]
+      .filter(Boolean)
+      .join(": ");
+
+    return matched || parsed.warning || null;
+  } catch {
+    return row.classificationExplanationJson;
+  }
 }
 
 export function getSelectableCategoriesForImportRow(

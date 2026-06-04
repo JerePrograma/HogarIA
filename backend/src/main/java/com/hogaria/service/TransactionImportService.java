@@ -10,6 +10,7 @@ import com.hogaria.entity.ImportBatchStatus;
 import com.hogaria.entity.ImportRowStatus;
 import com.hogaria.entity.ImportTargetEntity;
 import com.hogaria.entity.MoneyTransaction;
+import com.hogaria.entity.TransactionClassificationAudit;
 import com.hogaria.entity.TransactionImportReference;
 import com.hogaria.exception.BadRequestException;
 import com.hogaria.exception.ForbiddenException;
@@ -20,6 +21,7 @@ import com.hogaria.repository.ExcelImportBatchRepository;
 import com.hogaria.repository.ExcelImportRowRepository;
 import com.hogaria.repository.FinancialProfileRepository;
 import com.hogaria.repository.MoneyTransactionRepository;
+import com.hogaria.repository.TransactionClassificationAuditRepository;
 import com.hogaria.repository.TransactionImportReferenceRepository;
 import com.hogaria.service.transactionimport.ExcelImportTemplate;
 import com.hogaria.service.transactionimport.ImportedMovementCandidate;
@@ -262,6 +264,7 @@ public class TransactionImportService {
   private final ExcelImportBatchRepository batchRepository;
   private final ExcelImportRowRepository rowRepository;
   private final TransactionImportReferenceRepository referenceRepository;
+  private final TransactionClassificationAuditRepository classificationAuditRepository;
   private final TransactionService txService;
   private final TransactionCategorySuggestionService suggestionService;
   private final TransactionExcelImportFormatDetector excelFormatDetector;
@@ -276,6 +279,7 @@ public class TransactionImportService {
           ExcelImportBatchRepository batchRepository,
           ExcelImportRowRepository rowRepository,
           TransactionImportReferenceRepository referenceRepository,
+          TransactionClassificationAuditRepository classificationAuditRepository,
           TransactionService txService,
           TransactionCategorySuggestionService suggestionService,
           TransactionExcelImportFormatDetector excelFormatDetector,
@@ -289,6 +293,7 @@ public class TransactionImportService {
     this.batchRepository = batchRepository;
     this.rowRepository = rowRepository;
     this.referenceRepository = referenceRepository;
+    this.classificationAuditRepository = classificationAuditRepository;
     this.txService = txService;
     this.suggestionService = suggestionService;
     this.excelFormatDetector = excelFormatDetector;
@@ -587,6 +592,7 @@ public class TransactionImportService {
                       previewRow.counterparty(),
                       classificationStatus,
                       classificationReason,
+                      previewRow.classificationExplanationJson(),
                       batchId,
                       null
               ),
@@ -599,6 +605,7 @@ public class TransactionImportService {
                       previewRow.counterparty(),
                       classificationStatus,
                       classificationReason,
+                      previewRow.classificationExplanationJson(),
                       previewRow.balanceImpact(),
                       batchId,
                       null
@@ -606,6 +613,7 @@ public class TransactionImportService {
       );
 
       saveImportReference(profileId, accountId, batchId, loadedRow.entity(), previewRow, response.id());
+      saveClassificationAudit(loadedRow.entity(), previewRow, response.id(), categoryId);
       markImportRow(loadedRow.entity(), ImportRowStatus.IMPORTED, null);
 
       return createdResult(response.id());
@@ -1555,10 +1563,15 @@ public class TransactionImportService {
             candidate.extendedDescription(),
             candidate.merchantName(),
             candidate.counterparty(),
+            candidate.counterpartyDocumentHash(),
             candidate.paymentChannel(),
             candidate.balanceImpact(),
             candidate.classificationStatus(),
             candidate.classificationReason(),
+            candidate.classificationLayer() == null ? null : candidate.classificationLayer().name(),
+            candidate.classificationMatchedField(),
+            candidate.classificationMatchedValue(),
+            candidate.classificationExplanationJson(),
             candidate.categorySuggestionKey(),
             candidate.externalSequence(),
             candidate.sheetName(),
@@ -1661,10 +1674,15 @@ public class TransactionImportService {
             row.extendedDescription(),
             row.merchantName(),
             row.counterparty(),
+            row.counterpartyDocumentHash(),
             row.paymentChannel(),
             row.balanceImpact(),
             row.classificationStatus(),
             row.classificationReason(),
+            row.classificationLayer(),
+            row.classificationMatchedField(),
+            row.classificationMatchedValue(),
+            row.classificationExplanationJson(),
             row.categorySuggestionKey(),
             row.externalSequence(),
             row.sheetName(),
@@ -1691,11 +1709,17 @@ public class TransactionImportService {
                       .externalSequence(row.externalSequence())
                       .rawDescription(truncate(row.rawDescription(), 255))
                       .normalizedDescription(truncate(row.normalizedDescription(), 500))
-                      .extendedDescription(truncate(row.extendedDescription(), 500))
+                       .extendedDescription(truncate(row.extendedDescription(), 500))
                       .merchantName(truncate(row.merchantName(), 255))
-                      .targetEntity(row.targetEntity())
-                      .status(toImportRowStatus(row.status()))
-                      .errorMessage(row.skipReason())
+                      .counterpartyName(truncate(row.counterparty(), 255))
+                      .counterpartyDocumentHash(row.counterpartyDocumentHash())
+                      .paymentChannel(row.paymentChannel())
+                      .classificationStatus(row.classificationStatus())
+                      .classificationReason(truncate(row.classificationReason(), 255))
+                      .classificationExplanationJson(row.classificationExplanationJson())
+                       .targetEntity(row.targetEntity())
+                       .status(toImportRowStatus(row.status()))
+                       .errorMessage(row.skipReason())
                       .rawJson(objectMapper.writeValueAsString(row))
                       .build()
       );
@@ -1775,9 +1799,52 @@ public class TransactionImportService {
                     .normalizedDescription(truncate(previewRow.normalizedDescription(), 500))
                     .extendedDescription(truncate(previewRow.extendedDescription(), 500))
                     .merchantName(truncate(previewRow.merchantName(), 255))
+                    .counterpartyName(truncate(previewRow.counterparty(), 255))
+                    .counterpartyDocumentHash(previewRow.counterpartyDocumentHash())
+                    .paymentChannel(previewRow.paymentChannel())
+                    .classificationStatus(previewRow.classificationStatus())
+                    .classificationReason(truncate(previewRow.classificationReason(), 255))
+                    .classificationExplanationJson(previewRow.classificationExplanationJson())
                     .rawPayload(safeJsonPayload(firstNonBlank(previewRow.rawJson(), previewRow.rawPayload())))
                     .build()
     );
+  }
+
+  private void saveClassificationAudit(
+          ExcelImportRow importRow,
+          TransactionImportPreviewRow previewRow,
+          UUID transactionId,
+          UUID categoryId
+  ) {
+    if (classificationAuditRepository == null || previewRow == null) {
+      return;
+    }
+
+    classificationAuditRepository.save(
+            TransactionClassificationAudit.builder()
+                    .transactionId(transactionId)
+                    .importRowId(importRow == null ? null : importRow.getId())
+                    .ruleId(null)
+                    .reasonCode(firstNonBlank(previewRow.classificationReason(), "NO_IMPORT_RULE"))
+                    .matchedField(truncate(previewRow.classificationMatchedField(), 80))
+                    .matchedValue(truncate(previewRow.classificationMatchedValue(), 500))
+                    .suggestedCategoryId(categoryId)
+                    .confidence(confidenceScore(previewRow.confidence()))
+                    .build()
+    );
+  }
+
+  private BigDecimal confidenceScore(Confidence confidence) {
+    if (confidence == Confidence.HIGH) {
+      return new BigDecimal("0.95");
+    }
+    if (confidence == Confidence.MEDIUM) {
+      return new BigDecimal("0.70");
+    }
+    if (confidence == Confidence.LOW) {
+      return new BigDecimal("0.35");
+    }
+    return BigDecimal.ZERO;
   }
 
   private String safeJsonPayload(String payload) {
@@ -2033,21 +2100,38 @@ public class TransactionImportService {
     if (row.realDate() == null || row.amount() == null) {
       return new ImportMatch(ImportMatchType.NONE, null, null);
     }
-    if (row.sourceHash() != null && txRepository.existsByProfileIdAndSourceHash(profileId, row.sourceHash())) {
-      var tx = txRepository.findByProfileIdAndSourceHash(profileId, row.sourceHash()).orElse(null);
+    if (row.sourceHash() != null) {
+      var activeSourceMatches = txRepository.findActiveByProfileIdAndSourceHash(
+              profileId,
+              row.sourceHash(),
+              MoneyTransaction.Status.IGNORED,
+              MoneyTransaction.ClassificationStatus.IGNORED_BY_RULE
+      );
+      var tx = activeSourceMatches.isEmpty() ? null : activeSourceMatches.get(0);
+      if (tx != null) {
       return new ImportMatch(ImportMatchType.EXACT_DUPLICATE, tx == null ? null : tx.getId(), "Duplicado exacto: ya existe una operación con el mismo origen/hash.");
+      }
     }
     if (row.sourceHash() != null && row.source() != null
-            && referenceRepository.findByProfileIdAndAccountIdAndImportSourceAndSourceHash(
+            && referenceRepository.findActiveByProfileIdAndAccountIdAndImportSourceAndSourceHash(
             profileId,
             accountId,
             row.source().name(),
-            row.sourceHash()
+            row.sourceHash(),
+            MoneyTransaction.Status.IGNORED,
+            MoneyTransaction.ClassificationStatus.IGNORED_BY_RULE
     ).isPresent()) {
       return new ImportMatch(ImportMatchType.EXACT_DUPLICATE, null, "Duplicado exacto: ya existe una referencia de importación con el mismo source_hash.");
     }
     if (row.source() != null && row.sourceOperationId() != null) {
-      var tx = txRepository.findByProfileIdAndSourceAndSourceOperationId(profileId, row.source().name(), row.sourceOperationId());
+      var tx = txRepository.findActiveByStrongSourceOperation(
+              profileId,
+              row.source().name(),
+              row.sourceOperationId(),
+              MoneyTransaction.Status.IGNORED,
+              MoneyTransaction.ClassificationStatus.IGNORED_BY_RULE,
+              null
+      );
       if (!tx.isEmpty()) return new ImportMatch(ImportMatchType.SOURCE_DUPLICATE, tx.get(0).getId(), "Duplicado de origen: source + sourceOperationId.");
     }
     var nearby = txRepository.findByProfileIdAndRealDateBetweenAndAmount(profileId, row.realDate().minusDays(2), row.realDate().plusDays(2), row.amount());

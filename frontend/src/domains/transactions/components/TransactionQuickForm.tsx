@@ -17,6 +17,7 @@ import type {
   MovementType,
   TransactionStatus,
 } from "../../../domain/types";
+import { getCategoryDisplayName } from "../../../domain/transactionRules";
 import type { TransactionForm } from "../types";
 import { FilterChip } from "./FilterChip";
 
@@ -106,9 +107,7 @@ export function TransactionQuickForm({
             <option value="">Seleccionar categoría</option>
             {compatibleCategories.map((category) => (
               <option key={category.id} value={category.id}>
-                {category.technical
-                  ? `${category.name} · técnica`
-                  : category.name}
+                {getCategoryDisplayName(category)}
               </option>
             ))}
           </select>

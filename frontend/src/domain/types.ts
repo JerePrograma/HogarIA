@@ -43,6 +43,13 @@ export type PaymentChannel =
   | "CUENTA_DNI"
   | "DEBIT_CARD"
   | "CREDIT_CARD"
+  | "DIRECT_DEBIT"
+  | "POS_TRANSFER"
+  | "ATM"
+  | "MONEY_MARKET_YIELD"
+  | "TRANSPORT_CARD"
+  | "QR_PAYMENT"
+  | "CARD_FOREIGN_CURRENCY"
   | "MERCADO_PAGO"
   | "MERCADO_CREDITO"
   | "INTERNAL_TRANSFER"
@@ -115,6 +122,8 @@ export interface Category {
   parentId: string | null;
   name: string;
   categoryKey: string | null;
+  displayPath: string;
+  depth: number;
   type: CategoryType;
   scope: CategoryScope;
   defaultMovementType: MovementType | null;

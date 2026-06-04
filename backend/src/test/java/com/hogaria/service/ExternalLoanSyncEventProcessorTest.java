@@ -51,9 +51,11 @@ class ExternalLoanSyncEventProcessorTest {
     assertEquals(MoneyTransaction.Status.CONFIRMED, captor.getValue().getStatus());
   }
 
-  @Test void baselineSeedsCapitalPrestadoAsRecoverableAdjustmentNotBudgetable() throws Exception {
+  @Test void baselineKeepsExternalLoanCategoriesProfileConfigurable() throws Exception {
     String migration = Files.readString(Path.of("src/main/resources/db/migration/V1__baseline_schema_and_seed.sql"));
-    assertTrue(migration.contains("'CJ - Capital prestado', 'INVESTMENT', 'GLOBAL', 'ADJUSTMENT', FALSE, FALSE"));
+    assertTrue(migration.contains("CREATE TABLE external_loan_sync_config"));
+    assertTrue(migration.contains("loan_disbursement_category_id UUID"));
+    assertFalse(migration.contains("'CJ - Capital prestado'"));
   }
 
   @Test void paymentPrincipalCreatesAdjustment() {

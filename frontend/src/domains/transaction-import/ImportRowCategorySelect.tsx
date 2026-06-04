@@ -1,6 +1,7 @@
 import { Category } from "../../domain/types";
 import { getSelectableCategoriesForImportRow } from "./utils/importUtils";
 import { TransactionImportRow } from "./types";
+import { getCategoryDisplayName } from "../../domain/transactionRules";
 
 interface Props {
   row: TransactionImportRow;
@@ -36,7 +37,7 @@ export function ImportRowCategorySelect({ row, categories, onChange }: Props) {
 
       {compatibleCategories.map((category) => (
         <option key={category.id} value={category.id}>
-          {category.technical ? `${category.name} · técnica` : category.name}
+          {getCategoryDisplayName(category)}
         </option>
       ))}
     </select>

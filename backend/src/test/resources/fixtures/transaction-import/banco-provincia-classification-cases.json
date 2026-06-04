@@ -1,0 +1,112 @@
+[
+  {
+    "name": "DIA TIENDA 3 debit card",
+    "amount": "-1200.00",
+    "description": "PAGO CON TARJETA DEBITO",
+    "extendedDescription": "COMPRA TARJETA 10/05/26 COMPR. 0001",
+    "merchant": "DIA TIENDA 3",
+    "expectedCategoryKey": "supermercado",
+    "expectedStatus": "CLASSIFIED",
+    "expectedConfidence": "HIGH",
+    "expectedReason": "RULE_MERCHANT_DIA"
+  },
+  {
+    "name": "PedidosYa merchant",
+    "amount": "-5400.00",
+    "description": "PAGO CON TARJETA DEBITO",
+    "extendedDescription": "COMPRA TARJETA 12/05/26 COMPR. 0002",
+    "merchant": "PEDIDOSYA*TOMASSO PERO",
+    "expectedCategoryKey": "deliveryyrestaurantes",
+    "expectedStatus": "CLASSIFIED",
+    "expectedConfidence": "HIGH",
+    "expectedReason": "RULE_MERCHANT_PEDIDOSYA"
+  },
+  {
+    "name": "ARCA monotributo",
+    "amount": "-34000.00",
+    "description": "DEBITO PAGO DIRECTO",
+    "extendedDescription": "ARCA (EX AFIP) RE.MONOTR02/26",
+    "merchant": "",
+    "expectedCategoryKey": "monotributo",
+    "expectedStatus": "CLASSIFIED",
+    "expectedConfidence": "HIGH",
+    "expectedReason": "RULE_ARCA_AFIP_MONOTRIBUTO"
+  },
+  {
+    "name": "Uber debit card",
+    "amount": "-2800.00",
+    "description": "PAGO CON TARJETA DEBITO",
+    "extendedDescription": "COMPRA TARJETA 03/05/26 COMPR. 0003",
+    "merchant": "PAYU*AR*UBER",
+    "expectedCategoryKey": "taxiyapps",
+    "expectedStatus": "CLASSIFIED",
+    "expectedConfidence": "HIGH",
+    "expectedReason": "RULE_MERCHANT_UBER"
+  },
+  {
+    "name": "Mercado Pago SUBE",
+    "amount": "-1500.00",
+    "description": "PAGO CON TARJETA DEBITO",
+    "extendedDescription": "COMPRA TARJETA 03/05/26 COMPR. 0004",
+    "merchant": "MERPAGO*SUBE",
+    "expectedCategoryKey": "transportepublico",
+    "expectedStatus": "CLASSIFIED",
+    "expectedConfidence": "HIGH",
+    "expectedReason": "RULE_MERCHANT_SUBE"
+  },
+  {
+    "name": "Busplus",
+    "amount": "-2500.00",
+    "description": "PAGO CON TARJETA DEBITO",
+    "extendedDescription": "COMPRA TARJETA 03/05/26 COMPR. 0005",
+    "merchant": "BUSPLUS",
+    "expectedCategoryKey": "transportepublico",
+    "expectedStatus": "CLASSIFIED",
+    "expectedConfidence": "HIGH",
+    "expectedReason": "RULE_MERCHANT_BUSPLUS"
+  },
+  {
+    "name": "Salary Policia",
+    "amount": "320000.00",
+    "description": "CREDITO HABERES",
+    "extendedDescription": "Policia BCO.014 REF.000000000000",
+    "merchant": "",
+    "expectedCategoryKey": "sueldo",
+    "expectedStatus": "CLASSIFIED",
+    "expectedConfidence": "HIGH",
+    "expectedReason": "RULE_SALARY_POLICIA"
+  },
+  {
+    "name": "Interest income",
+    "amount": "17.01",
+    "description": "ACREDITACION INTERESES",
+    "extendedDescription": "ACREDIT. INTERESES PERIODO",
+    "merchant": "",
+    "expectedCategoryKey": "interesesyrendimientos",
+    "expectedStatus": "CLASSIFIED",
+    "expectedConfidence": "HIGH",
+    "expectedReason": "RULE_INTEREST_INCOME"
+  },
+  {
+    "name": "Banco Provincia loan payment",
+    "amount": "-56000.00",
+    "description": "PAGO CUOTA DE PRESTAMO",
+    "extendedDescription": "PAGO CUOTA DE PRESTAMO",
+    "merchant": "",
+    "expectedCategoryKey": "prestamobancoprovincia",
+    "expectedStatus": "CLASSIFIED",
+    "expectedConfidence": "HIGH",
+    "expectedReason": "RULE_BANCO_PROVINCIA_LOAN_PAYMENT"
+  },
+  {
+    "name": "DEBIN review",
+    "amount": "-10000.00",
+    "description": "DEBITO DEBIN",
+    "extendedDescription": "DEBIN 10/05 SIN COMERCIO CONOCIDO",
+    "merchant": "",
+    "expectedCategoryKey": null,
+    "expectedStatus": "REVIEW",
+    "expectedConfidence": "LOW",
+    "expectedReason": "RULE_CHANNEL_TRANSFER_REVIEW"
+  }
+]

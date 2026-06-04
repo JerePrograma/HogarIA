@@ -22,6 +22,7 @@ public record TransactionCreateRequest(
         String counterparty,
         MoneyTransaction.ClassificationStatus classificationStatus,
         String classificationReason,
+        String classificationExplanationJson,
         UUID importBatchId,
         UUID internalTransferGroupId
 ) {}

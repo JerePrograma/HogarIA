@@ -21,6 +21,8 @@ public class BancoProvinciaMovimientosExcelParser extends ExcelImportParserSuppo
   private final TransactionImportRuleClassifier classifier;
   private final ImportSourceHashService hashService;
   private final ObjectMapper objectMapper;
+  private final MerchantExtractor merchantExtractor;
+  private final CounterpartyExtractor counterpartyExtractor;
 
   public BancoProvinciaMovimientosExcelParser(
           ImportTextNormalizer normalizer,
@@ -32,6 +34,8 @@ public class BancoProvinciaMovimientosExcelParser extends ExcelImportParserSuppo
     this.classifier = classifier;
     this.hashService = hashService;
     this.objectMapper = objectMapper;
+    this.merchantExtractor = new MerchantExtractor(normalizer);
+    this.counterpartyExtractor = new CounterpartyExtractor(normalizer);
   }
 
   @Override
@@ -114,27 +118,51 @@ public class BancoProvinciaMovimientosExcelParser extends ExcelImportParserSuppo
       return null;
     }
 
-    var counterparty = extractCounterparty(extendedDescription, merchantName);
-    var normalizedDescription = normalizer.normalize(joinUseful(description, extendedDescription, merchantName));
+    var merchant = merchantExtractor.fromBancoProvincia(description, extendedDescription, merchantName);
+    var counterparty = counterpartyExtractor.fromBancoProvincia(extendedDescription, merchant);
+    var normalizedDescription = normalizer.normalize(joinUseful(description, extendedDescription, merchant.raw()));
     var paymentChannel = classifier.inferBancoProvinciaPaymentChannel(description, extendedDescription);
-    var classification = classifier.classifyBancoProvincia(
-            signedAmount,
-            description,
-            extendedDescription,
-            merchantName,
-            paymentChannel,
-            counterparty
-    );
     var sourceHash = hashService.fromFallback(
             profileId,
             accountId,
             TransactionImportSource.BANCO_PROVINCIA,
-            sequence + "|" + realDate + "|" + signedAmount + "|" + balanceText
+            sequence + "|" + realDate + "|" + signedAmount
     );
     var raw = rawMap(detection.headers(), values, detection.displayName(), detection.sheetName(), rowNumber);
     raw.put("_signedAmount", signedAmount.toPlainString());
     raw.put("_sourceHash", sourceHash);
-    raw.put("_counterparty", counterparty);
+    raw.put("_merchantRaw", merchant.raw() == null ? "" : merchant.raw());
+    raw.put("_merchantNormalized", merchant.normalized() == null ? "" : merchant.normalized());
+    raw.put("_counterparty", counterparty.raw() == null ? "" : counterparty.raw());
+    raw.put("_counterpartyDocumentHash", counterparty.documentHash() == null ? "" : counterparty.documentHash());
+
+    var normalizedMovement = new NormalizedImportMovement(
+            TransactionImportSource.BANCO_PROVINCIA,
+            sequence.isBlank() ? null : sequence,
+            sourceHash,
+            realDate,
+            realDate.atStartOfDay(),
+            signedAmount,
+            DEFAULT_CURRENCY,
+            description,
+            normalizedDescription,
+            extendedDescription,
+            merchant.raw(),
+            merchant.normalized(),
+            counterparty.raw(),
+            counterparty.documentHash(),
+            paymentChannel,
+            signedAmount.signum() < 0 ? ImportOperationKind.DEBIT : ImportOperationKind.CREDIT,
+            description,
+            null,
+            null,
+            null,
+            null,
+            null,
+            counterparty.raw(),
+            objectMapper.writeValueAsString(raw)
+    );
+    var classification = classifier.classify(normalizedMovement);
 
     return ImportedMovementCandidate.builder()
             .source(TransactionImportSource.BANCO_PROVINCIA)
@@ -152,8 +180,9 @@ public class BancoProvinciaMovimientosExcelParser extends ExcelImportParserSuppo
             .rawDescription(description)
             .normalizedDescription(normalizedDescription)
             .extendedDescription(extendedDescription)
-            .merchantName(merchantName.isBlank() ? null : merchantName)
-            .counterparty(counterparty.isBlank() ? null : counterparty)
+            .merchantName(merchant.raw())
+            .counterparty(counterparty.raw())
+            .counterpartyDocumentHash(counterparty.documentHash())
             .paymentChannel(classification.paymentChannel())
             .movementType(classification.movementType())
             .balanceImpact(classification.balanceImpact())
@@ -161,8 +190,12 @@ public class BancoProvinciaMovimientosExcelParser extends ExcelImportParserSuppo
             .categorySuggestionName(classification.categorySuggestionName())
             .classificationStatus(classification.classificationStatus())
             .classificationReason(classification.classificationReason())
+            .classificationLayer(classification.classificationLayer())
+            .classificationMatchedField(classification.matchedField())
+            .classificationMatchedValue(classification.matchedValue())
+            .classificationExplanationJson(classification.explanationJson())
             .confidence(classification.confidence())
-            .rawJson(objectMapper.writeValueAsString(raw))
+            .rawJson(normalizedMovement.rawPayload())
             .rowNumber(rowNumber)
             .sheetName(detection.sheetName())
             .targetEntity(targetEntity(classification.movementType()))

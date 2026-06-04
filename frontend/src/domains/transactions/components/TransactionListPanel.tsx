@@ -14,6 +14,7 @@ import {
   transactionOriginOptions,
   transactionStatusOptions,
 } from "../../../domain/financeOptions";
+import { getCategoryDisplayName } from "../../../domain/transactionRules";
 import { EmptyState } from "../../../shared/ui/EmptyState";
 import { ErrorState } from "../../../shared/ui/ErrorState";
 import { ALL, WITHOUT_CATEGORY, type TransactionFilters } from "../types";
@@ -194,9 +195,7 @@ export function TransactionListPanel({
               <option value={WITHOUT_CATEGORY}>Sin categoría</option>
               {categories.map((category) => (
                 <option key={category.id} value={category.id}>
-                  {category.technical
-                    ? `${category.name} · técnica`
-                    : category.name}
+                  {getCategoryDisplayName(category)}
                 </option>
               ))}
             </select>
@@ -438,7 +437,7 @@ export function TransactionListPanel({
             <option value="">Elegir categoría</option>
             {categories.map((category) => (
               <option key={category.id} value={category.id}>
-                {category.name}
+                {getCategoryDisplayName(category)}
               </option>
             ))}
           </select>

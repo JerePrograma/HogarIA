@@ -7,7 +7,25 @@ export type TransactionImportSource =
 export type TransactionImportMovementType = 'INCOME' | 'EXPENSE' | 'SAVING' | 'TRANSFER' | 'ADJUSTMENT';
 export type TransactionImportRowStatus = 'READY' | 'NEEDS_CATEGORY' | 'DUPLICATE' | 'DUPLICATE_EXACT' | 'POSSIBLE_INTERNAL_TRANSFER' | 'INTERNAL_TRANSFER_MATCHED' | 'POSSIBLE_CROSS_SOURCE_DUPLICATE' | 'REVIEW' | 'SKIPPED' | 'ERROR';
 export type TransactionImportConfidence = 'HIGH' | 'MEDIUM' | 'LOW' | 'NONE';
-export type TransactionImportPaymentChannel = 'UNKNOWN' | 'CASH' | 'BANK_TRANSFER' | 'DEBIN' | 'CUENTA_DNI' | 'DEBIT_CARD' | 'CREDIT_CARD' | 'MERCADO_PAGO' | 'MERCADO_CREDITO' | 'INTERNAL_TRANSFER' | 'OTHER';
+export type TransactionImportPaymentChannel =
+  | 'UNKNOWN'
+  | 'CASH'
+  | 'BANK_TRANSFER'
+  | 'DEBIN'
+  | 'CUENTA_DNI'
+  | 'DEBIT_CARD'
+  | 'CREDIT_CARD'
+  | 'DIRECT_DEBIT'
+  | 'POS_TRANSFER'
+  | 'ATM'
+  | 'MONEY_MARKET_YIELD'
+  | 'TRANSPORT_CARD'
+  | 'QR_PAYMENT'
+  | 'CARD_FOREIGN_CURRENCY'
+  | 'MERCADO_PAGO'
+  | 'MERCADO_CREDITO'
+  | 'INTERNAL_TRANSFER'
+  | 'OTHER';
 export type TransactionImportBalanceImpact = 'OPERATING_INCOME' | 'CONSUMPTION_EXPENSE' | 'SAVING_OUTFLOW' | 'INVESTMENT_OUTFLOW' | 'DEBT_OUTFLOW' | 'RECOVERABLE_OUTFLOW' | 'PRINCIPAL_RECOVERY' | 'INTEREST_INCOME' | 'REFUND_OR_REIMBURSEMENT' | 'INTERNAL_TRANSFER' | 'EXTERNAL_TRANSFER' | 'NEUTRAL_ADJUSTMENT' | 'IGNORED' | 'TECHNICAL' | 'UNKNOWN';
 export type TransactionImportClassificationStatus = 'CLASSIFIED' | 'NEEDS_CATEGORY' | 'REVIEW' | 'TECHNICAL' | 'IGNORED_BY_RULE';
 
@@ -28,6 +46,7 @@ export interface TransactionImportRow {
   extendedDescription?: string | null;
   merchantName?: string | null;
   counterparty?: string | null;
+  counterpartyDocumentHash?: string | null;
   rawSignedAmount?: number;
   amount: number;
   currency?: string;
@@ -36,6 +55,10 @@ export interface TransactionImportRow {
   balanceImpact?: TransactionImportBalanceImpact | null;
   classificationStatus?: TransactionImportClassificationStatus | null;
   classificationReason?: string | null;
+  classificationLayer?: string | null;
+  classificationMatchedField?: string | null;
+  classificationMatchedValue?: string | null;
+  classificationExplanationJson?: string | null;
   categorySuggestionKey?: string | null;
   suggestedCategoryId: string | null;
   suggestedCategoryName?: string | null;

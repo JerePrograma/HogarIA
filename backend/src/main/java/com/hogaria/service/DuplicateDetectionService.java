@@ -36,8 +36,15 @@ public class DuplicateDetectionService {
     public List<MoneyTransaction> findStrongSourceDuplicates(MoneyTransaction transaction, UUID excludeId) {
         if (transaction.getSourceHash() != null && !transaction.getSourceHash().isBlank()) {
             return repository
-                    .findByProfileIdAndSourceHash(transaction.getProfileId(), transaction.getSourceHash())
+                    .findActiveByProfileIdAndSourceHash(
+                            transaction.getProfileId(),
+                            transaction.getSourceHash(),
+                            MoneyTransaction.Status.IGNORED,
+                            MoneyTransaction.ClassificationStatus.IGNORED_BY_RULE
+                    )
+                    .stream()
                     .filter(existing -> excludeId == null || !existing.getId().equals(excludeId))
+                    .findFirst()
                     .map(List::of)
                     .orElseGet(List::of);
         }
@@ -46,10 +53,12 @@ public class DuplicateDetectionService {
                 && !transaction.getSource().isBlank()
                 && transaction.getSourceOperationId() != null
                 && !transaction.getSourceOperationId().isBlank()) {
-            return repository.findByStrongSourceOperation(
+            return repository.findActiveByStrongSourceOperation(
                     transaction.getProfileId(),
                     transaction.getSource().trim().toUpperCase(Locale.ROOT),
                     transaction.getSourceOperationId().trim(),
+                    MoneyTransaction.Status.IGNORED,
+                    MoneyTransaction.ClassificationStatus.IGNORED_BY_RULE,
                     excludeId
             );
         }

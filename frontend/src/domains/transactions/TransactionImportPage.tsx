@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
 import { queryKeys } from "../../domain/queryKeys";
+import { getCategoryDisplayName } from "../../domain/transactionRules";
 import { listAccounts } from "../../api/accountsApi";
 import { listCategories } from "../../api/categoriesApi";
 import {
@@ -270,16 +271,24 @@ export function TransactionImportPage() {
     const search = normalize(filters.search);
 
     return rows.filter((row) => {
+      const suggestedCategory = categoriesById.get(row.suggestedCategoryId ?? "");
       const suggestedCategoryName =
+        (suggestedCategory ? getCategoryDisplayName(suggestedCategory) : null) ??
         row.suggestedCategoryName ??
-        categoriesById.get(row.suggestedCategoryId ?? "")?.name ??
         "";
 
       const matchesSearch =
         !search ||
         normalize(row.rawDescription).includes(search) ||
         normalize(row.normalizedDescription).includes(search) ||
+        normalize(row.extendedDescription).includes(search) ||
+        normalize(row.merchantName).includes(search) ||
+        normalize(row.counterparty).includes(search) ||
+        normalize(row.classificationReason).includes(search) ||
+        normalize(row.classificationMatchedValue).includes(search) ||
         normalize(suggestedCategoryName).includes(search) ||
+        normalize(suggestedCategory?.displayPath).includes(search) ||
+        normalize(suggestedCategory?.categoryKey).includes(search) ||
         normalize(row.realDate).includes(search) ||
         String(row.amount ?? "").includes(search);
 
@@ -806,7 +815,7 @@ export function TransactionImportPage() {
                             <option value={ALL}>Todas</option>
                             {categories.map((category) => (
                               <option key={category.id} value={category.id}>
-                                {category.name}
+                                {getCategoryDisplayName(category)}
                               </option>
                             ))}
                           </select>

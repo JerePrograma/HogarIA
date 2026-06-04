@@ -38,6 +38,7 @@ class TransactionImportServiceTest {
   @Mock ExcelImportBatchRepository batchRepository;
   @Mock ExcelImportRowRepository rowRepository;
   @Mock TransactionImportReferenceRepository referenceRepository;
+  @Mock TransactionClassificationAuditRepository classificationAuditRepository;
   @Mock TransactionService txService;
   @Mock TransactionCategorySuggestionService suggestionService;
   @Mock TransactionExcelImportFormatDetector excelFormatDetector;
@@ -49,7 +50,7 @@ class TransactionImportServiceTest {
 
   @BeforeEach
   void setup() {
-    service = new TransactionImportService(profileRepository, accountRepository, categoryRepository, txRepository, batchRepository, rowRepository, referenceRepository, txService, suggestionService, excelFormatDetector, List.<TransactionExcelMovementParser>of(), new ObjectMapper().findAndRegisterModules());
+    service = new TransactionImportService(profileRepository, accountRepository, categoryRepository, txRepository, batchRepository, rowRepository, referenceRepository, classificationAuditRepository, txService, suggestionService, excelFormatDetector, List.<TransactionExcelMovementParser>of(), new ObjectMapper().findAndRegisterModules());
     lenient().when(profileRepository.findByIdAndUserId(eq(profileId), eq(userId))).thenReturn(Optional.of(FinancialProfile.builder().id(profileId).userId(userId).build()));
     lenient().when(accountRepository.existsByIdAndProfileId(eq(accountId), eq(profileId))).thenReturn(true);
     lenient().when(batchRepository.findById(any())).thenReturn(Optional.empty());
@@ -285,7 +286,7 @@ class TransactionImportServiceTest {
   @Test
   void previewDoesNotCreateMoneyTransactions() {
     var parser = mock(TransactionExcelMovementParser.class);
-    service = new TransactionImportService(profileRepository, accountRepository, categoryRepository, txRepository, batchRepository, rowRepository, referenceRepository, txService, suggestionService, excelFormatDetector, List.of(parser), new ObjectMapper().findAndRegisterModules());
+    service = new TransactionImportService(profileRepository, accountRepository, categoryRepository, txRepository, batchRepository, rowRepository, referenceRepository, classificationAuditRepository, txService, suggestionService, excelFormatDetector, List.of(parser), new ObjectMapper().findAndRegisterModules());
     var batchId = UUID.randomUUID();
     var categoryId = UUID.randomUUID();
     var detection = new DetectedExcelImportFormat(
@@ -381,10 +382,15 @@ class TransactionImportServiceTest {
             "COMPRA TARJETA 29/01/26 23:43",
             "PAYU*AR*UBER",
             "PAYU*AR*UBER",
+            null,
             MoneyTransaction.PaymentChannel.DEBIT_CARD,
             MoneyTransaction.BalanceImpact.CONSUMPTION_EXPENSE,
             MoneyTransaction.ClassificationStatus.CLASSIFIED,
             "RULE_UBER",
+            "MERCHANT_ALIAS",
+            "merchant",
+            "PAYU*AR*UBER",
+            "{\"reasonCode\":\"RULE_UBER\"}",
             "taxiyapps",
             "9332",
             "Hoja 1",
@@ -509,6 +515,7 @@ class TransactionImportServiceTest {
             null,
             null,
             null,
+            null,
             null
     );
   }
@@ -565,10 +572,15 @@ class TransactionImportServiceTest {
             desc,
             null,
             null,
+            null,
             MoneyTransaction.PaymentChannel.MERCADO_PAGO,
             balanceImpact,
             classificationStatus,
             classificationReason,
+            null,
+            null,
+            null,
+            null,
             null,
             null,
             "Hoja 1",

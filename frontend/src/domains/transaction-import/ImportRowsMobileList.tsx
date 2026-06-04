@@ -5,6 +5,7 @@ import { formatMoney } from '../../domain/formatters';
 import type { TransactionImportMovementType, TransactionImportRow } from './types';
 import { ImportRowCategorySelect } from './ImportRowCategorySelect';
 import {
+  getClassificationExplanationSummary,
   getImportRowIssueMessage,
   getSuggestedCategoryName,
   importBalanceImpactLabels,
@@ -39,6 +40,7 @@ function compactMeta(row: TransactionImportRow) {
     row.confidence
       ? `Confianza: ${importConfidenceLabels[row.confidence] ?? row.confidence}`
       : null,
+    row.classificationLayer ? `Capa: ${row.classificationLayer}` : null,
   ].filter(Boolean).join(' · ');
 }
 
@@ -122,6 +124,9 @@ export function ImportRowsMobileList({
             {compactMeta(row) ? <p className="muted">{compactMeta(row)}</p> : null}
             {row.classificationReason ? (
               <p className="muted">Regla: {row.classificationReason}</p>
+            ) : null}
+            {getClassificationExplanationSummary(row) ? (
+              <p className="muted">Match: {getClassificationExplanationSummary(row)}</p>
             ) : null}
             {issueMessage ? <p className="import-row-note">{issueMessage}</p> : null}
           </article>

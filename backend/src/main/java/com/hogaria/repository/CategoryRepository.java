@@ -7,7 +7,9 @@ import org.springframework.data.repository.query.Param;
 
 public interface CategoryRepository extends JpaRepository<Category, UUID> {
     List<Category> findByProfileIdAndActiveTrue(UUID profileId);
+    List<Category> findByProfileId(UUID profileId);
     List<Category> findByProfileIdIsNullAndActiveTrue();
+    List<Category> findByProfileIdIsNull();
     Optional<Category> findByIdAndProfileId(UUID id, UUID profileId);
     Optional<Category> findByIdAndProfileIdIsNull(UUID id);
 

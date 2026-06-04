@@ -68,6 +68,21 @@ public interface MoneyTransactionRepository extends JpaRepository<MoneyTransacti
 
     Optional<MoneyTransaction> findByProfileIdAndSourceHash(UUID profileId, String sourceHash);
 
+    @Query("""
+            select t from MoneyTransaction t
+            where t.profileId = :profileId
+              and t.sourceHash = :sourceHash
+              and t.status <> :ignoredStatus
+              and t.classificationStatus <> :ignoredClassification
+            order by t.realDate asc, t.id asc
+            """)
+    List<MoneyTransaction> findActiveByProfileIdAndSourceHash(
+            @Param("profileId") UUID profileId,
+            @Param("sourceHash") String sourceHash,
+            @Param("ignoredStatus") MoneyTransaction.Status ignoredStatus,
+            @Param("ignoredClassification") MoneyTransaction.ClassificationStatus ignoredClassification
+    );
+
     List<MoneyTransaction> findByProfileIdAndSourceAndSourceOperationId(
             UUID profileId,
             String source,
@@ -188,6 +203,24 @@ public interface MoneyTransactionRepository extends JpaRepository<MoneyTransacti
             @Param("profileId") UUID profileId,
             @Param("source") String source,
             @Param("sourceOperationId") String sourceOperationId,
+            @Param("excludeId") UUID excludeId
+    );
+
+    @Query("""
+            select t from MoneyTransaction t
+            where t.profileId = :profileId
+              and t.source = :source
+              and t.sourceOperationId = :sourceOperationId
+              and t.status <> :ignoredStatus
+              and t.classificationStatus <> :ignoredClassification
+              and (:excludeId is null or t.id <> :excludeId)
+            """)
+    List<MoneyTransaction> findActiveByStrongSourceOperation(
+            @Param("profileId") UUID profileId,
+            @Param("source") String source,
+            @Param("sourceOperationId") String sourceOperationId,
+            @Param("ignoredStatus") MoneyTransaction.Status ignoredStatus,
+            @Param("ignoredClassification") MoneyTransaction.ClassificationStatus ignoredClassification,
             @Param("excludeId") UUID excludeId
     );
 }

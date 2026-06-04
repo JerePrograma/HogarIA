@@ -96,6 +96,7 @@ CREATE TABLE money_transaction (
     counterparty VARCHAR(255),
     classification_status VARCHAR(40) NOT NULL DEFAULT 'CLASSIFIED',
     classification_reason VARCHAR(255),
+    classification_explanation_json JSONB,
     import_batch_id UUID,
     internal_transfer_group_id UUID,
     created_at TIMESTAMP NOT NULL DEFAULT now(),
@@ -121,6 +122,13 @@ CREATE TABLE money_transaction (
             'MERCADO_PAGO',
             'MERCADO_CREDITO',
             'INTERNAL_TRANSFER',
+            'DIRECT_DEBIT',
+            'POS_TRANSFER',
+            'ATM',
+            'MONEY_MARKET_YIELD',
+            'TRANSPORT_CARD',
+            'QR_PAYMENT',
+            'CARD_FOREIGN_CURRENCY',
             'OTHER'
         )
     ),
@@ -295,6 +303,12 @@ CREATE TABLE excel_import_row (
     normalized_description VARCHAR(500),
     extended_description VARCHAR(500),
     merchant_name VARCHAR(255),
+    counterparty_name VARCHAR(255),
+    counterparty_document_hash VARCHAR(64),
+    payment_channel VARCHAR(40),
+    classification_status VARCHAR(40),
+    classification_reason VARCHAR(255),
+    classification_explanation_json JSONB,
     target_entity VARCHAR(40),
     status VARCHAR(30) NOT NULL,
     error_message VARCHAR(1000),
@@ -304,6 +318,33 @@ CREATE TABLE excel_import_row (
     CONSTRAINT ck_excel_import_row_month CHECK (month IS NULL OR month BETWEEN 1 AND 12),
     CONSTRAINT ck_excel_import_row_movement_type CHECK (
         movement_type IS NULL OR movement_type IN ('INCOME', 'EXPENSE', 'SAVING', 'TRANSFER', 'ADJUSTMENT')
+    ),
+    CONSTRAINT ck_excel_import_row_payment_channel CHECK (
+        payment_channel IS NULL
+        OR payment_channel IN (
+            'UNKNOWN',
+            'CASH',
+            'BANK_TRANSFER',
+            'DEBIN',
+            'CUENTA_DNI',
+            'DEBIT_CARD',
+            'CREDIT_CARD',
+            'MERCADO_PAGO',
+            'MERCADO_CREDITO',
+            'INTERNAL_TRANSFER',
+            'DIRECT_DEBIT',
+            'POS_TRANSFER',
+            'ATM',
+            'MONEY_MARKET_YIELD',
+            'TRANSPORT_CARD',
+            'QR_PAYMENT',
+            'CARD_FOREIGN_CURRENCY',
+            'OTHER'
+        )
+    ),
+    CONSTRAINT ck_excel_import_row_classification_status CHECK (
+        classification_status IS NULL
+        OR classification_status IN ('CLASSIFIED', 'NEEDS_CATEGORY', 'REVIEW', 'TECHNICAL', 'IGNORED_BY_RULE')
     ),
     CONSTRAINT ck_excel_import_row_target_entity CHECK (
         target_entity IS NULL
@@ -323,6 +364,143 @@ CREATE TABLE excel_import_row (
         )
     ),
     CONSTRAINT ck_excel_import_row_status CHECK (status IN ('READY', 'IMPORTED', 'SKIPPED', 'WARNING', 'ERROR'))
+);
+
+CREATE TABLE merchant_alias (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    profile_id UUID,
+    source VARCHAR(40),
+    alias_raw VARCHAR(255) NOT NULL,
+    alias_normalized VARCHAR(255) NOT NULL,
+    canonical_name VARCHAR(255) NOT NULL,
+    category_id UUID NOT NULL,
+    payment_channel VARCHAR(40),
+    confidence NUMERIC(5,2) NOT NULL,
+    active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMP NOT NULL DEFAULT now(),
+    updated_at TIMESTAMP NOT NULL DEFAULT now(),
+    CONSTRAINT fk_merchant_alias_profile FOREIGN KEY (profile_id) REFERENCES financial_profile(id),
+    CONSTRAINT fk_merchant_alias_category FOREIGN KEY (category_id) REFERENCES category(id),
+    CONSTRAINT ck_merchant_alias_confidence CHECK (confidence >= 0 AND confidence <= 1),
+    CONSTRAINT ck_merchant_alias_payment_channel CHECK (
+        payment_channel IS NULL
+        OR payment_channel IN (
+            'UNKNOWN',
+            'CASH',
+            'BANK_TRANSFER',
+            'DEBIN',
+            'CUENTA_DNI',
+            'DEBIT_CARD',
+            'CREDIT_CARD',
+            'MERCADO_PAGO',
+            'MERCADO_CREDITO',
+            'INTERNAL_TRANSFER',
+            'DIRECT_DEBIT',
+            'POS_TRANSFER',
+            'ATM',
+            'MONEY_MARKET_YIELD',
+            'TRANSPORT_CARD',
+            'QR_PAYMENT',
+            'CARD_FOREIGN_CURRENCY',
+            'OTHER'
+        )
+    )
+);
+
+CREATE TABLE counterparty_alias (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    profile_id UUID NOT NULL,
+    source VARCHAR(40),
+    counterparty_name VARCHAR(255),
+    counterparty_document_hash VARCHAR(64),
+    canonical_name VARCHAR(255) NOT NULL,
+    default_category_id UUID,
+    default_movement_type VARCHAR(40),
+    internal_transfer_candidate BOOLEAN NOT NULL DEFAULT FALSE,
+    active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMP NOT NULL DEFAULT now(),
+    updated_at TIMESTAMP NOT NULL DEFAULT now(),
+    CONSTRAINT fk_counterparty_alias_profile FOREIGN KEY (profile_id) REFERENCES financial_profile(id),
+    CONSTRAINT fk_counterparty_alias_category FOREIGN KEY (default_category_id) REFERENCES category(id),
+    CONSTRAINT ck_counterparty_alias_default_movement_type CHECK (
+        default_movement_type IS NULL
+        OR default_movement_type IN ('INCOME', 'EXPENSE', 'SAVING', 'TRANSFER', 'ADJUSTMENT')
+    ),
+    CONSTRAINT ck_counterparty_alias_identity CHECK (
+        counterparty_name IS NOT NULL OR counterparty_document_hash IS NOT NULL
+    )
+);
+
+CREATE TABLE classification_rule (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    profile_id UUID,
+    priority INT NOT NULL,
+    source VARCHAR(40),
+    field_name VARCHAR(80) NOT NULL,
+    pattern VARCHAR(500) NOT NULL,
+    pattern_type VARCHAR(20) NOT NULL,
+    category_id UUID,
+    movement_type VARCHAR(40),
+    payment_channel VARCHAR(40),
+    classification_status VARCHAR(40) NOT NULL,
+    confidence NUMERIC(5,2) NOT NULL,
+    reason_code VARCHAR(120) NOT NULL,
+    warning VARCHAR(1000),
+    active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMP NOT NULL DEFAULT now(),
+    updated_at TIMESTAMP NOT NULL DEFAULT now(),
+    CONSTRAINT fk_classification_rule_profile FOREIGN KEY (profile_id) REFERENCES financial_profile(id),
+    CONSTRAINT fk_classification_rule_category FOREIGN KEY (category_id) REFERENCES category(id),
+    CONSTRAINT ck_classification_rule_priority CHECK (priority >= 0),
+    CONSTRAINT ck_classification_rule_pattern_type CHECK (pattern_type IN ('EXACT', 'CONTAINS', 'REGEX')),
+    CONSTRAINT ck_classification_rule_movement_type CHECK (
+        movement_type IS NULL OR movement_type IN ('INCOME', 'EXPENSE', 'SAVING', 'TRANSFER', 'ADJUSTMENT')
+    ),
+    CONSTRAINT ck_classification_rule_payment_channel CHECK (
+        payment_channel IS NULL
+        OR payment_channel IN (
+            'UNKNOWN',
+            'CASH',
+            'BANK_TRANSFER',
+            'DEBIN',
+            'CUENTA_DNI',
+            'DEBIT_CARD',
+            'CREDIT_CARD',
+            'MERCADO_PAGO',
+            'MERCADO_CREDITO',
+            'INTERNAL_TRANSFER',
+            'DIRECT_DEBIT',
+            'POS_TRANSFER',
+            'ATM',
+            'MONEY_MARKET_YIELD',
+            'TRANSPORT_CARD',
+            'QR_PAYMENT',
+            'CARD_FOREIGN_CURRENCY',
+            'OTHER'
+        )
+    ),
+    CONSTRAINT ck_classification_rule_status CHECK (
+        classification_status IN ('CLASSIFIED', 'NEEDS_CATEGORY', 'REVIEW', 'TECHNICAL', 'IGNORED_BY_RULE')
+    ),
+    CONSTRAINT ck_classification_rule_confidence CHECK (confidence >= 0 AND confidence <= 1)
+);
+
+CREATE TABLE transaction_classification_audit (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    transaction_id UUID,
+    import_row_id UUID,
+    rule_id UUID,
+    reason_code VARCHAR(120) NOT NULL,
+    matched_field VARCHAR(80),
+    matched_value VARCHAR(500),
+    suggested_category_id UUID,
+    confidence NUMERIC(5,2) NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT now(),
+    CONSTRAINT fk_tx_classification_audit_transaction FOREIGN KEY (transaction_id) REFERENCES money_transaction(id) ON DELETE CASCADE,
+    CONSTRAINT fk_tx_classification_audit_import_row FOREIGN KEY (import_row_id) REFERENCES excel_import_row(id) ON DELETE SET NULL,
+    CONSTRAINT fk_tx_classification_audit_rule FOREIGN KEY (rule_id) REFERENCES classification_rule(id) ON DELETE SET NULL,
+    CONSTRAINT fk_tx_classification_audit_category FOREIGN KEY (suggested_category_id) REFERENCES category(id),
+    CONSTRAINT ck_tx_classification_audit_confidence CHECK (confidence >= 0 AND confidence <= 1)
 );
 
 CREATE TABLE monthly_plan_item (
@@ -455,12 +633,45 @@ CREATE TABLE transaction_import_reference (
     normalized_description VARCHAR(500),
     extended_description VARCHAR(500),
     merchant_name VARCHAR(255),
+    counterparty_name VARCHAR(255),
+    counterparty_document_hash VARCHAR(64),
+    payment_channel VARCHAR(40),
+    classification_status VARCHAR(40),
+    classification_reason VARCHAR(255),
+    classification_explanation_json JSONB,
     raw_payload JSONB,
     created_at TIMESTAMP NOT NULL DEFAULT now(),
     updated_at TIMESTAMP NOT NULL DEFAULT now(),
     CONSTRAINT fk_transaction_import_reference_transaction FOREIGN KEY (transaction_id) REFERENCES money_transaction(id) ON DELETE CASCADE,
     CONSTRAINT fk_transaction_import_reference_batch FOREIGN KEY (import_batch_id) REFERENCES excel_import_batch(id) ON DELETE SET NULL,
-    CONSTRAINT fk_transaction_import_reference_row FOREIGN KEY (import_row_id) REFERENCES excel_import_row(id) ON DELETE SET NULL
+    CONSTRAINT fk_transaction_import_reference_row FOREIGN KEY (import_row_id) REFERENCES excel_import_row(id) ON DELETE SET NULL,
+    CONSTRAINT ck_transaction_import_reference_payment_channel CHECK (
+        payment_channel IS NULL
+        OR payment_channel IN (
+            'UNKNOWN',
+            'CASH',
+            'BANK_TRANSFER',
+            'DEBIN',
+            'CUENTA_DNI',
+            'DEBIT_CARD',
+            'CREDIT_CARD',
+            'MERCADO_PAGO',
+            'MERCADO_CREDITO',
+            'INTERNAL_TRANSFER',
+            'DIRECT_DEBIT',
+            'POS_TRANSFER',
+            'ATM',
+            'MONEY_MARKET_YIELD',
+            'TRANSPORT_CARD',
+            'QR_PAYMENT',
+            'CARD_FOREIGN_CURRENCY',
+            'OTHER'
+        )
+    ),
+    CONSTRAINT ck_transaction_import_reference_classification_status CHECK (
+        classification_status IS NULL
+        OR classification_status IN ('CLASSIFIED', 'NEEDS_CATEGORY', 'REVIEW', 'TECHNICAL', 'IGNORED_BY_RULE')
+    )
 );
 
 CREATE INDEX idx_profile_user_id ON financial_profile(user_id);
@@ -483,15 +694,12 @@ CREATE UNIQUE INDEX ux_category_profile_key_type
 CREATE UNIQUE INDEX ux_category_global_key_type
     ON category(category_key, type)
     WHERE profile_id IS NULL AND category_key IS NOT NULL AND active = TRUE;
-CREATE INDEX idx_category_profile_budgetable
-    ON category(profile_id, budgetable, technical);
 CREATE INDEX idx_category_profile_budgetable_technical
     ON category(profile_id, budgetable, technical);
 CREATE INDEX idx_category_global_category_key
     ON category(category_key)
     WHERE profile_id IS NULL;
 
-CREATE INDEX idx_money_tx_profile_budget_date ON money_transaction(profile_id, budget_date);
 CREATE INDEX idx_money_tx_profile_category ON money_transaction(profile_id, category_id);
 CREATE INDEX idx_money_tx_profile_account ON money_transaction(profile_id, account_id);
 CREATE INDEX idx_money_tx_type ON money_transaction(movement_type);
@@ -505,7 +713,9 @@ CREATE INDEX idx_money_tx_profile_classification ON money_transaction(profile_id
 CREATE INDEX idx_money_tx_profile_source_operation ON money_transaction(profile_id, source, source_operation_id);
 CREATE UNIQUE INDEX ux_money_tx_profile_source_hash
     ON money_transaction(profile_id, source_hash)
-    WHERE source_hash IS NOT NULL;
+    WHERE source_hash IS NOT NULL
+      AND status <> 'IGNORED'
+      AND classification_status <> 'IGNORED_BY_RULE';
 CREATE INDEX idx_money_tx_internal_transfer_group
     ON money_transaction(internal_transfer_group_id)
     WHERE internal_transfer_group_id IS NOT NULL;
@@ -515,16 +725,15 @@ CREATE INDEX idx_money_tx_profile_duplicate_fingerprint
     WHERE duplicate_fingerprint IS NOT NULL;
 CREATE UNIQUE INDEX ux_money_tx_profile_source_operation_idempotent
     ON money_transaction(profile_id, source, source_operation_id)
-    WHERE source IS NOT NULL AND source_operation_id IS NOT NULL AND status <> 'IGNORED';
+    WHERE source IS NOT NULL
+      AND source_operation_id IS NOT NULL
+      AND status <> 'IGNORED'
+      AND classification_status <> 'IGNORED_BY_RULE';
 CREATE UNIQUE INDEX ux_money_tx_profile_account_duplicate_fingerprint_active
     ON money_transaction(profile_id, account_id, duplicate_fingerprint)
     WHERE duplicate_fingerprint IS NOT NULL
       AND status <> 'IGNORED'
       AND classification_status <> 'IGNORED_BY_RULE';
-CREATE UNIQUE INDEX ux_money_tx_profile_source_operation_strict
-    ON money_transaction(profile_id, source, source_operation_id)
-    WHERE source IS NOT NULL AND source_operation_id IS NOT NULL;
-
 CREATE INDEX idx_budget_year_profile_year ON budget_year(profile_id, year);
 CREATE INDEX idx_budget_month_year_month ON budget_month(budget_year_id, month);
 CREATE INDEX idx_budget_item_month ON budget_category_item(budget_month_id);
@@ -564,6 +773,36 @@ CREATE INDEX idx_excel_import_row_sheet ON excel_import_row(sheet_name);
 CREATE INDEX idx_excel_import_row_batch_row ON excel_import_row(batch_id, row_number);
 CREATE INDEX idx_excel_import_row_source_hash ON excel_import_row(source_hash);
 CREATE INDEX idx_excel_import_row_source_operation ON excel_import_row(source_operation_id);
+CREATE INDEX idx_excel_import_row_classification ON excel_import_row(classification_status);
+CREATE INDEX idx_excel_import_row_payment_channel ON excel_import_row(payment_channel);
+
+CREATE UNIQUE INDEX ux_merchant_alias_global_source_alias
+    ON merchant_alias(source, alias_normalized)
+    WHERE profile_id IS NULL AND active = TRUE;
+CREATE UNIQUE INDEX ux_merchant_alias_profile_source_alias
+    ON merchant_alias(profile_id, source, alias_normalized)
+    WHERE profile_id IS NOT NULL AND active = TRUE;
+CREATE INDEX idx_merchant_alias_profile_source ON merchant_alias(profile_id, source);
+CREATE INDEX idx_merchant_alias_normalized ON merchant_alias(alias_normalized);
+CREATE INDEX idx_merchant_alias_category ON merchant_alias(category_id);
+
+CREATE UNIQUE INDEX ux_counterparty_alias_profile_source_document
+    ON counterparty_alias(profile_id, source, counterparty_document_hash)
+    WHERE counterparty_document_hash IS NOT NULL AND active = TRUE;
+CREATE INDEX idx_counterparty_alias_profile_source ON counterparty_alias(profile_id, source);
+CREATE INDEX idx_counterparty_alias_document_hash ON counterparty_alias(counterparty_document_hash);
+CREATE INDEX idx_counterparty_alias_category ON counterparty_alias(default_category_id);
+
+CREATE INDEX idx_classification_rule_profile_source ON classification_rule(profile_id, source);
+CREATE INDEX idx_classification_rule_priority ON classification_rule(priority);
+CREATE INDEX idx_classification_rule_category ON classification_rule(category_id);
+CREATE UNIQUE INDEX ux_classification_rule_profile_reason
+    ON classification_rule(COALESCE(profile_id, '00000000-0000-0000-0000-000000000000'::uuid), reason_code)
+    WHERE active = TRUE;
+
+CREATE INDEX idx_tx_classification_audit_transaction ON transaction_classification_audit(transaction_id);
+CREATE INDEX idx_tx_classification_audit_import_row ON transaction_classification_audit(import_row_id);
+CREATE INDEX idx_tx_classification_audit_rule ON transaction_classification_audit(rule_id);
 
 CREATE INDEX idx_monthly_plan_item_profile_period ON monthly_plan_item(profile_id, period_year, period_month);
 CREATE INDEX idx_monthly_plan_item_profile_transaction
@@ -587,7 +826,7 @@ CREATE UNIQUE INDEX ux_transaction_import_reference_transaction
 CREATE UNIQUE INDEX ux_transaction_import_reference_import_row
     ON transaction_import_reference(import_row_id)
     WHERE import_row_id IS NOT NULL;
-CREATE UNIQUE INDEX ux_transaction_import_reference_source_hash
+CREATE INDEX idx_transaction_import_reference_profile_source_hash
     ON transaction_import_reference(profile_id, account_id, import_source, source_hash)
     WHERE source_hash IS NOT NULL;
 CREATE INDEX idx_transaction_import_reference_transaction ON transaction_import_reference(transaction_id);
@@ -600,178 +839,62 @@ CREATE INDEX idx_transaction_import_reference_profile_account_source
 
 WITH seed(parent_key, category_key, name, type, scope, default_movement_type, budgetable, technical) AS (
     VALUES
-        (NULL, 'ingresoslaborales', 'Ingresos laborales', 'INCOME', 'GLOBAL', 'INCOME', TRUE, FALSE),
-        (NULL, 'ingresosprofesionales', 'Ingresos profesionales', 'INCOME', 'GLOBAL', 'INCOME', TRUE, FALSE),
-        (NULL, 'ingresosdenegocio', 'Ingresos de negocio', 'INCOME', 'GLOBAL', 'INCOME', TRUE, FALSE),
-        (NULL, 'ingresosfinancieros', 'Ingresos financieros', 'INCOME', 'GLOBAL', 'INCOME', TRUE, FALSE),
-        (NULL, 'ingresoseventuales', 'Ingresos eventuales', 'INCOME', 'GLOBAL', 'INCOME', TRUE, FALSE),
-        (NULL, 'cjingresosdeprestamos', 'CJ - Ingresos de préstamos', 'INCOME', 'GLOBAL', 'INCOME', TRUE, FALSE),
-        (NULL, 'vivienda', 'Vivienda', 'FIXED_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
-        (NULL, 'servicios', 'Servicios', 'FIXED_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
-        (NULL, 'saludfija', 'Salud fija', 'FIXED_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
-        (NULL, 'educacionfija', 'Educación fija', 'FIXED_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
-        (NULL, 'seguros', 'Seguros', 'FIXED_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
-        (NULL, 'suscripcionesfijas', 'Suscripciones fijas', 'FIXED_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
-        (NULL, 'impuestosfijos', 'Impuestos fijos', 'FIXED_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
+        (NULL, 'ingresos', 'Ingresos', 'INCOME', 'GLOBAL', 'INCOME', TRUE, FALSE),
         (NULL, 'alimentacion', 'Alimentación', 'VARIABLE_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
         (NULL, 'transporte', 'Transporte', 'VARIABLE_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
-        (NULL, 'hogar', 'Hogar', 'VARIABLE_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
-        (NULL, 'saludvariable', 'Salud variable', 'VARIABLE_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
-        (NULL, 'familiaehijos', 'Familia e hijos', 'VARIABLE_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
-        (NULL, 'mascotas', 'Mascotas', 'VARIABLE_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
-        (NULL, 'indumentaria', 'Indumentaria', 'VARIABLE_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
-        (NULL, 'ocio', 'Ocio', 'VARIABLE_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
-        (NULL, 'viajes', 'Viajes', 'VARIABLE_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
+        (NULL, 'servicios', 'Servicios', 'FIXED_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
+        (NULL, 'impuestos', 'Impuestos', 'FIXED_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
+        (NULL, 'segurosymutuales', 'Seguros y mutuales', 'FIXED_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
         (NULL, 'bancosycomisiones', 'Bancos y comisiones', 'VARIABLE_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
-        (NULL, 'impuestosvariables', 'Impuestos variables', 'VARIABLE_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
-        (NULL, 'gastosgenerales', 'Gastos generales', 'VARIABLE_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
-        (NULL, 'ahorro', 'Ahorro', 'SAVING', 'GLOBAL', 'SAVING', TRUE, FALSE),
-        (NULL, 'transferenciasinternas', 'Transferencias internas', 'SAVING', 'GLOBAL', 'TRANSFER', FALSE, TRUE),
-        (NULL, 'inversiones', 'Inversiones', 'INVESTMENT', 'GLOBAL', 'SAVING', TRUE, FALSE),
-        (NULL, 'cjprestamosotorgados', 'CJ - Préstamos otorgados', 'INVESTMENT', 'GLOBAL', 'SAVING', TRUE, FALSE),
         (NULL, 'deudas', 'Deudas', 'DEBT', 'GLOBAL', 'ADJUSTMENT', TRUE, FALSE),
+        (NULL, 'transferencias', 'Transferencias', 'SAVING', 'GLOBAL', 'TRANSFER', FALSE, TRUE),
+        (NULL, 'familiaypersonales', 'Familia y personales', 'VARIABLE_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
         (NULL, 'operacionestecnicas', 'Operaciones técnicas', 'VARIABLE_EXPENSE', 'GLOBAL', 'ADJUSTMENT', FALSE, TRUE),
-        ('ingresoslaborales', 'sueldo', 'Sueldo', 'INCOME', 'GLOBAL', 'INCOME', TRUE, FALSE),
-        ('ingresoslaborales', 'aguinaldo', 'Aguinaldo', 'INCOME', 'GLOBAL', 'INCOME', TRUE, FALSE),
-        ('ingresoslaborales', 'bonosycomisiones', 'Bonos y comisiones', 'INCOME', 'GLOBAL', 'INCOME', TRUE, FALSE),
-        ('ingresoslaborales', 'horasextra', 'Horas extra', 'INCOME', 'GLOBAL', 'INCOME', TRUE, FALSE),
-        ('ingresosprofesionales', 'honorarios', 'Honorarios', 'INCOME', 'GLOBAL', 'INCOME', TRUE, FALSE),
-        ('ingresosprofesionales', 'freelance', 'Freelance', 'INCOME', 'GLOBAL', 'INCOME', TRUE, FALSE),
-        ('ingresosprofesionales', 'serviciosprofesionales', 'Servicios profesionales', 'INCOME', 'GLOBAL', 'INCOME', TRUE, FALSE),
-        ('ingresosdenegocio', 'ventas', 'Ventas', 'INCOME', 'GLOBAL', 'INCOME', TRUE, FALSE),
-        ('ingresosdenegocio', 'cobrosdeclientes', 'Cobros de clientes', 'INCOME', 'GLOBAL', 'INCOME', TRUE, FALSE),
-        ('ingresosdenegocio', 'recuperodegastos', 'Recupero de gastos', 'INCOME', 'GLOBAL', 'INCOME', TRUE, FALSE),
-        ('ingresosfinancieros', 'interesesganados', 'Intereses ganados', 'INCOME', 'GLOBAL', 'INCOME', TRUE, FALSE),
-        ('ingresosfinancieros', 'rendimientos', 'Rendimientos', 'INCOME', 'GLOBAL', 'INCOME', TRUE, FALSE),
-        ('ingresosfinancieros', 'dividendos', 'Dividendos', 'INCOME', 'GLOBAL', 'INCOME', TRUE, FALSE),
-        ('ingresoseventuales', 'beneficiosypromociones', 'Beneficios y promociones', 'INCOME', 'GLOBAL', 'INCOME', TRUE, FALSE),
-        ('ingresoseventuales', 'devolucionesyreintegros', 'Devoluciones y reintegros', 'INCOME', 'GLOBAL', 'INCOME', TRUE, FALSE),
-        ('ingresoseventuales', 'transferenciasrecibidas', 'Transferencias recibidas', 'INCOME', 'GLOBAL', 'INCOME', TRUE, FALSE),
-        ('ingresoseventuales', 'ayudafamiliar', 'Ayuda familiar', 'INCOME', 'GLOBAL', 'INCOME', TRUE, FALSE),
-        ('ingresoseventuales', 'ventadeusados', 'Venta de usados', 'INCOME', 'GLOBAL', 'INCOME', TRUE, FALSE),
-        ('ingresoseventuales', 'otrosingresos', 'Otros ingresos', 'INCOME', 'GLOBAL', 'INCOME', TRUE, FALSE),
-        ('cjingresosdeprestamos', 'cjinterescobrado', 'CJ - Interés cobrado', 'INCOME', 'GLOBAL', 'INCOME', TRUE, FALSE),
-        ('cjingresosdeprestamos', 'cjmoracobrada', 'CJ - Mora cobrada', 'INCOME', 'GLOBAL', 'INCOME', TRUE, FALSE),
-        ('cjingresosdeprestamos', 'cjcomisioncobrada', 'CJ - Comisión cobrada', 'INCOME', 'GLOBAL', 'INCOME', TRUE, FALSE),
-        ('vivienda', 'alquiler', 'Alquiler', 'FIXED_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
-        ('vivienda', 'expensas', 'Expensas', 'FIXED_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
-        ('vivienda', 'hipoteca', 'Hipoteca', 'FIXED_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
-        ('vivienda', 'abl', 'ABL', 'FIXED_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
-        ('vivienda', 'impuestoinmobiliario', 'Impuesto inmobiliario', 'FIXED_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
-        ('servicios', 'electricidad', 'Electricidad', 'FIXED_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
-        ('servicios', 'gas', 'Gas', 'FIXED_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
-        ('servicios', 'agua', 'Agua', 'FIXED_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
-        ('servicios', 'internet', 'Internet', 'FIXED_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
-        ('servicios', 'telefoniamovil', 'Telefonía móvil', 'FIXED_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
-        ('servicios', 'cable', 'Cable', 'FIXED_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
-        ('servicios', 'streaming', 'Streaming', 'FIXED_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
-        ('saludfija', 'prepaga', 'Prepaga', 'FIXED_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
-        ('saludfija', 'obrasocial', 'Obra social', 'FIXED_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
-        ('saludfija', 'planmedico', 'Plan médico', 'FIXED_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
-        ('educacionfija', 'cuotaescolar', 'Cuota escolar', 'FIXED_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
-        ('educacionfija', 'universidad', 'Universidad', 'FIXED_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
-        ('educacionfija', 'cursosrecurrentes', 'Cursos recurrentes', 'FIXED_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
-        ('seguros', 'segurodelauto', 'Seguro del auto', 'FIXED_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
-        ('seguros', 'segurodelhogar', 'Seguro del hogar', 'FIXED_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
-        ('seguros', 'segurodevida', 'Seguro de vida', 'FIXED_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
-        ('seguros', 'segurodecaucion', 'Seguro de caución', 'FIXED_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
-        ('suscripcionesfijas', 'software', 'Software', 'FIXED_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
-        ('suscripcionesfijas', 'gimnasio', 'Gimnasio', 'FIXED_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
-        ('suscripcionesfijas', 'plataformasdigitales', 'Plataformas digitales', 'FIXED_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
-        ('suscripcionesfijas', 'herramientasdetrabajo', 'Herramientas de trabajo', 'FIXED_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
-        ('impuestosfijos', 'monotributo', 'Monotributo', 'FIXED_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
-        ('impuestosfijos', 'autonomos', 'Autónomos', 'FIXED_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
-        ('impuestosfijos', 'ingresosbrutos', 'Ingresos Brutos', 'FIXED_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
-        ('impuestosfijos', 'iva', 'IVA', 'FIXED_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
-        ('impuestosfijos', 'ganancias', 'Ganancias', 'FIXED_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
-        ('impuestosfijos', 'patentes', 'Patentes', 'FIXED_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
+        ('ingresos', 'sueldo', 'Sueldo', 'INCOME', 'GLOBAL', 'INCOME', TRUE, FALSE),
+        ('ingresos', 'interesesyrendimientos', 'Intereses y rendimientos', 'INCOME', 'GLOBAL', 'INCOME', TRUE, FALSE),
+        ('ingresos', 'rendimientomercadopago', 'Rendimiento Mercado Pago', 'INCOME', 'GLOBAL', 'INCOME', TRUE, FALSE),
+        ('ingresos', 'transferenciasrecibidas', 'Transferencias recibidas', 'INCOME', 'GLOBAL', 'INCOME', TRUE, FALSE),
+        ('ingresos', 'beneficiosypromociones', 'Beneficios y promociones', 'INCOME', 'GLOBAL', 'INCOME', TRUE, FALSE),
+        ('ingresos', 'cobrosporlink', 'Cobros por link', 'INCOME', 'GLOBAL', 'INCOME', TRUE, FALSE),
         ('alimentacion', 'supermercado', 'Supermercado', 'VARIABLE_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
         ('alimentacion', 'almacen', 'Almacén', 'VARIABLE_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
-        ('alimentacion', 'verduleria', 'Verdulería', 'VARIABLE_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
-        ('alimentacion', 'carniceria', 'Carnicería', 'VARIABLE_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
-        ('alimentacion', 'delivery', 'Delivery', 'VARIABLE_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
-        ('alimentacion', 'restaurantes', 'Restaurantes', 'VARIABLE_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
+        ('alimentacion', 'deliveryyrestaurantes', 'Delivery y restaurantes', 'VARIABLE_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
         ('transporte', 'transportepublico', 'Transporte público', 'VARIABLE_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
-        ('transporte', 'combustible', 'Combustible', 'VARIABLE_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
         ('transporte', 'taxiyapps', 'Taxi y apps', 'VARIABLE_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
-        ('transporte', 'estacionamiento', 'Estacionamiento', 'VARIABLE_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
-        ('transporte', 'peajes', 'Peajes', 'VARIABLE_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
-        ('transporte', 'mantenimientovehicular', 'Mantenimiento vehicular', 'VARIABLE_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
-        ('hogar', 'limpieza', 'Limpieza', 'VARIABLE_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
-        ('hogar', 'reparaciones', 'Reparaciones', 'VARIABLE_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
-        ('hogar', 'ferreteria', 'Ferretería', 'VARIABLE_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
-        ('hogar', 'mueblesydecoracion', 'Muebles y decoración', 'VARIABLE_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
-        ('hogar', 'electrodomesticos', 'Electrodomésticos', 'VARIABLE_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
-        ('saludvariable', 'medicamentos', 'Medicamentos', 'VARIABLE_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
-        ('saludvariable', 'consultasmedicas', 'Consultas médicas', 'VARIABLE_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
-        ('saludvariable', 'estudiosmedicos', 'Estudios médicos', 'VARIABLE_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
-        ('saludvariable', 'odontologia', 'Odontología', 'VARIABLE_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
-        ('saludvariable', 'terapia', 'Terapia', 'VARIABLE_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
-        ('familiaehijos', 'colegioymateriales', 'Colegio y materiales', 'VARIABLE_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
-        ('familiaehijos', 'actividadesdehijos', 'Actividades de hijos', 'VARIABLE_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
-        ('familiaehijos', 'ropadehijos', 'Ropa de hijos', 'VARIABLE_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
-        ('familiaehijos', 'juguetes', 'Juguetes', 'VARIABLE_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
-        ('familiaehijos', 'cumpleanosyeventos', 'Cumpleaños y eventos', 'VARIABLE_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
-        ('mascotas', 'alimentodemascotas', 'Alimento de mascotas', 'VARIABLE_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
-        ('mascotas', 'veterinaria', 'Veterinaria', 'VARIABLE_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
-        ('mascotas', 'accesoriosdemascotas', 'Accesorios de mascotas', 'VARIABLE_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
-        ('indumentaria', 'ropa', 'Ropa', 'VARIABLE_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
-        ('indumentaria', 'calzado', 'Calzado', 'VARIABLE_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
-        ('indumentaria', 'accesorios', 'Accesorios', 'VARIABLE_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
-        ('ocio', 'salidas', 'Salidas', 'VARIABLE_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
-        ('ocio', 'entretenimiento', 'Entretenimiento', 'VARIABLE_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
-        ('ocio', 'regalos', 'Regalos', 'VARIABLE_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
-        ('ocio', 'donaciones', 'Donaciones', 'VARIABLE_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
-        ('viajes', 'pasajes', 'Pasajes', 'VARIABLE_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
-        ('viajes', 'hospedaje', 'Hospedaje', 'VARIABLE_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
-        ('viajes', 'excursiones', 'Excursiones', 'VARIABLE_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
-        ('viajes', 'viaticos', 'Viáticos', 'VARIABLE_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
-        ('bancosycomisiones', 'comisionesycargos', 'Comisiones y cargos', 'VARIABLE_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
+        ('transporte', 'combustible', 'Combustible', 'VARIABLE_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
+        ('transporte', 'pasajes', 'Pasajes', 'VARIABLE_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
+        ('servicios', 'electricidad', 'Electricidad', 'FIXED_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
+        ('servicios', 'gas', 'Gas', 'FIXED_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
+        ('servicios', 'telefoniamovil', 'Telefonía móvil', 'FIXED_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
+        ('servicios', 'internet', 'Internet', 'FIXED_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
+        ('servicios', 'plataformasdigitales', 'Plataformas digitales', 'FIXED_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
+        ('servicios', 'meli', 'Meli+', 'FIXED_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
+        ('impuestos', 'monotributo', 'Monotributo', 'FIXED_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
+        ('impuestos', 'percepcionesrg4815', 'Percepciones RG 4815', 'FIXED_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
+        ('impuestos', 'arcaafip', 'ARCA / AFIP', 'FIXED_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
+        ('impuestos', 'impuestosbancarios', 'Impuestos bancarios', 'FIXED_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
+        ('segurosymutuales', 'seguros', 'Seguros', 'FIXED_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
+        ('segurosymutuales', 'mutual', 'Mutual', 'FIXED_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
+        ('segurosymutuales', 'cobranzarecurrentearevisar', 'Cobranza recurrente a revisar', 'FIXED_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
         ('bancosycomisiones', 'comisionesbancarias', 'Comisiones bancarias', 'VARIABLE_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
+        ('bancosycomisiones', 'puntoefectivo', 'Punto efectivo', 'VARIABLE_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
         ('bancosycomisiones', 'mantenimientodecuenta', 'Mantenimiento de cuenta', 'VARIABLE_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
-        ('bancosycomisiones', 'impuestodebitosycreditos', 'Impuesto débitos y créditos', 'VARIABLE_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
-        ('bancosycomisiones', 'interesesporfinanciacion', 'Intereses por financiación', 'VARIABLE_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
-        ('impuestosvariables', 'percepciones', 'Percepciones', 'VARIABLE_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
-        ('impuestosvariables', 'retenciones', 'Retenciones', 'VARIABLE_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
-        ('impuestosvariables', 'arca', 'ARCA', 'VARIABLE_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
-        ('impuestosvariables', 'multasyrecargos', 'Multas y recargos', 'VARIABLE_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
-        ('gastosgenerales', 'comprasvarias', 'Compras varias', 'VARIABLE_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
-        ('gastosgenerales', 'gastosmenores', 'Gastos menores', 'VARIABLE_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
-        ('gastosgenerales', 'otrosgastos', 'Otros gastos', 'VARIABLE_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
-        ('ahorro', 'fondodeemergencia', 'Fondo de emergencia', 'SAVING', 'GLOBAL', 'SAVING', TRUE, FALSE),
-        ('ahorro', 'ahorrogeneral', 'Ahorro general', 'SAVING', 'GLOBAL', 'SAVING', TRUE, FALSE),
-        ('ahorro', 'objetivovacaciones', 'Objetivo vacaciones', 'SAVING', 'GLOBAL', 'SAVING', TRUE, FALSE),
-        ('ahorro', 'objetivoauto', 'Objetivo auto', 'SAVING', 'GLOBAL', 'SAVING', TRUE, FALSE),
-        ('ahorro', 'objetivovivienda', 'Objetivo vivienda', 'SAVING', 'GLOBAL', 'SAVING', TRUE, FALSE),
-        ('ahorro', 'educacionfutura', 'Educación futura', 'SAVING', 'GLOBAL', 'SAVING', TRUE, FALSE),
-        ('transferenciasinternas', 'cuentadnidebin', 'Cuenta DNI / DEBIN', 'SAVING', 'GLOBAL', 'TRANSFER', FALSE, TRUE),
-        ('transferenciasinternas', 'fondeomercadopagotransferenciasinternas', 'Fondeo MercadoPago / transferencias internas', 'SAVING', 'GLOBAL', 'TRANSFER', FALSE, TRUE),
-        ('transferenciasinternas', 'transferenciaentrecuentas', 'Transferencia entre cuentas', 'SAVING', 'GLOBAL', 'TRANSFER', FALSE, TRUE),
-        ('transferenciasinternas', 'movimientoentrebilleteras', 'Movimiento entre billeteras', 'SAVING', 'GLOBAL', 'TRANSFER', FALSE, TRUE),
-        ('inversiones', 'dolares', 'Dólares', 'INVESTMENT', 'GLOBAL', 'SAVING', TRUE, FALSE),
-        ('inversiones', 'plazofijo', 'Plazo fijo', 'INVESTMENT', 'GLOBAL', 'SAVING', TRUE, FALSE),
-        ('inversiones', 'fondoscomunes', 'Fondos comunes', 'INVESTMENT', 'GLOBAL', 'SAVING', TRUE, FALSE),
-        ('inversiones', 'cedears', 'CEDEARs', 'INVESTMENT', 'GLOBAL', 'SAVING', TRUE, FALSE),
-        ('inversiones', 'acciones', 'Acciones', 'INVESTMENT', 'GLOBAL', 'SAVING', TRUE, FALSE),
-        ('inversiones', 'bonos', 'Bonos', 'INVESTMENT', 'GLOBAL', 'SAVING', TRUE, FALSE),
-        ('inversiones', 'cripto', 'Cripto', 'INVESTMENT', 'GLOBAL', 'SAVING', TRUE, FALSE),
-        ('inversiones', 'rendimientosreinvertidos', 'Rendimientos reinvertidos', 'INVESTMENT', 'GLOBAL', 'SAVING', TRUE, FALSE),
-        ('cjprestamosotorgados', 'cjcapitalprestado', 'CJ - Capital prestado', 'INVESTMENT', 'GLOBAL', 'ADJUSTMENT', FALSE, FALSE),
-        ('cjprestamosotorgados', 'cjcapitalrecuperado', 'CJ - Capital recuperado', 'INVESTMENT', 'GLOBAL', 'SAVING', FALSE, FALSE),
-        ('cjprestamosotorgados', 'cjajustedeprestamo', 'CJ - Ajuste de préstamo', 'INVESTMENT', 'GLOBAL', 'ADJUSTMENT', TRUE, FALSE),
-        ('deudas', 'tarjetadecredito', 'Tarjeta de crédito', 'DEBT', 'GLOBAL', 'ADJUSTMENT', TRUE, FALSE),
-        ('deudas', 'creditosyfinanciacion', 'Créditos y financiación', 'DEBT', 'GLOBAL', 'ADJUSTMENT', TRUE, FALSE),
-        ('deudas', 'prestamopersonal', 'Préstamo personal', 'DEBT', 'GLOBAL', 'ADJUSTMENT', TRUE, FALSE),
-        ('deudas', 'prestamofamiliar', 'Préstamo familiar', 'DEBT', 'GLOBAL', 'ADJUSTMENT', TRUE, FALSE),
+        ('deudas', 'prestamobancoprovincia', 'Préstamo Banco Provincia', 'DEBT', 'GLOBAL', 'ADJUSTMENT', TRUE, FALSE),
         ('deudas', 'mercadocredito', 'Mercado Crédito', 'DEBT', 'GLOBAL', 'ADJUSTMENT', TRUE, FALSE),
-        ('deudas', 'cuotaspendientes', 'Cuotas pendientes', 'DEBT', 'GLOBAL', 'ADJUSTMENT', TRUE, FALSE),
-        ('deudas', 'interesesymora', 'Intereses y mora', 'DEBT', 'GLOBAL', 'ADJUSTMENT', TRUE, FALSE),
-        ('deudas', 'refinanciacion', 'Refinanciación', 'DEBT', 'GLOBAL', 'ADJUSTMENT', TRUE, FALSE),
-        ('deudas', 'cancelaciondedeuda', 'Cancelación de deuda', 'DEBT', 'GLOBAL', 'ADJUSTMENT', TRUE, FALSE),
+        ('deudas', 'cuotasdeprestamo', 'Cuotas de préstamo', 'DEBT', 'GLOBAL', 'ADJUSTMENT', TRUE, FALSE),
+        ('deudas', 'interesesyfinanciacion', 'Intereses y financiación', 'DEBT', 'GLOBAL', 'ADJUSTMENT', TRUE, FALSE),
+        ('transferencias', 'transferenciasinternas', 'Transferencias internas', 'SAVING', 'GLOBAL', 'TRANSFER', FALSE, TRUE),
+        ('transferencias', 'fondeomercadopago', 'Fondeo Mercado Pago', 'SAVING', 'GLOBAL', 'TRANSFER', FALSE, TRUE),
+        ('transferencias', 'cuentadnidebin', 'Cuenta DNI / DEBIN', 'SAVING', 'GLOBAL', 'TRANSFER', FALSE, TRUE),
+        ('transferencias', 'transferenciasaterceros', 'Transferencias a terceros', 'SAVING', 'GLOBAL', 'TRANSFER', FALSE, TRUE),
+        ('transferencias', 'transferenciasrecibidasarevisar', 'Transferencias recibidas a revisar', 'SAVING', 'GLOBAL', 'TRANSFER', FALSE, TRUE),
+        ('familiaypersonales', 'hijos', 'Hijos', 'VARIABLE_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
+        ('familiaypersonales', 'compraspersonales', 'Compras personales', 'VARIABLE_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
+        ('familiaypersonales', 'variosarevisar', 'Varios a revisar', 'VARIABLE_EXPENSE', 'GLOBAL', 'EXPENSE', TRUE, FALSE),
+        ('operacionestecnicas', 'movimientoignorado', 'Movimiento ignorado', 'VARIABLE_EXPENSE', 'GLOBAL', 'ADJUSTMENT', FALSE, TRUE),
         ('operacionestecnicas', 'ajustedesaldo', 'Ajuste de saldo', 'VARIABLE_EXPENSE', 'GLOBAL', 'ADJUSTMENT', FALSE, TRUE),
         ('operacionestecnicas', 'diferenciaporredondeo', 'Diferencia por redondeo', 'VARIABLE_EXPENSE', 'GLOBAL', 'ADJUSTMENT', FALSE, TRUE),
-        ('operacionestecnicas', 'movimientoignorado', 'Movimiento ignorado', 'VARIABLE_EXPENSE', 'GLOBAL', 'ADJUSTMENT', FALSE, TRUE),
-        ('operacionestecnicas', 'reclasificacionmanual', 'Reclasificación manual', 'VARIABLE_EXPENSE', 'GLOBAL', 'ADJUSTMENT', FALSE, TRUE)
+        ('operacionestecnicas', 'ruidodeimportacion', 'Ruido de importación', 'VARIABLE_EXPENSE', 'GLOBAL', 'ADJUSTMENT', FALSE, TRUE)
 ),
 roots AS (
     INSERT INTO category (
@@ -837,3 +960,109 @@ JOIN roots parent
   ON parent.category_key = child.parent_key
  AND parent.type = child.type
 WHERE child.parent_key IS NOT NULL;
+
+WITH alias_seed(source, alias_raw, alias_normalized, canonical_name, category_key, payment_channel, confidence) AS (
+    VALUES
+        ('BANCO_PROVINCIA', 'PAYU*AR*UBER', 'payu ar uber', 'Uber', 'taxiyapps', 'DEBIT_CARD', 0.95),
+        ('BANCO_PROVINCIA', 'MERPAGO*SUBE', 'merpago sube', 'SUBE', 'transportepublico', 'TRANSPORT_CARD', 0.95),
+        ('BANCO_PROVINCIA', 'BUSPLUS', 'busplus', 'BUSPLUS', 'transportepublico', 'TRANSPORT_CARD', 0.95),
+        ('BANCO_PROVINCIA', 'DIA TIENDA', 'dia tienda', 'DIA', 'supermercado', 'DEBIT_CARD', 0.95),
+        ('BANCO_PROVINCIA', 'MERPAGO*SUPERDIA', 'merpago superdia', 'DIA', 'supermercado', 'DEBIT_CARD', 0.95),
+        ('BANCO_PROVINCIA', 'PEDIDOSYA', 'pedidosya', 'PedidosYa', 'deliveryyrestaurantes', 'DEBIT_CARD', 0.95),
+        ('BANCO_PROVINCIA', 'MERPAGO*MOSTAZA', 'merpago mostaza', 'Mostaza', 'deliveryyrestaurantes', 'DEBIT_CARD', 0.95),
+        ('BANCO_PROVINCIA', 'MERPAGO*TUENTI', 'merpago tuenti', 'Tuenti', 'telefoniamovil', 'DEBIT_CARD', 0.95),
+        ('MERCADO_PAGO', 'EDEA', 'edea', 'EDEA', 'electricidad', 'MERCADO_PAGO', 0.95),
+        ('MERCADO_PAGO', 'CAMUZZI', 'camuzzi', 'Camuzzi', 'gas', 'MERCADO_PAGO', 0.95),
+        ('MERCADO_PAGO', 'SHELL BOX', 'shell box', 'Shell Box', 'combustible', 'MERCADO_PAGO', 0.95),
+        ('MERCADO_PAGO', 'MELI+', 'meli', 'Meli+', 'meli', 'MERCADO_PAGO', 0.95),
+        ('MERCADO_PAGO', 'MERCADO CREDITO', 'mercado credito', 'Mercado Crédito', 'mercadocredito', 'MERCADO_CREDITO', 0.95),
+        ('MERCADO_PAGO', 'MERCADOCRÉDITO', 'mercadocredito', 'Mercado Crédito', 'mercadocredito', 'MERCADO_CREDITO', 0.95),
+        ('MERCADO_PAGO', 'EMOVA', 'emova', 'EMOVA', 'transportepublico', 'TRANSPORT_CARD', 0.95)
+)
+INSERT INTO merchant_alias (
+    profile_id,
+    source,
+    alias_raw,
+    alias_normalized,
+    canonical_name,
+    category_id,
+    payment_channel,
+    confidence,
+    active,
+    created_at,
+    updated_at
+)
+SELECT
+    NULL,
+    alias_seed.source,
+    alias_seed.alias_raw,
+    alias_seed.alias_normalized,
+    alias_seed.canonical_name,
+    category.id,
+    alias_seed.payment_channel,
+    alias_seed.confidence,
+    TRUE,
+    now(),
+    now()
+FROM alias_seed
+JOIN category
+  ON category.profile_id IS NULL
+ AND category.category_key = alias_seed.category_key
+ AND category.active = TRUE;
+
+WITH rule_seed(priority, source, field_name, pattern, pattern_type, category_key, movement_type, payment_channel, classification_status, confidence, reason_code, warning) AS (
+    VALUES
+        (10, 'MERCADO_PAGO', 'rawDescription', 'EMPTY_DETAIL_POSITIVE_UNLIQUIDATED', 'EXACT', 'rendimientomercadopago', 'INCOME', 'MONEY_MARKET_YIELD', 'CLASSIFIED', 0.95, 'RULE_MP_YIELD_EMPTY_DETAIL', NULL),
+        (20, 'MERCADO_PAGO', 'identificationNumber', 'EMOVA', 'CONTAINS', 'transportepublico', 'EXPENSE', 'TRANSPORT_CARD', 'CLASSIFIED', 0.95, 'RULE_MP_EMOVA_TRANSPORT', NULL),
+        (100, 'BANCO_PROVINCIA', 'merchant', 'PAYU*AR*UBER', 'CONTAINS', 'taxiyapps', 'EXPENSE', 'DEBIT_CARD', 'CLASSIFIED', 0.95, 'RULE_MERCHANT_UBER', NULL),
+        (110, 'BANCO_PROVINCIA', 'merchant', 'MERPAGO*SUBE', 'CONTAINS', 'transportepublico', 'EXPENSE', 'TRANSPORT_CARD', 'CLASSIFIED', 0.95, 'RULE_MERCHANT_SUBE', NULL),
+        (130, 'BANCO_PROVINCIA', 'merchant', 'DIA TIENDA', 'CONTAINS', 'supermercado', 'EXPENSE', 'DEBIT_CARD', 'CLASSIFIED', 0.95, 'RULE_MERCHANT_DIA', NULL),
+        (140, 'BANCO_PROVINCIA', 'merchant', 'PEDIDOSYA', 'CONTAINS', 'deliveryyrestaurantes', 'EXPENSE', 'DEBIT_CARD', 'CLASSIFIED', 0.95, 'RULE_MERCHANT_PEDIDOSYA', NULL),
+        (200, 'BANCO_PROVINCIA', 'extendedDescription', 'ARCA|AFIP|MONOTRIB', 'REGEX', 'monotributo', 'EXPENSE', 'DIRECT_DEBIT', 'CLASSIFIED', 0.95, 'RULE_ARCA_AFIP_MONOTRIBUTO', NULL),
+        (210, 'BANCO_PROVINCIA', 'extendedDescription', 'CAJA DE SEG', 'CONTAINS', 'seguros', 'EXPENSE', 'DIRECT_DEBIT', 'CLASSIFIED', 0.95, 'RULE_DIRECT_DEBIT_INSURANCE', NULL),
+        (220, 'BANCO_PROVINCIA', 'extendedDescription', 'BK COBRANZAS|TERTIUM SA|ASOCIACION MUTU', 'REGEX', 'cobranzarecurrentearevisar', 'EXPENSE', 'DIRECT_DEBIT', 'REVIEW', 0.70, 'RULE_DIRECT_DEBIT_RECURRENT_REVIEW', 'Débito recurrente sensible: requiere alias de perfil para autoclasificar.'),
+        (300, 'MERCADO_PAGO', 'normalizedDescription', 'PAGO DEBIN|BANK TRANSFER|TRANSFERENCIA BANCARIA', 'REGEX', 'fondeomercadopago', 'TRANSFER', 'BANK_TRANSFER', 'TECHNICAL', 0.70, 'RULE_MP_FUNDING_TRANSFER', 'No impacta como ingreso operativo.'),
+        (310, 'MERCADO_PAGO', 'rawDescription', 'Link de pago', 'CONTAINS', 'cobrosporlink', 'INCOME', 'MERCADO_PAGO', 'REVIEW', 0.70, 'RULE_MP_PAYMENT_LINK_REVIEW', 'Puede ser recupero, venta o transferencia.'),
+        (900, 'BANCO_PROVINCIA', 'rawDescription', 'PAGO CON TARJETA DEBITO', 'CONTAINS', NULL, 'EXPENSE', 'DEBIT_CARD', 'REVIEW', 0.35, 'RULE_DEBIT_CARD_PURCHASE_REVIEW', 'Fallback genérico: solo corre después de aliases/reglas específicas.'),
+        (920, 'BANCO_PROVINCIA', 'rawDescription', 'DEBITO PAGO DIRECTO', 'CONTAINS', NULL, 'EXPENSE', 'DIRECT_DEBIT', 'REVIEW', 0.35, 'RULE_DIRECT_DEBIT_REVIEW', 'Fallback genérico: solo corre después de reglas específicas.')
+)
+INSERT INTO classification_rule (
+    profile_id,
+    priority,
+    source,
+    field_name,
+    pattern,
+    pattern_type,
+    category_id,
+    movement_type,
+    payment_channel,
+    classification_status,
+    confidence,
+    reason_code,
+    warning,
+    active,
+    created_at,
+    updated_at
+)
+SELECT
+    NULL,
+    rule_seed.priority,
+    rule_seed.source,
+    rule_seed.field_name,
+    rule_seed.pattern,
+    rule_seed.pattern_type,
+    category.id,
+    rule_seed.movement_type,
+    rule_seed.payment_channel,
+    rule_seed.classification_status,
+    rule_seed.confidence,
+    rule_seed.reason_code,
+    rule_seed.warning,
+    TRUE,
+    now(),
+    now()
+FROM rule_seed
+LEFT JOIN category
+  ON category.profile_id IS NULL
+ AND category.category_key = rule_seed.category_key
+ AND category.active = TRUE;

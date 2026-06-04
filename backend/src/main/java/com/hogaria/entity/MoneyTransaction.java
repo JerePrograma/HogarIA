@@ -7,6 +7,8 @@ import java.time.LocalDateTime;
 import java.util.Locale;
 import java.util.UUID;
 import lombok.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 @Entity
 @Table(
@@ -118,6 +120,10 @@ public class MoneyTransaction {
     @Column(name = "classification_reason", length = 255)
     private String classificationReason;
 
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "classification_explanation_json", columnDefinition = "jsonb")
+    private String classificationExplanationJson;
+
     @Column(name = "import_batch_id")
     private UUID importBatchId;
 
@@ -185,6 +191,13 @@ public class MoneyTransaction {
         MERCADO_PAGO,
         MERCADO_CREDITO,
         INTERNAL_TRANSFER,
+        DIRECT_DEBIT,
+        POS_TRANSFER,
+        ATM,
+        MONEY_MARKET_YIELD,
+        TRANSPORT_CARD,
+        QR_PAYMENT,
+        CARD_FOREIGN_CURRENCY,
         OTHER
     }
 

@@ -84,8 +84,8 @@ public class TransactionCategorySuggestionService {
     this.rules = List.of(
             rule(
                     "\\b(COMISION|COMISIÓN|CARGO|PUNTO\\s+EFECTIVO|MANTENIMIENTO\\s+DE\\s+CUENTA)\\b",
-                    "Comisiones y cargos",
-                    "comisiones_y_cargos",
+                    "Comisiones bancarias",
+                    "comisionesbancarias",
                     MoneyTransaction.MovementType.EXPENSE,
                     Category.Type.VARIABLE_EXPENSE,
                     Confidence.HIGH,
@@ -97,8 +97,8 @@ public class TransactionCategorySuggestionService {
             ),
             rule(
                     "\\b(IMPUESTO|RG\\s*4815|IIBB|RETENCION|RETENCIÓN|PERCEPCION|PERCEPCIÓN|ARCA|AFIP|AGIP)\\b",
-                    "Impuestos variables",
-                    "impuestos_variables",
+                    "Impuestos bancarios",
+                    "impuestosbancarios",
                     MoneyTransaction.MovementType.EXPENSE,
                     Category.Type.VARIABLE_EXPENSE,
                     Confidence.HIGH,
@@ -162,8 +162,8 @@ public class TransactionCategorySuggestionService {
             ),
             rule(
                     "\\b(PAGO\\s+CON\\s+TARJETA\\s+DEBITO|PAGO\\s+CON\\s+T\\.D\\.|TARJETA\\s+DEBITO|TARJETA\\s+DÉBITO)\\b",
-                    "Gastos generales",
-                    "gastos_generales",
+                    "Varios a revisar",
+                    "variosarevisar",
                     MoneyTransaction.MovementType.EXPENSE,
                     Category.Type.VARIABLE_EXPENSE,
                     Confidence.MEDIUM,
@@ -188,8 +188,8 @@ public class TransactionCategorySuggestionService {
             ),
             rule(
                     "\\b(ACREDITACION\\s+INTERESES|ACREDIT\\.\\s+INTERESES|INTERESES\\s+GANADOS)\\b",
-                    "Intereses ganados",
-                    "interesesganados",
+                    "Intereses y rendimientos",
+                    "interesesyrendimientos",
                     MoneyTransaction.MovementType.INCOME,
                     Category.Type.INCOME,
                     Confidence.HIGH,
@@ -202,7 +202,7 @@ public class TransactionCategorySuggestionService {
             rule(
                     "\\b(TRANSFERENCIA\\s+RECIBIDA|CR\\.TRAN\\.|BANK\\s+TRANSFER|TRANSF\\s+DE)\\b",
                     "Transferencias recibidas",
-                    "transferencias_recibidas",
+                    "transferenciasrecibidas",
                     MoneyTransaction.MovementType.INCOME,
                     Category.Type.INCOME,
                     Confidence.MEDIUM,
@@ -404,7 +404,7 @@ public class TransactionCategorySuggestionService {
     var category = findCategory(
             categories,
             "Cuenta DNI / DEBIN",
-            "cuenta_dni_debin",
+            "cuentadnidebin",
             MoneyTransaction.MovementType.TRANSFER,
             Category.Type.SAVING
     );

@@ -123,7 +123,12 @@ class TransactionDuplicateDetectionTest {
     void repeatedSourceHashIsRejectedAsIdempotentDuplicate() {
         var existing = transaction(accountId, "Importado", new BigDecimal("10.00"));
         existing.setSourceHash("abc123");
-        when(txRepo.findByProfileIdAndSourceHash(profileId, "abc123")).thenReturn(Optional.of(existing));
+        when(txRepo.findActiveByProfileIdAndSourceHash(
+                profileId,
+                "abc123",
+                MoneyTransaction.Status.IGNORED,
+                MoneyTransaction.ClassificationStatus.IGNORED_BY_RULE
+        )).thenReturn(List.of(existing));
 
         var ex = assertThrows(
                 DomainConflictException.class,
@@ -138,7 +143,14 @@ class TransactionDuplicateDetectionTest {
         var existing = transaction(accountId, "Importado", new BigDecimal("10.00"));
         existing.setSource("BANCO_PROVINCIA");
         existing.setSourceOperationId("op-1");
-        when(txRepo.findByStrongSourceOperation(profileId, "BANCO_PROVINCIA", "op-1", null))
+        when(txRepo.findActiveByStrongSourceOperation(
+                profileId,
+                "BANCO_PROVINCIA",
+                "op-1",
+                MoneyTransaction.Status.IGNORED,
+                MoneyTransaction.ClassificationStatus.IGNORED_BY_RULE,
+                null
+        ))
                 .thenReturn(List.of(existing));
 
         var ex = assertThrows(
@@ -270,6 +282,7 @@ class TransactionDuplicateDetectionTest {
                 source,
                 sourceOperationId,
                 sourceHash,
+                null,
                 null,
                 null,
                 null,

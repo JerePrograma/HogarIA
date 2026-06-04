@@ -7,10 +7,14 @@ export interface CategoryCreateRequest {
   name: string;
   type: Category['type'];
   scope: Category['scope'];
-  parentId?: string;
+  parentId?: string | null;
 }
 
-export interface CategoryUpdateRequest extends CategoryCreateRequest {
+export interface CategoryUpdateRequest {
+  name?: string;
+  type?: Category['type'];
+  scope?: Category['scope'];
+  parentId?: string | null;
   active?: boolean;
 }
 

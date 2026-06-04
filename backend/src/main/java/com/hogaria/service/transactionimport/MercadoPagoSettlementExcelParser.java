@@ -29,6 +29,8 @@ public class MercadoPagoSettlementExcelParser extends ExcelImportParserSupport i
   private final TransactionImportRuleClassifier classifier;
   private final ImportSourceHashService hashService;
   private final ObjectMapper objectMapper;
+  private final MerchantExtractor merchantExtractor;
+  private final CounterpartyExtractor counterpartyExtractor;
 
   public MercadoPagoSettlementExcelParser(
           ImportTextNormalizer normalizer,
@@ -40,6 +42,8 @@ public class MercadoPagoSettlementExcelParser extends ExcelImportParserSupport i
     this.classifier = classifier;
     this.hashService = hashService;
     this.objectMapper = objectMapper;
+    this.merchantExtractor = new MerchantExtractor(normalizer);
+    this.counterpartyExtractor = new CounterpartyExtractor(normalizer);
   }
 
   @Override
@@ -136,7 +140,16 @@ public class MercadoPagoSettlementExcelParser extends ExcelImportParserSupport i
     var wallet = value(values, detection.headerIndexes(), "BILLETERA VIRTUAL");
     var lastFour = value(values, detection.headerIndexes(), "LAST_FOUR_DIGITS");
     var franchise = value(values, detection.headerIndexes(), "FRANCHISE");
-    var paymentChannel = classifier.inferMercadoPagoPaymentChannel(paymentMethodType, paymentMethod);
+    var paymentChannel = new PaymentChannelDetector(normalizer).detectMercadoPago(
+            rawDescription,
+            operationType,
+            paymentMethodType,
+            paymentMethod,
+            identificationNumber,
+            operationTags
+    );
+    var merchant = merchantExtractor.fromMercadoPago(rawDescription, identificationNumber, operationTags, payer);
+    var counterparty = counterpartyExtractor.fromMercadoPago(payer, bank, wallet, identificationNumber);
 
     var extendedDescription = joinUseful(
             operationType,
@@ -157,16 +170,6 @@ public class MercadoPagoSettlementExcelParser extends ExcelImportParserSupport i
     );
 
     var normalizedDescription = normalizer.normalize(joinUseful(rawDescription, extendedDescription));
-    var classification = classifier.classifyMercadoPago(
-            signedAmount,
-            rawDescription,
-            operationType,
-            paymentMethodType,
-            paymentMethod,
-            payer,
-            liquidated,
-            paymentChannel
-    );
     var sourceOperationId = firstNonBlank(operationId, identificationNumber, purchaseId, orderId);
     var sourceHash = sourceOperationId.isBlank()
             ? hashService.fromFallback(
@@ -175,15 +178,48 @@ public class MercadoPagoSettlementExcelParser extends ExcelImportParserSupport i
             TransactionImportSource.MERCADO_PAGO,
             parsedDate.realDate() + "|" + signedAmount + "|" + normalizedDescription + "|" + extendedDescription
     )
-            : hashService.fromOperationId(
+            : hashService.fromFallback(
             profileId,
             accountId,
             TransactionImportSource.MERCADO_PAGO,
-            sourceOperationId
+            sourceOperationId + "|" + signedAmount + "|" + parsedDate.realDate()
     );
     var raw = rawMap(detection.headers(), values, detection.displayName(), detection.sheetName(), rowNumber);
     raw.put("_signedAmount", signedAmount.toPlainString());
     raw.put("_sourceHash", sourceHash);
+    raw.put("_merchantRaw", merchant.raw() == null ? "" : merchant.raw());
+    raw.put("_merchantNormalized", merchant.normalized() == null ? "" : merchant.normalized());
+    raw.put("_counterparty", counterparty.raw() == null ? "" : counterparty.raw());
+    raw.put("_counterpartyDocumentHash", counterparty.documentHash() == null ? "" : counterparty.documentHash());
+
+    var rawJson = objectMapper.writeValueAsString(raw);
+    var normalizedMovement = new NormalizedImportMovement(
+            TransactionImportSource.MERCADO_PAGO,
+            sourceOperationId.isBlank() ? null : sourceOperationId,
+            sourceHash,
+            parsedDate.realDate(),
+            parsedDate.operationDateTime(),
+            signedAmount,
+            currency,
+            rawDescription,
+            normalizedDescription,
+            extendedDescription,
+            merchant.raw(),
+            merchant.normalized(),
+            counterparty.raw(),
+            counterparty.documentHash(),
+            paymentChannel,
+            signedAmount.signum() < 0 ? ImportOperationKind.DEBIT : ImportOperationKind.CREDIT,
+            operationType,
+            paymentMethodType,
+            paymentMethod,
+            liquidated,
+            operationTags,
+            identificationNumber,
+            payer,
+            rawJson
+    );
+    var classification = classifier.classify(normalizedMovement);
 
     return ImportedMovementCandidate.builder()
             .source(TransactionImportSource.MERCADO_PAGO)
@@ -201,8 +237,9 @@ public class MercadoPagoSettlementExcelParser extends ExcelImportParserSupport i
             .rawDescription(rawDescription)
             .normalizedDescription(normalizedDescription)
             .extendedDescription(extendedDescription)
-            .merchantName(null)
-            .counterparty(firstNonBlank(payer, bank, wallet))
+            .merchantName(merchant.raw())
+            .counterparty(counterparty.raw())
+            .counterpartyDocumentHash(counterparty.documentHash())
             .paymentChannel(classification.paymentChannel())
             .movementType(classification.movementType())
             .balanceImpact(classification.balanceImpact())
@@ -210,8 +247,12 @@ public class MercadoPagoSettlementExcelParser extends ExcelImportParserSupport i
             .categorySuggestionName(classification.categorySuggestionName())
             .classificationStatus(classification.classificationStatus())
             .classificationReason(classification.classificationReason())
+            .classificationLayer(classification.classificationLayer())
+            .classificationMatchedField(classification.matchedField())
+            .classificationMatchedValue(classification.matchedValue())
+            .classificationExplanationJson(classification.explanationJson())
             .confidence(classification.confidence())
-            .rawJson(objectMapper.writeValueAsString(raw))
+            .rawJson(rawJson)
             .rowNumber(rowNumber)
             .sheetName(detection.sheetName())
             .targetEntity(targetEntity(classification.movementType()))

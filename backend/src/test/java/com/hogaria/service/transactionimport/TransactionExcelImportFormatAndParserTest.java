@@ -103,10 +103,11 @@ class TransactionExcelImportFormatAndParserTest {
 
     assertEquals(2, rows.size());
     assertEquals(MoneyTransaction.PaymentChannel.MERCADO_CREDITO, rows.get(0).paymentChannel());
-    assertEquals(MoneyTransaction.ClassificationStatus.REVIEW, rows.get(0).classificationStatus());
+    assertEquals(MoneyTransaction.ClassificationStatus.CLASSIFIED, rows.get(0).classificationStatus());
     assertEquals("mercadocredito", rows.get(0).categorySuggestionKey());
-    assertEquals(MoneyTransaction.ClassificationStatus.TECHNICAL, rows.get(1).classificationStatus());
-    assertEquals(com.hogaria.dto.TransactionImportDtos.RowStatus.SKIPPED, rows.get(1).rowStatus());
+    assertEquals(MoneyTransaction.ClassificationStatus.CLASSIFIED, rows.get(1).classificationStatus());
+    assertEquals("rendimientomercadopago", rows.get(1).categorySuggestionKey());
+    assertEquals(com.hogaria.dto.TransactionImportDtos.RowStatus.READY, rows.get(1).rowStatus());
   }
 
   @Test
@@ -135,7 +136,7 @@ class TransactionExcelImportFormatAndParserTest {
     assertEquals(MoneyTransaction.PaymentChannel.DEBIT_CARD, uber.paymentChannel());
 
     var interests = rows.get(3);
-    assertEquals("interesesganados", interests.categorySuggestionKey());
+    assertEquals("interesesyrendimientos", interests.categorySuggestionKey());
     assertEquals(MoneyTransaction.BalanceImpact.INTEREST_INCOME, interests.balanceImpact());
   }
 

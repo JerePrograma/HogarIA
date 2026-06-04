@@ -25,6 +25,7 @@ public record TransactionResponse(
         String counterparty,
         MoneyTransaction.ClassificationStatus classificationStatus,
         String classificationReason,
+        String classificationExplanationJson,
         UUID importBatchId,
         UUID internalTransferGroupId,
         LocalDateTime createdAt,

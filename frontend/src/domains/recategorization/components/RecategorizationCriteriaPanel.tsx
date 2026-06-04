@@ -10,6 +10,7 @@ import type {
   PaymentChannel,
   TransactionClassificationStatus,
 } from "../../../domain/types";
+import { getCategoryDisplayName } from "../../../domain/transactionRules";
 import {
   CLASSIFICATION_STATUS_LABELS,
   PAYMENT_CHANNEL_LABELS,
@@ -190,7 +191,7 @@ export function RecategorizationCriteriaPanel({
             <option value="__WITHOUT_CATEGORY__">Sin categoría</option>
             {categories.map((category) => (
               <option key={category.id} value={category.id}>
-                {category.name}
+                {getCategoryDisplayName(category)}
               </option>
             ))}
           </select>
@@ -234,7 +235,7 @@ export function RecategorizationCriteriaPanel({
             <option value="">Seleccionar</option>
             {categories.map((category) => (
               <option key={category.id} value={category.id}>
-                {category.name}
+                {getCategoryDisplayName(category)}
               </option>
             ))}
           </select>
