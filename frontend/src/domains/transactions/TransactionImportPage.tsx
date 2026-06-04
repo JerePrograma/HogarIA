@@ -17,6 +17,12 @@ import { ImportPreviewSummary } from "../transaction-import/ImportPreviewSummary
 import { ImportResultPanel } from "../transaction-import/ImportResultPanel";
 import { ImportRowsTable } from "../transaction-import/ImportRowsTable";
 import { ImportSourceForm } from "../transaction-import/ImportSourceForm";
+import {
+  countBlockingMissingCategoryRows,
+  countImportableRows,
+  countImportRows,
+  countTechnicalNeutralRows,
+} from "../transaction-import/importCalculations";
 import type {
   TransactionImportCommitPayload,
   TransactionImportCommitResult,
@@ -65,15 +71,6 @@ function getRowStatusLabel(status: RowStatusFilter) {
   if (status === ALL) return "Todos los estados";
 
   return rowStatusLabels[status] ?? status;
-}
-
-function getRowStatusTone(
-  status: RowStatus,
-): "ok" | "watch" | "critical" | "neutral" {
-  if (status === "READY") return "ok";
-  if (status === "NEEDS_CATEGORY" || status === "REVIEW") return "watch";
-  if (status === "ERROR") return "critical";
-  return "neutral";
 }
 
 function normalize(value: string | null | undefined) {
@@ -222,53 +219,15 @@ export function TransactionImportPage() {
     },
   });
 
-  const rowCounters = useMemo(
-    () =>
-      rows.reduce(
-        (acc, row) => {
-          acc.total += 1;
-          acc[row.status] = (acc[row.status] ?? 0) + 1;
-
-          return acc;
-        },
-        {
-          total: 0,
-          READY: 0,
-          NEEDS_CATEGORY: 0,
-          DUPLICATE: 0,
-          DUPLICATE_EXACT: 0,
-          POSSIBLE_INTERNAL_TRANSFER: 0,
-          INTERNAL_TRANSFER_MATCHED: 0,
-          POSSIBLE_CROSS_SOURCE_DUPLICATE: 0,
-          REVIEW: 0,
-          ERROR: 0,
-          SKIPPED: 0,
-        } as Record<RowStatus | "total", number>,
-      ),
-    [rows],
-  );
+  const rowCounters = useMemo(() => countImportRows(rows), [rows]);
 
   const unresolvedRows = useMemo(
-    () =>
-      rows.filter(
-        (row) =>
-          (row.status === "NEEDS_CATEGORY" &&
-            !row.suggestedCategoryId &&
-            !createMissingFallbackCategory) ||
-          (row.status === "REVIEW" && !row.suggestedCategoryId),
-      ).length,
+    () => countBlockingMissingCategoryRows(rows, createMissingFallbackCategory),
     [rows, createMissingFallbackCategory],
   );
 
   const importableRows = useMemo(
-    () =>
-      rows.filter(
-        (row) =>
-          (row.status === "READY" ||
-            row.status === "NEEDS_CATEGORY" ||
-            row.status === "REVIEW") &&
-          (createMissingFallbackCategory || Boolean(row.suggestedCategoryId)),
-      ).length,
+    () => countImportableRows(rows, createMissingFallbackCategory),
     [rows, createMissingFallbackCategory],
   );
 
@@ -285,6 +244,7 @@ export function TransactionImportPage() {
   const exactDuplicateRows = rowCounters.DUPLICATE_EXACT ?? 0;
   const needsCategoryRows = rowCounters.NEEDS_CATEGORY ?? 0;
   const reviewRows = rowCounters.REVIEW ?? preview?.reviewRows ?? 0;
+  const technicalNeutralRows = useMemo(() => countTechnicalNeutralRows(rows), [rows]);
 
   const duplicateSuggestionGroups = useMemo(() => {
     const duplicates = rows.filter(
@@ -431,8 +391,9 @@ export function TransactionImportPage() {
     internalRows:
       (rowCounters.POSSIBLE_INTERNAL_TRANSFER ?? 0) +
       (rowCounters.INTERNAL_TRANSFER_MATCHED ?? 0),
-    needsCategoryRows,
+    blockingCategoryRows: unresolvedRows,
     reviewRows,
+    technicalNeutralRows,
     incompatibleRows,
     importableRows,
     hasPreview: Boolean(preview),
@@ -593,6 +554,8 @@ export function TransactionImportPage() {
                   invalidRows={invalidRows}
                   ignoredRows={ignoredRows}
                   reviewRows={reviewRows}
+                  needsCategoryRows={needsCategoryRows}
+                  technicalNeutralRows={technicalNeutralRows}
                   suggestedCategoryRows={
                     preview.suggestedCategoryRows ??
                     rows.filter((row) => row.suggestedCategoryId).length
@@ -651,10 +614,11 @@ export function TransactionImportPage() {
 
                     {unresolvedRows > 0 ? (
                       <div className="mensaje-warning">
-                        <strong>{unresolvedRows} fila(s) sin categoría o en revisión.</strong>
+                        <strong>{unresolvedRows} fila(s) necesitan categoría.</strong>
                         <span>
-                          Asigná una categoría y revisá las filas ambiguas
-                          para continuar.
+                          Asigná una categoría o activá “Otros a revisar” para
+                          continuar. Las filas en revisión técnica o neutra no
+                          bloquean por categoría.
                         </span>
                       </div>
                     ) : null}
@@ -986,6 +950,11 @@ export function TransactionImportPage() {
                   <strong>{reviewRows}</strong>
                 </div>
 
+                <div className={technicalNeutralRows > 0 ? "tone-neutral" : ""}>
+                  <span>Técnicas/neutras</span>
+                  <strong>{technicalNeutralRows}</strong>
+                </div>
+
                 <div className={duplicateRows > 0 ? "tone-neutral" : ""}>
                   <span>Duplicadas</span>
                   <strong>{duplicateRows}</strong>
@@ -1031,8 +1000,9 @@ function buildWizardSteps({
   duplicateRows,
   exactDuplicateRows,
   internalRows,
-  needsCategoryRows,
+  blockingCategoryRows,
   reviewRows,
+  technicalNeutralRows,
   incompatibleRows,
   importableRows,
   hasPreview,
@@ -1045,8 +1015,9 @@ function buildWizardSteps({
   duplicateRows: number;
   exactDuplicateRows: number;
   internalRows: number;
-  needsCategoryRows: number;
+  blockingCategoryRows: number;
   reviewRows: number;
+  technicalNeutralRows: number;
   incompatibleRows: number;
   importableRows: number;
   hasPreview: boolean;
@@ -1091,20 +1062,24 @@ function buildWizardSteps({
     {
       id: 5,
       title: "Categorías",
-      counter: `${needsCategoryRows + reviewRows} sin resolver`,
+      counter: `${blockingCategoryRows} por resolver`,
       description: "Las categorías mantienen entendibles los gráficos.",
       action:
-        needsCategoryRows > 0 || reviewRows > 0 || incompatibleRows > 0
-          ? "Elegí categorías compatibles antes de confirmar."
-          : "Categorías listas.",
-      blocked: needsCategoryRows > 0 || reviewRows > 0 || incompatibleRows > 0,
+        blockingCategoryRows > 0 || incompatibleRows > 0
+          ? "Elegí categorías compatibles o usá fallback antes de confirmar."
+          : reviewRows > 0
+            ? "Hay filas en revisión que pueden importarse sin confirmar impacto operativo."
+            : "Categorías listas.",
+      blocked: blockingCategoryRows > 0 || incompatibleRows > 0,
     },
     {
       id: 6,
       title: "Impacto",
       counter: `${importableRows} importable(s)`,
       description: "Revisá qué entra como gasto, ingreso o movimiento neutral.",
-      action: importableRows > 0 ? "Listo para confirmar." : "No hay filas nuevas para importar.",
+      action: technicalNeutralRows > 0
+        ? `${technicalNeutralRows} técnica(s)/neutra(s) no impactan ingresos o gastos.`
+        : importableRows > 0 ? "Listo para confirmar." : "No hay filas nuevas para importar.",
       blocked: importableRows === 0,
     },
     {

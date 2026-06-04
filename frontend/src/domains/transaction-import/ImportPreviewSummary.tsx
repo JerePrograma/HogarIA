@@ -5,6 +5,8 @@ interface Props {
   invalidRows: number;
   ignoredRows: number;
   reviewRows?: number;
+  needsCategoryRows?: number;
+  technicalNeutralRows?: number;
   suggestedCategoryRows?: number;
 }
 
@@ -35,6 +37,8 @@ export function ImportPreviewSummary({
   invalidRows,
   ignoredRows,
   reviewRows = 0,
+  needsCategoryRows = 0,
+  technicalNeutralRows = 0,
   suggestedCategoryRows = 0,
 }: Props) {
   const blockedRows = invalidRows + ignoredRows;
@@ -70,10 +74,24 @@ export function ImportPreviewSummary({
       />
 
       <SummaryItem
+        title="Necesitan categoría"
+        value={needsCategoryRows}
+        helper="Requieren categoría manual o fallback."
+        tone={needsCategoryRows > 0 ? 'warning' : 'neutral'}
+      />
+
+      <SummaryItem
         title="Review"
         value={reviewRows}
-        helper="Necesitan mirada manual."
+        helper="Pueden quedar pendientes o neutrales."
         tone={reviewRows > 0 ? 'warning' : 'neutral'}
+      />
+
+      <SummaryItem
+        title="Técnicas/neutras"
+        value={technicalNeutralRows}
+        helper="No impactan ingresos/gastos operativos."
+        tone={technicalNeutralRows > 0 ? 'info' : 'neutral'}
       />
 
       <SummaryItem

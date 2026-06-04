@@ -80,13 +80,16 @@ class TransactionImportServiceTest {
     when(categoryRepository.findByProfileIdAndActiveTrue(profileId)).thenReturn(List.of());
     when(categoryRepository.findByProfileIdIsNullAndActiveTrue()).thenReturn(List.of());
     UUID newCatId = UUID.randomUUID();
-    when(categoryRepository.save(any())).thenReturn(Category.builder().id(newCatId).profileId(profileId).name("Transporte").type(Category.Type.VARIABLE_EXPENSE).active(true).build());
+    when(categoryRepository.save(any())).thenReturn(Category.builder().id(newCatId).profileId(profileId).name("Otros a revisar").type(Category.Type.VARIABLE_EXPENSE).active(true).build());
     when(categoryRepository.findById(newCatId)).thenReturn(Optional.of(Category.builder().id(newCatId).type(Category.Type.VARIABLE_EXPENSE).active(true).build()));
     when(txService.create(any(TransactionCreateRequest.class), eq(userId), any(TransactionService.TransactionMetadata.class))).thenReturn(response(newCatId, MoneyTransaction.MovementType.EXPENSE, "SUBE", new BigDecimal("200")));
 
     var response = service.commit(userId, profileId, batchId, new TransactionImportCommitRequest(List.of(new TransactionImportCommitRow(1, null, accountId, MoneyTransaction.MovementType.EXPENSE, new BigDecimal("200"), RowStatus.NEEDS_CATEGORY, "SUBE")), true, true));
     assertEquals(1, response.createdCount());
     assertEquals(0, response.failedCount());
+    var categoryCaptor = ArgumentCaptor.forClass(Category.class);
+    verify(categoryRepository).save(categoryCaptor.capture());
+    assertEquals("Otros a revisar", categoryCaptor.getValue().getName());
   }
 
   @Test
@@ -98,6 +101,132 @@ class TransactionImportServiceTest {
     var response = service.commit(userId, profileId, batchId, new TransactionImportCommitRequest(List.of(new TransactionImportCommitRow(1, null, accountId, MoneyTransaction.MovementType.EXPENSE, new BigDecimal("200"), RowStatus.NEEDS_CATEGORY, "SUBE")), false, true));
     assertEquals(0, response.createdCount());
     assertEquals(1, response.failedCount());
+  }
+
+  @Test
+  void commitImportsGenericReviewIncomeWithoutCategoryAsPendingReview() throws Exception {
+    UUID batchId = UUID.randomUUID();
+    var row = previewRow(
+            1,
+            RowStatus.REVIEW,
+            "Varios",
+            new BigDecimal("5000"),
+            null,
+            null,
+            MoneyTransaction.MovementType.INCOME,
+            MoneyTransaction.BalanceImpact.UNKNOWN,
+            MoneyTransaction.ClassificationStatus.REVIEW,
+            "RULE_MP_GENERIC_INFLOW_REVIEW"
+    );
+    when(rowRepository.findByBatchIdOrderByRowNumber(batchId)).thenReturn(List.of(toEntity(row)));
+    when(txService.create(any(TransactionCreateRequest.class), eq(userId), any(TransactionService.TransactionMetadata.class)))
+            .thenReturn(response(null, MoneyTransaction.MovementType.INCOME, "Varios", new BigDecimal("5000")));
+
+    var response = service.commit(userId, profileId, batchId, new TransactionImportCommitRequest(List.of(
+            new TransactionImportCommitRow(1, null, accountId, MoneyTransaction.MovementType.INCOME, new BigDecimal("5000"), RowStatus.REVIEW, "Varios")
+    ), true, true));
+
+    assertEquals(1, response.createdCount());
+    assertEquals(0, response.failedCount());
+    var requestCaptor = ArgumentCaptor.forClass(TransactionCreateRequest.class);
+    var metadataCaptor = ArgumentCaptor.forClass(TransactionService.TransactionMetadata.class);
+    verify(txService).create(requestCaptor.capture(), eq(userId), metadataCaptor.capture());
+    assertNull(requestCaptor.getValue().categoryId());
+    assertEquals(MoneyTransaction.Status.PENDING, requestCaptor.getValue().status());
+    assertEquals(MoneyTransaction.ClassificationStatus.REVIEW, requestCaptor.getValue().classificationStatus());
+    assertEquals("RULE_MP_GENERIC_INFLOW_REVIEW", requestCaptor.getValue().classificationReason());
+    assertEquals(MoneyTransaction.ClassificationStatus.REVIEW, metadataCaptor.getValue().classificationStatus());
+    assertEquals("RULE_MP_GENERIC_INFLOW_REVIEW", metadataCaptor.getValue().classificationReason());
+    verify(categoryRepository, never()).save(any());
+  }
+
+  @Test
+  void commitImportsTechnicalInternalTransferWithoutCategoryAsConfirmedNeutralMovement() throws Exception {
+    UUID batchId = UUID.randomUUID();
+    var row = previewRow(
+            1,
+            RowStatus.REVIEW,
+            "Pago Debin | Bank Transfer",
+            new BigDecimal("400000"),
+            null,
+            "Fondeo MercadoPago / transferencias internas",
+            MoneyTransaction.MovementType.TRANSFER,
+            MoneyTransaction.BalanceImpact.INTERNAL_TRANSFER,
+            MoneyTransaction.ClassificationStatus.TECHNICAL,
+            "RULE_MP_FUNDING_TRANSFER"
+    );
+    when(rowRepository.findByBatchIdOrderByRowNumber(batchId)).thenReturn(List.of(toEntity(row)));
+    when(txService.create(any(TransactionCreateRequest.class), eq(userId), any(TransactionService.TransactionMetadata.class)))
+            .thenReturn(response(null, MoneyTransaction.MovementType.TRANSFER, "Pago Debin | Bank Transfer", new BigDecimal("400000")));
+
+    var response = service.commit(userId, profileId, batchId, new TransactionImportCommitRequest(List.of(
+            new TransactionImportCommitRow(1, null, accountId, MoneyTransaction.MovementType.TRANSFER, new BigDecimal("400000"), RowStatus.REVIEW, "Pago Debin | Bank Transfer")
+    ), false, true));
+
+    assertEquals(1, response.createdCount());
+    assertEquals(0, response.failedCount());
+    var requestCaptor = ArgumentCaptor.forClass(TransactionCreateRequest.class);
+    var metadataCaptor = ArgumentCaptor.forClass(TransactionService.TransactionMetadata.class);
+    verify(txService).create(requestCaptor.capture(), eq(userId), metadataCaptor.capture());
+    assertNull(requestCaptor.getValue().categoryId());
+    assertEquals(MoneyTransaction.MovementType.TRANSFER, requestCaptor.getValue().movementType());
+    assertEquals(MoneyTransaction.Status.CONFIRMED, requestCaptor.getValue().status());
+    assertEquals(MoneyTransaction.ClassificationStatus.TECHNICAL, requestCaptor.getValue().classificationStatus());
+    assertEquals("RULE_MP_FUNDING_TRANSFER", requestCaptor.getValue().classificationReason());
+    assertEquals(MoneyTransaction.BalanceImpact.INTERNAL_TRANSFER, metadataCaptor.getValue().balanceImpact());
+  }
+
+  @Test
+  void commitImportsNeutralMercadoCreditoAdjustmentWithoutCategoryAsReviewNeutral() throws Exception {
+    UUID batchId = UUID.randomUUID();
+    var row = previewRow(
+            1,
+            RowStatus.REVIEW,
+            "Payment linked to a loan origination",
+            new BigDecimal("120000"),
+            null,
+            "Mercado Crédito",
+            MoneyTransaction.MovementType.ADJUSTMENT,
+            MoneyTransaction.BalanceImpact.NEUTRAL_ADJUSTMENT,
+            MoneyTransaction.ClassificationStatus.REVIEW,
+            "RULE_MERCADO_CREDITO_LOAN_ORIGINATION_REVIEW"
+    );
+    when(rowRepository.findByBatchIdOrderByRowNumber(batchId)).thenReturn(List.of(toEntity(row)));
+    when(txService.create(any(TransactionCreateRequest.class), eq(userId), any(TransactionService.TransactionMetadata.class)))
+            .thenReturn(response(null, MoneyTransaction.MovementType.ADJUSTMENT, "Payment linked to a loan origination", new BigDecimal("120000")));
+
+    var response = service.commit(userId, profileId, batchId, new TransactionImportCommitRequest(List.of(
+            new TransactionImportCommitRow(1, null, accountId, MoneyTransaction.MovementType.ADJUSTMENT, new BigDecimal("120000"), RowStatus.REVIEW, "Payment linked to a loan origination")
+    ), false, true));
+
+    assertEquals(1, response.createdCount());
+    assertEquals(0, response.failedCount());
+    var requestCaptor = ArgumentCaptor.forClass(TransactionCreateRequest.class);
+    var metadataCaptor = ArgumentCaptor.forClass(TransactionService.TransactionMetadata.class);
+    verify(txService).create(requestCaptor.capture(), eq(userId), metadataCaptor.capture());
+    assertNull(requestCaptor.getValue().categoryId());
+    assertEquals(MoneyTransaction.MovementType.ADJUSTMENT, requestCaptor.getValue().movementType());
+    assertEquals(MoneyTransaction.Status.CONFIRMED, requestCaptor.getValue().status());
+    assertEquals(MoneyTransaction.ClassificationStatus.REVIEW, requestCaptor.getValue().classificationStatus());
+    assertEquals("RULE_MERCADO_CREDITO_LOAN_ORIGINATION_REVIEW", requestCaptor.getValue().classificationReason());
+    assertEquals(MoneyTransaction.BalanceImpact.NEUTRAL_ADJUSTMENT, metadataCaptor.getValue().balanceImpact());
+  }
+
+  @Test
+  void commitStillFailsWhenSelectedCategoryIsIncompatibleWithMovementType() throws Exception {
+    UUID batchId = UUID.randomUUID();
+    UUID categoryId = UUID.randomUUID();
+    var row = previewRow(1, RowStatus.READY, "Varios", new BigDecimal("5000"), categoryId, "Sueldo", MoneyTransaction.MovementType.EXPENSE);
+    when(rowRepository.findByBatchIdOrderByRowNumber(batchId)).thenReturn(List.of(toEntity(row)));
+    when(categoryRepository.findById(categoryId)).thenReturn(Optional.of(Category.builder().id(categoryId).type(Category.Type.INCOME).active(true).build()));
+
+    var response = service.commit(userId, profileId, batchId, new TransactionImportCommitRequest(List.of(
+            new TransactionImportCommitRow(1, categoryId, accountId, MoneyTransaction.MovementType.EXPENSE, new BigDecimal("5000"), RowStatus.READY, "Varios")
+    ), false, true));
+
+    assertEquals(0, response.createdCount());
+    assertEquals(1, response.failedCount());
+    verify(txService, never()).create(any(), any(), any());
   }
 
   @Test
@@ -132,7 +261,7 @@ class TransactionImportServiceTest {
   }
 
   @Test
-  void commitCreatesNewCategoryWhenSameNameExistingIsIncompatible() throws Exception {
+  void commitFallbackUsesReviewCategoryEvenWhenSuggestedNameExists() throws Exception {
     UUID batchId = UUID.randomUUID();
     var row = previewRow(1, RowStatus.NEEDS_CATEGORY, "SUELDO", new BigDecimal("200"), null, "Ingresos varios", MoneyTransaction.MovementType.INCOME);
     when(rowRepository.findByBatchIdOrderByRowNumber(batchId)).thenReturn(List.of(toEntity(row)));
@@ -141,13 +270,16 @@ class TransactionImportServiceTest {
     ));
     when(categoryRepository.findByProfileIdIsNullAndActiveTrue()).thenReturn(List.of());
     UUID newCategoryId = UUID.randomUUID();
-    when(categoryRepository.save(any(Category.class))).thenReturn(Category.builder().id(newCategoryId).profileId(profileId).name("Ingresos varios").type(Category.Type.INCOME).active(true).build());
+    when(categoryRepository.save(any(Category.class))).thenReturn(Category.builder().id(newCategoryId).profileId(profileId).name("Otros a revisar").type(Category.Type.INCOME).active(true).build());
     when(categoryRepository.findById(newCategoryId)).thenReturn(Optional.of(Category.builder().id(newCategoryId).type(Category.Type.INCOME).active(true).build()));
     when(txService.create(any(TransactionCreateRequest.class), eq(userId), any(TransactionService.TransactionMetadata.class))).thenReturn(response(newCategoryId, MoneyTransaction.MovementType.INCOME, "SUELDO", new BigDecimal("200")));
 
     var response = service.commit(userId, profileId, batchId, new TransactionImportCommitRequest(List.of(new TransactionImportCommitRow(1, null, accountId, MoneyTransaction.MovementType.INCOME, new BigDecimal("200"), RowStatus.NEEDS_CATEGORY, "SUELDO")), true, true));
     assertEquals(1, response.createdCount());
-    verify(categoryRepository, times(1)).save(any(Category.class));
+    var categoryCaptor = ArgumentCaptor.forClass(Category.class);
+    verify(categoryRepository, times(1)).save(categoryCaptor.capture());
+    assertEquals("Otros a revisar", categoryCaptor.getValue().getName());
+    assertEquals(Category.Type.INCOME, categoryCaptor.getValue().getType());
   }
 
   @Test
@@ -387,6 +519,62 @@ class TransactionImportServiceTest {
 
   private TransactionImportPreviewRow previewRow(int n, TransactionImportSource source, RowStatus status, String desc, BigDecimal amount, UUID catId, String catName, MoneyTransaction.MovementType mt, LocalDate date) {
     return new TransactionImportPreviewRow(n, source, null, null, date, date, desc, desc, amount, amount, "ARS", mt, catId, catName, Confidence.HIGH, status, "", "{}", null, null, null, null, null, null);
+  }
+
+  private TransactionImportPreviewRow previewRow(
+          int n,
+          RowStatus status,
+          String desc,
+          BigDecimal amount,
+          UUID catId,
+          String catName,
+          MoneyTransaction.MovementType movementType,
+          MoneyTransaction.BalanceImpact balanceImpact,
+          MoneyTransaction.ClassificationStatus classificationStatus,
+          String classificationReason
+  ) {
+    var date = LocalDate.now();
+    return new TransactionImportPreviewRow(
+            n,
+            TransactionImportSource.MERCADO_PAGO,
+            null,
+            null,
+            date,
+            date,
+            desc,
+            desc,
+            amount,
+            amount,
+            "ARS",
+            movementType,
+            catId,
+            catName,
+            Confidence.LOW,
+            status,
+            "",
+            "{}",
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            "MERCADO_PAGO_SETTLEMENT",
+            date.atStartOfDay(),
+            MoneyTransaction.OperationDateTimePrecision.DATE_ONLY,
+            desc,
+            null,
+            null,
+            MoneyTransaction.PaymentChannel.MERCADO_PAGO,
+            balanceImpact,
+            classificationStatus,
+            classificationReason,
+            null,
+            null,
+            "Hoja 1",
+            ImportTargetEntity.EXPENSE,
+            "{}"
+    );
   }
 
   private Object classify(BigDecimal amount, String detail) throws Exception {

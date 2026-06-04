@@ -1004,6 +1004,7 @@ public class TransactionService {
                 .sourceOperationId(firstNonBlank(metadata == null ? null : metadata.sourceOperationId(), request.sourceOperationId()))
                 .sourceHash(firstNonBlank(metadata == null ? null : metadata.sourceHash(), request.sourceHash()))
                 .paymentChannel(metadata != null && metadata.paymentChannel() != null ? metadata.paymentChannel() : request.paymentChannel())
+                .balanceImpact(metadata != null && metadata.balanceImpact() != null ? metadata.balanceImpact() : MoneyTransaction.BalanceImpact.UNKNOWN)
                 .counterparty(firstNonBlank(metadata == null ? null : metadata.counterparty(), request.counterparty()))
                 .classificationStatus(classificationStatus)
                 .classificationReason(firstNonBlank(metadata == null ? null : metadata.classificationReason(), request.classificationReason()))
@@ -1036,6 +1037,7 @@ public class TransactionService {
         return request.status() == MoneyTransaction.Status.PENDING
                 || request.classificationStatus() == MoneyTransaction.ClassificationStatus.NEEDS_CATEGORY
                 || request.classificationStatus() == MoneyTransaction.ClassificationStatus.REVIEW
+                || request.classificationStatus() == MoneyTransaction.ClassificationStatus.TECHNICAL
                 || request.status() == MoneyTransaction.Status.IGNORED
                 || request.classificationStatus() == MoneyTransaction.ClassificationStatus.IGNORED_BY_RULE;
     }
@@ -1497,6 +1499,7 @@ public class TransactionService {
             String counterparty,
             MoneyTransaction.ClassificationStatus classificationStatus,
             String classificationReason,
+            MoneyTransaction.BalanceImpact balanceImpact,
             UUID importBatchId,
             UUID internalTransferGroupId
     ) {

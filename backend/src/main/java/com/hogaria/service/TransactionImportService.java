@@ -524,20 +524,23 @@ public class TransactionImportService {
     }
 
     if (categoryId == null) {
-      errors.add("Fila " + commitRow.rowNumber() + ": falta categoría.");
-      markImportRow(loadedRow.entity(), ImportRowStatus.ERROR, "Falta categoría.");
-      return failedResult();
-    }
-    var category = categoryRepository.findById(categoryId).orElse(null);
-    if (category == null) {
-      errors.add("Fila " + commitRow.rowNumber() + ": categoría inexistente.");
-      markImportRow(loadedRow.entity(), ImportRowStatus.ERROR, "Categoría inexistente.");
-      return failedResult();
-    }
-    if (!isMovementCategoryCompatible(movementType, category.getType())) {
-      errors.add("Fila " + commitRow.rowNumber() + ": tipo de movimiento/categoría incompatible.");
-      markImportRow(loadedRow.entity(), ImportRowStatus.ERROR, "Tipo de movimiento/categoría incompatible.");
-      return failedResult();
+      if (!canImportWithoutCategory(previewRow)) {
+        errors.add("Fila " + commitRow.rowNumber() + ": falta categoría.");
+        markImportRow(loadedRow.entity(), ImportRowStatus.ERROR, "Falta categoría.");
+        return failedResult();
+      }
+    } else {
+      var category = categoryRepository.findById(categoryId).orElse(null);
+      if (category == null) {
+        errors.add("Fila " + commitRow.rowNumber() + ": categoría inexistente.");
+        markImportRow(loadedRow.entity(), ImportRowStatus.ERROR, "Categoría inexistente.");
+        return failedResult();
+      }
+      if (!isMovementCategoryCompatible(movementType, category.getType())) {
+        errors.add("Fila " + commitRow.rowNumber() + ": tipo de movimiento/categoría incompatible.");
+        markImportRow(loadedRow.entity(), ImportRowStatus.ERROR, "Tipo de movimiento/categoría incompatible.");
+        return failedResult();
+      }
     }
 
     var description = firstNonBlank(
@@ -558,6 +561,11 @@ public class TransactionImportService {
     }
 
     try {
+      var paymentChannel = previewRow.paymentChannel() == null
+              ? inferPaymentChannel(previewRow.source(), description)
+              : previewRow.paymentChannel();
+      var classificationStatus = inferClassificationStatus(previewRow, categoryId);
+      var classificationReason = inferClassificationReason(previewRow);
       var response = txService.create(
               new TransactionCreateRequest(
                       profileId,
@@ -571,14 +579,14 @@ public class TransactionImportService {
                       firstNonBlank(previewRow.currency(), DEFAULT_CURRENCY).toUpperCase(Locale.ROOT),
                       description,
                       MoneyTransaction.Origin.IMPORT,
-                      MoneyTransaction.Status.CONFIRMED,
+                      importStatusFor(previewRow, categoryId),
                       previewRow.source().name(),
                       previewRow.sourceOperationId(),
                       previewRow.sourceHash(),
-                      previewRow.paymentChannel() == null ? inferPaymentChannel(previewRow.source(), description) : previewRow.paymentChannel(),
+                      paymentChannel,
                       previewRow.counterparty(),
-                      inferClassificationStatus(previewRow, categoryId),
-                      inferClassificationReason(previewRow),
+                      classificationStatus,
+                      classificationReason,
                       batchId,
                       null
               ),
@@ -587,10 +595,11 @@ public class TransactionImportService {
                       previewRow.source().name(),
                       previewRow.sourceOperationId(),
                       previewRow.sourceHash(),
-                      previewRow.paymentChannel() == null ? inferPaymentChannel(previewRow.source(), description) : previewRow.paymentChannel(),
+                      paymentChannel,
                       previewRow.counterparty(),
-                      inferClassificationStatus(previewRow, categoryId),
-                      inferClassificationReason(previewRow),
+                      classificationStatus,
+                      classificationReason,
+                      previewRow.balanceImpact(),
                       batchId,
                       null
               )
@@ -1886,29 +1895,57 @@ public class TransactionImportService {
       return previewRow.suggestedCategoryId();
     }
 
-    if (!request.createMissingFallbackCategory()) {
+    if (!request.createMissingFallbackCategory() || previewRow.status() != RowStatus.NEEDS_CATEGORY) {
       return null;
     }
 
-    var categoryName = firstNonBlank(
-            previewRow.suggestedCategoryName(),
-            fallbackCategoryName(movementType)
-    );
-
+    var categoryName = fallbackCategoryName(movementType);
     var categoryType = inferCategoryType(categoryName, movementType);
 
     return getOrCreateCategory(profileId, categoryName, categoryType).getId();
+  }
+
+  private boolean canImportWithoutCategory(TransactionImportPreviewRow row) {
+    if (row.status() == RowStatus.NEEDS_CATEGORY) {
+      return false;
+    }
+
+    return row.status() == RowStatus.REVIEW
+            || row.classificationStatus() == MoneyTransaction.ClassificationStatus.REVIEW
+            || row.classificationStatus() == MoneyTransaction.ClassificationStatus.NEEDS_CATEGORY
+            || row.classificationStatus() == MoneyTransaction.ClassificationStatus.TECHNICAL
+            || row.balanceImpact() == MoneyTransaction.BalanceImpact.INTERNAL_TRANSFER
+            || row.balanceImpact() == MoneyTransaction.BalanceImpact.NEUTRAL_ADJUSTMENT
+            || row.balanceImpact() == MoneyTransaction.BalanceImpact.TECHNICAL;
+  }
+
+  private MoneyTransaction.Status importStatusFor(TransactionImportPreviewRow row, UUID categoryId) {
+    if (categoryId != null) {
+      return MoneyTransaction.Status.CONFIRMED;
+    }
+
+    if (row.classificationStatus() == MoneyTransaction.ClassificationStatus.TECHNICAL
+            || row.balanceImpact() == MoneyTransaction.BalanceImpact.INTERNAL_TRANSFER
+            || row.balanceImpact() == MoneyTransaction.BalanceImpact.NEUTRAL_ADJUSTMENT
+            || row.balanceImpact() == MoneyTransaction.BalanceImpact.TECHNICAL) {
+      return MoneyTransaction.Status.CONFIRMED;
+    }
+
+    return MoneyTransaction.Status.PENDING;
   }
 
   private MoneyTransaction.ClassificationStatus inferClassificationStatus(
           TransactionImportPreviewRow row,
           UUID categoryId
   ) {
-    if (categoryId == null) {
-      return MoneyTransaction.ClassificationStatus.NEEDS_CATEGORY;
-    }
     if (row.classificationStatus() != null) {
       return row.classificationStatus();
+    }
+    if (categoryId == null) {
+      if (row.status() == RowStatus.REVIEW) {
+        return MoneyTransaction.ClassificationStatus.REVIEW;
+      }
+      return MoneyTransaction.ClassificationStatus.NEEDS_CATEGORY;
     }
     if (row.status() == RowStatus.POSSIBLE_CROSS_SOURCE_DUPLICATE) {
       return MoneyTransaction.ClassificationStatus.REVIEW;

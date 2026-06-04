@@ -19,13 +19,13 @@ export function ImportCommitPanel({
 
         {hasMissingCategory ? (
           <p className="mensaje-warning">
-            Hay movimientos listos para importar sin categoría. Asigná una categoría o activá la
-            categoría fallback antes de confirmar.
+            Hay filas NEEDS_CATEGORY sin categoría. Asigná una categoría o activá
+            “Otros a revisar” antes de confirmar.
           </p>
         ) : (
           <p className="muted">
-            Las filas importables se van a convertir en movimientos reales. Los duplicados y errores
-            no se importan.
+            Hay filas en revisión. Las técnicas/neutras se importarán como revisión
+            o transferencia técnica; las filas NEEDS_CATEGORY requieren categoría o fallback.
           </p>
         )}
       </div>

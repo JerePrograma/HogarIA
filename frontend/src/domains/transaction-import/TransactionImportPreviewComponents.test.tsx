@@ -6,6 +6,10 @@ import type { Category } from "../../domain/types";
 import { ImportCommitPanel } from "./ImportCommitPanel";
 import { ImportPreviewSummary } from "./ImportPreviewSummary";
 import { ImportRowsTable } from "./ImportRowsTable";
+import {
+  countBlockingMissingCategoryRows,
+  countImportableRows,
+} from "./importCalculations";
 import type { TransactionImportRow } from "./types";
 
 const categories: Category[] = [
@@ -79,13 +83,19 @@ describe("transaction import preview components", () => {
         ignoredRows={1}
         suggestedCategoryRows={6}
         reviewRows={3}
+        needsCategoryRows={2}
+        technicalNeutralRows={4}
       />,
     );
 
     expect(screen.getByText("Sugeridas")).toBeInTheDocument();
     expect(screen.getByText("Review")).toBeInTheDocument();
+    expect(screen.getByText("Necesitan categoría")).toBeInTheDocument();
+    expect(screen.getByText("Técnicas/neutras")).toBeInTheDocument();
     expect(screen.getByText("6")).toBeInTheDocument();
     expect(screen.getByText("3")).toBeInTheDocument();
+    expect(screen.getAllByText("2").length).toBeGreaterThan(0);
+    expect(screen.getByText("4")).toBeInTheDocument();
   });
 
   it("shows duplicate rows and the skip reason before import", () => {
@@ -153,5 +163,72 @@ describe("transaction import preview components", () => {
     fireEvent.click(screen.getByRole("button", { name: "Confirmar importación" }));
 
     expect(onCommit).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not disable confirmation for REVIEW rows without category", () => {
+    const rows = [
+      buildRow({
+        status: "REVIEW",
+        movementType: "INCOME",
+        balanceImpact: "UNKNOWN",
+        classificationStatus: "REVIEW",
+        classificationReason: "RULE_MP_GENERIC_INFLOW_REVIEW",
+        suggestedCategoryId: null,
+        suggestedCategoryName: null,
+      }),
+    ];
+    const canCommit =
+      countImportableRows(rows, false) > 0 &&
+      countBlockingMissingCategoryRows(rows, false) === 0;
+
+    render(
+      <ImportCommitPanel
+        canCommit={canCommit}
+        pending={false}
+        hasMissingCategory={false}
+        onCommit={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "Confirmar importación" })).toBeEnabled();
+  });
+
+  it("disables confirmation for NEEDS_CATEGORY rows until fallback is enabled", () => {
+    const rows = [
+      buildRow({
+        status: "NEEDS_CATEGORY",
+        classificationStatus: "NEEDS_CATEGORY",
+        classificationReason: "NO_IMPORT_RULE",
+        suggestedCategoryId: null,
+      }),
+    ];
+    const canCommitWithoutFallback =
+      countImportableRows(rows, false) > 0 &&
+      countBlockingMissingCategoryRows(rows, false) === 0;
+    const canCommitWithFallback =
+      countImportableRows(rows, true) > 0 &&
+      countBlockingMissingCategoryRows(rows, true) === 0;
+
+    const { rerender } = render(
+      <ImportCommitPanel
+        canCommit={canCommitWithoutFallback}
+        pending={false}
+        hasMissingCategory
+        onCommit={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "Confirmar importación" })).toBeDisabled();
+
+    rerender(
+      <ImportCommitPanel
+        canCommit={canCommitWithFallback}
+        pending={false}
+        hasMissingCategory={false}
+        onCommit={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "Confirmar importación" })).toBeEnabled();
   });
 });

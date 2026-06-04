@@ -111,10 +111,11 @@ export function getImportRowIssueMessage(
   if (
     row.status === "NEEDS_CATEGORY" &&
     !row.suggestedCategoryId &&
-    row.suggestedCategoryName &&
     createMissingFallbackCategory
   ) {
-    return `Sugerida: ${row.suggestedCategoryName}. Se creará al confirmar.`;
+    return row.suggestedCategoryName
+      ? `Sugerida para revisar: ${row.suggestedCategoryName}. Se usará “Otros a revisar” al confirmar.`
+      : "Se usará “Otros a revisar” al confirmar.";
   }
 
   if (
