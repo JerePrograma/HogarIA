@@ -29,36 +29,25 @@ interface Props {
   createMissingFallbackCategory: boolean;
 }
 
-function isExistingMovementStatus(status: TransactionImportRow["status"]) {
-  return [
-    "DUPLICATE",
-    "DUPLICATE_EXACT",
-    "POSSIBLE_INTERNAL_TRANSFER",
-    "INTERNAL_TRANSFER_MATCHED",
-    "POSSIBLE_CROSS_SOURCE_DUPLICATE",
-    "SKIPPED",
-  ].includes(status);
+function isLockedImportRowStatus(status: TransactionImportRow["status"]) {
+  return ["DUPLICATE", "DUPLICATE_EXACT", "SKIPPED", "ERROR"].includes(status);
 }
 
 function getExistingMovementNote(row: TransactionImportRow) {
-  if (!isExistingMovementStatus(row.status)) {
-    return null;
+  if (row.status === "POSSIBLE_INTERNAL_TRANSFER") {
+    return "Posible transferencia interna. Se puede importar como movimiento técnico/neutro para no inflar ingresos o gastos.";
+  }
+
+  if (row.status === "INTERNAL_TRANSFER_MATCHED") {
+    return "Transferencia interna detectada. Se importará como movimiento técnico/neutro, sin impacto operativo.";
+  }
+
+  if (row.status === "POSSIBLE_CROSS_SOURCE_DUPLICATE") {
+    return "Posible duplicado entre fuentes. Revisalo antes de confirmar; no se trata como duplicado exacto.";
   }
 
   if (row.status === "DUPLICATE" || row.status === "DUPLICATE_EXACT") {
     return "No se creará al confirmar: ya existe un movimiento compatible. Revisá recategorización si corresponde.";
-  }
-
-  if (row.status === "POSSIBLE_INTERNAL_TRANSFER") {
-    return "Posible transferencia interna. No conviene importarla como gasto/ingreso nuevo sin revisión.";
-  }
-
-  if (row.status === "INTERNAL_TRANSFER_MATCHED") {
-    return "Transferencia interna detectada. Se omite para evitar duplicar impacto.";
-  }
-
-  if (row.status === "POSSIBLE_CROSS_SOURCE_DUPLICATE") {
-    return "Posible duplicado entre fuentes. Conviene revisar el movimiento existente.";
   }
 
   return null;
@@ -76,7 +65,9 @@ function compactMeta(row: TransactionImportRow) {
       ? `Clasificación: ${importClassificationStatusLabels[row.classificationStatus] ?? row.classificationStatus}`
       : null,
     row.classificationLayer ? `Capa: ${row.classificationLayer}` : null,
-  ].filter(Boolean).join(" · ");
+  ]
+    .filter(Boolean)
+    .join(" · ");
 }
 
 export function ImportRowsTable({
@@ -130,6 +121,17 @@ export function ImportRowsTable({
                 categoriesById,
               );
 
+              function isExistingMovementStatus(status: TransactionImportRow["status"]) {
+                return [
+                  "DUPLICATE",
+                  "DUPLICATE_EXACT",
+                  "POSSIBLE_INTERNAL_TRANSFER",
+                  "INTERNAL_TRANSFER_MATCHED",
+                  "POSSIBLE_CROSS_SOURCE_DUPLICATE",
+                  "SKIPPED",
+                ].includes(status);
+              }
+
               return (
                 <tr key={row.rowNumber}>
                   <td>
@@ -160,11 +162,16 @@ export function ImportRowsTable({
                       ) : null}
 
                       {row.merchantName ? (
-                        <span className="muted">Comercio: {row.merchantName}</span>
+                        <span className="muted">
+                          Comercio: {row.merchantName}
+                        </span>
                       ) : null}
 
-                      {row.counterparty && row.counterparty !== row.merchantName ? (
-                        <span className="muted">Contraparte: {row.counterparty}</span>
+                      {row.counterparty &&
+                      row.counterparty !== row.merchantName ? (
+                        <span className="muted">
+                          Contraparte: {row.counterparty}
+                        </span>
                       ) : null}
 
                       {compactMeta(row) ? (
@@ -172,7 +179,9 @@ export function ImportRowsTable({
                       ) : null}
 
                       {row.classificationReason ? (
-                        <span className="muted">Regla: {row.classificationReason}</span>
+                        <span className="muted">
+                          Regla: {row.classificationReason}
+                        </span>
                       ) : null}
 
                       {getClassificationExplanationSummary(row) ? (
@@ -261,7 +270,11 @@ export function ImportRowsTable({
                   <td>
                     <StatusBadge
                       tone={getImportRowStatusTone(row.status)}
-                      label={labelOrFallback(importRowStatusLabels, row.status, "Estado no reconocido")}
+                      label={labelOrFallback(
+                        importRowStatusLabels,
+                        row.status,
+                        "Estado no reconocido",
+                      )}
                     />
                   </td>
                 </tr>

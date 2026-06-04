@@ -18,12 +18,6 @@ import { ImportPreviewSummary } from "../transaction-import/ImportPreviewSummary
 import { ImportResultPanel } from "../transaction-import/ImportResultPanel";
 import { ImportRowsTable } from "../transaction-import/ImportRowsTable";
 import { ImportSourceForm } from "../transaction-import/ImportSourceForm";
-import {
-  countBlockingMissingCategoryRows,
-  countImportableRows,
-  countImportRows,
-  countTechnicalNeutralRows,
-} from "../transaction-import/importCalculations";
 import type {
   TransactionImportCommitPayload,
   TransactionImportCommitResult,
@@ -31,10 +25,26 @@ import type {
   TransactionImportRow,
   TransactionImportSource,
 } from "../transaction-import/types";
+import {
+  buildImportDerivedState,
+  countByStatus,
+} from "../transaction-import/importDerivedState";
 
 type RowStatus = TransactionImportRow["status"];
 type RowStatusFilter = RowStatus | "ALL";
-
+type ImportFilterChip =
+  | {
+      key: "ALL";
+      label: string;
+      count: number;
+      status: "ALL";
+    }
+  | {
+      key: RowStatus;
+      label: string;
+      count: number;
+      status: RowStatus;
+    };
 interface RowFilters {
   search: string;
   status: RowStatusFilter;
@@ -131,8 +141,7 @@ export function TransactionImportPage() {
   const { profileId = "" } = useParams();
   const qc = useQueryClient();
 
-  const [source, setSource] =
-    useState<TransactionImportSource>("AUTO");
+  const [source, setSource] = useState<TransactionImportSource>("AUTO");
   const [accountId, setAccountId] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<TransactionImportPreview | null>(null);
@@ -220,32 +229,44 @@ export function TransactionImportPage() {
     },
   });
 
-  const rowCounters = useMemo(() => countImportRows(rows), [rows]);
-
-  const unresolvedRows = useMemo(
-    () => countBlockingMissingCategoryRows(rows, createMissingFallbackCategory),
-    [rows, createMissingFallbackCategory],
+  const incompatibleRows = useMemo(
+    () =>
+      rows.filter(
+        (row) =>
+          (row.status === "READY" ||
+            row.status === "NEEDS_CATEGORY" ||
+            row.status === "REVIEW") &&
+          !isCategoryCompatibleWithImportedMovement(row, categoriesById),
+      ).length,
+    [categoriesById, rows],
   );
 
-  const importableRows = useMemo(
-    () => countImportableRows(rows, createMissingFallbackCategory),
-    [rows, createMissingFallbackCategory],
+  const derived = useMemo(
+    () =>
+      buildImportDerivedState(
+        rows,
+        createMissingFallbackCategory,
+        incompatibleRows,
+        skipDuplicatesConfirmed,
+      ),
+    [
+      rows,
+      createMissingFallbackCategory,
+      incompatibleRows,
+      skipDuplicatesConfirmed,
+    ],
   );
 
-  const invalidRows = rowCounters.ERROR ?? 0;
-  const ignoredRows = rowCounters.SKIPPED ?? 0;
-  const duplicateRows =
-    (rowCounters.DUPLICATE ?? 0) +
-      (rowCounters.DUPLICATE_EXACT ?? 0) +
-      (rowCounters.POSSIBLE_INTERNAL_TRANSFER ?? 0) +
-      (rowCounters.INTERNAL_TRANSFER_MATCHED ?? 0) +
-      (rowCounters.POSSIBLE_CROSS_SOURCE_DUPLICATE ?? 0) ||
-    preview?.duplicateRows ||
-    0;
-  const exactDuplicateRows = rowCounters.DUPLICATE_EXACT ?? 0;
-  const needsCategoryRows = rowCounters.NEEDS_CATEGORY ?? 0;
-  const reviewRows = rowCounters.REVIEW ?? preview?.reviewRows ?? 0;
-  const technicalNeutralRows = useMemo(() => countTechnicalNeutralRows(rows), [rows]);
+  const invalidRows = derived.errorRows;
+  const ignoredRows = derived.skippedRows;
+  const duplicateRows = derived.duplicateRows;
+  const exactDuplicateRows = derived.exactDuplicateRows;
+  const needsCategoryRows = derived.needsCategoryRows;
+  const unresolvedRows = derived.blockingMissingCategoryRows;
+  const reviewRows = derived.reviewRows;
+  const technicalNeutralRows = derived.technicalNeutralRows;
+  const importableRows = derived.importableRows;
+  const hasBlockingIssues = derived.hasBlockingIssues;
 
   const duplicateSuggestionGroups = useMemo(() => {
     const duplicates = rows.filter(
@@ -271,9 +292,13 @@ export function TransactionImportPage() {
     const search = normalize(filters.search);
 
     return rows.filter((row) => {
-      const suggestedCategory = categoriesById.get(row.suggestedCategoryId ?? "");
+      const suggestedCategory = categoriesById.get(
+        row.suggestedCategoryId ?? "",
+      );
       const suggestedCategoryName =
-        (suggestedCategory ? getCategoryDisplayName(suggestedCategory) : null) ??
+        (suggestedCategory
+          ? getCategoryDisplayName(suggestedCategory)
+          : null) ??
         row.suggestedCategoryName ??
         "";
 
@@ -302,18 +327,6 @@ export function TransactionImportPage() {
       return matchesSearch && matchesStatus && matchesCategory;
     });
   }, [categoriesById, filters, rows]);
-
-  const incompatibleRows = useMemo(
-    () =>
-      rows.filter(
-        (row) =>
-          (row.status === "READY" ||
-            row.status === "NEEDS_CATEGORY" ||
-            row.status === "REVIEW") &&
-          !isCategoryCompatibleWithImportedMovement(row, categoriesById),
-      ).length,
-    [categoriesById, rows],
-  );
 
   const activeFilterCount = [
     filters.search,
@@ -384,23 +397,16 @@ export function TransactionImportPage() {
 
   const duplicateDecisionMissing =
     exactDuplicateRows > 0 && !skipDuplicatesConfirmed;
-  const hasBlockingIssues =
-    unresolvedRows > 0 ||
-    invalidRows > 0 ||
-    incompatibleRows > 0 ||
-    duplicateDecisionMissing;
   const hasPreviewRows = rows.length > 0;
 
   const wizardSteps = buildWizardSteps({
     currentStep,
     totalRows: preview?.totalRows ?? rows.length,
     invalidRows,
-    duplicateRows,
     exactDuplicateRows,
-    internalRows:
-      (rowCounters.POSSIBLE_INTERNAL_TRANSFER ?? 0) +
-      (rowCounters.INTERNAL_TRANSFER_MATCHED ?? 0),
-    blockingCategoryRows: unresolvedRows,
+    internalRows: derived.internalTransferRows,
+    blockingCategoryRows: derived.blockingMissingCategoryRows,
+    duplicateRows: derived.duplicateRows,
     reviewRows,
     technicalNeutralRows,
     incompatibleRows,
@@ -409,6 +415,75 @@ export function TransactionImportPage() {
     hasResult: Boolean(commitMutation.data),
     duplicateDecisionMissing,
   });
+
+  const statusFilterChips: ImportFilterChip[] = [
+    {
+      key: ALL,
+      label: "Todos",
+      count: derived.totalRows,
+      status: ALL,
+    },
+    {
+      key: "READY",
+      label: rowStatusLabels.READY,
+      count: countByStatus(rows, "READY"),
+      status: "READY",
+    },
+    {
+      key: "NEEDS_CATEGORY",
+      label: rowStatusLabels.NEEDS_CATEGORY,
+      count: countByStatus(rows, "NEEDS_CATEGORY"),
+      status: "NEEDS_CATEGORY",
+    },
+    {
+      key: "DUPLICATE",
+      label: rowStatusLabels.DUPLICATE,
+      count: countByStatus(rows, "DUPLICATE"),
+      status: "DUPLICATE",
+    },
+    {
+      key: "DUPLICATE_EXACT",
+      label: rowStatusLabels.DUPLICATE_EXACT,
+      count: countByStatus(rows, "DUPLICATE_EXACT"),
+      status: "DUPLICATE_EXACT",
+    },
+    {
+      key: "POSSIBLE_INTERNAL_TRANSFER",
+      label: rowStatusLabels.POSSIBLE_INTERNAL_TRANSFER,
+      count: countByStatus(rows, "POSSIBLE_INTERNAL_TRANSFER"),
+      status: "POSSIBLE_INTERNAL_TRANSFER",
+    },
+    {
+      key: "INTERNAL_TRANSFER_MATCHED",
+      label: rowStatusLabels.INTERNAL_TRANSFER_MATCHED,
+      count: countByStatus(rows, "INTERNAL_TRANSFER_MATCHED"),
+      status: "INTERNAL_TRANSFER_MATCHED",
+    },
+    {
+      key: "POSSIBLE_CROSS_SOURCE_DUPLICATE",
+      label: rowStatusLabels.POSSIBLE_CROSS_SOURCE_DUPLICATE,
+      count: countByStatus(rows, "POSSIBLE_CROSS_SOURCE_DUPLICATE"),
+      status: "POSSIBLE_CROSS_SOURCE_DUPLICATE",
+    },
+    {
+      key: "REVIEW",
+      label: rowStatusLabels.REVIEW,
+      count: countByStatus(rows, "REVIEW"),
+      status: "REVIEW",
+    },
+    {
+      key: "ERROR",
+      label: rowStatusLabels.ERROR,
+      count: countByStatus(rows, "ERROR"),
+      status: "ERROR",
+    },
+    {
+      key: "SKIPPED",
+      label: rowStatusLabels.SKIPPED,
+      count: countByStatus(rows, "SKIPPED"),
+      status: "SKIPPED",
+    },
+  ];
 
   return (
     <AppLayout>
@@ -578,7 +653,7 @@ export function TransactionImportPage() {
                     <p className="muted">
                       Si una fila no tiene categoría, lo más seguro es elegirla.
                       Solo activá esta opción si aceptás crear una categoría
-                      temporal llamada “Otros a revisar”.
+                      temporal compatible según el tipo de movimiento.
                     </p>
                   </div>
 
@@ -591,7 +666,8 @@ export function TransactionImportPage() {
                       }
                     />
                     <span>
-                      Crear categoría temporal “Otros a revisar” para filas sin categoría
+                      Crear categoría temporal compatible para filas sin
+                      categoría
                     </span>
                   </label>
 
@@ -623,7 +699,9 @@ export function TransactionImportPage() {
 
                     {unresolvedRows > 0 ? (
                       <div className="mensaje-warning">
-                        <strong>{unresolvedRows} fila(s) necesitan categoría.</strong>
+                        <strong>
+                          {unresolvedRows} fila(s) necesitan categoría.
+                        </strong>
                         <span>
                           Asigná una categoría o activá “Otros a revisar” para
                           continuar. Las filas en revisión técnica o neutra no
@@ -634,7 +712,9 @@ export function TransactionImportPage() {
 
                     {duplicateDecisionMissing ? (
                       <div className="mensaje-warning">
-                        <strong>{exactDuplicateRows} duplicado(s) exacto(s).</strong>
+                        <strong>
+                          {exactDuplicateRows} duplicado(s) exacto(s).
+                        </strong>
                         <span>
                           Marcá que querés omitirlos antes de confirmar.
                         </span>
@@ -824,35 +904,23 @@ export function TransactionImportPage() {
                     </div>
 
                     <div className="transaction-import-filter-chips">
-                      <button
-                        type="button"
-                        className={`transaction-import-chip ${
-                          filters.status === ALL ? "active" : ""
-                        }`}
-                        onClick={() => setFilters({ ...filters, status: ALL })}
-                      >
-                        Todos · {rowCounters.total}
-                      </button>
-
-                      {Object.entries(rowStatusLabels).map(
-                        ([status, label]) => (
-                          <button
-                            key={status}
-                            type="button"
-                            className={`transaction-import-chip ${
-                              filters.status === status ? "active" : ""
-                            }`}
-                            onClick={() =>
-                              setFilters({
-                                ...filters,
-                                status: status as RowStatus,
-                              })
-                            }
-                          >
-                            {label} · {rowCounters[status as RowStatus] ?? 0}
-                          </button>
-                        ),
-                      )}
+                      {statusFilterChips.map((chip) => (
+                        <button
+                          key={chip.key}
+                          type="button"
+                          className={`transaction-import-chip ${
+                            filters.status === chip.status ? "active" : ""
+                          }`}
+                          onClick={() =>
+                            setFilters({
+                              ...filters,
+                              status: chip.status,
+                            })
+                          }
+                        >
+                          {chip.label} · {chip.count}
+                        </button>
+                      ))}
                     </div>
 
                     {visibleRows.length === 0 ? (
@@ -878,7 +946,9 @@ export function TransactionImportPage() {
                     type="button"
                     className="boton-secundario"
                     disabled={wizardStep <= 2}
-                    onClick={() => setWizardStep((step) => Math.max(2, step - 1))}
+                    onClick={() =>
+                      setWizardStep((step) => Math.max(2, step - 1))
+                    }
                   >
                     Paso anterior
                   </button>
@@ -888,10 +958,13 @@ export function TransactionImportPage() {
                     disabled={
                       wizardStep >= 7 ||
                       (wizardStep === 3 && duplicateDecisionMissing) ||
-                      (wizardStep === 5 && (unresolvedRows > 0 || incompatibleRows > 0)) ||
+                      (wizardStep === 5 &&
+                        (unresolvedRows > 0 || incompatibleRows > 0)) ||
                       (wizardStep === 7 && hasBlockingIssues)
                     }
-                    onClick={() => setWizardStep((step) => Math.min(7, step + 1))}
+                    onClick={() =>
+                      setWizardStep((step) => Math.min(7, step + 1))
+                    }
                   >
                     Siguiente paso
                   </button>
@@ -1047,7 +1120,8 @@ function buildWizardSteps({
       title: "Vista previa",
       counter: hasPreview ? `${totalRows} fila(s)` : "Pendiente",
       description: "Vemos fechas, montos y textos ya normalizados.",
-      action: invalidRows > 0 ? "Hay filas con error." : "Podés revisar el detalle.",
+      action:
+        invalidRows > 0 ? "Hay filas con error." : "Podés revisar el detalle.",
       blocked: invalidRows > 0,
     },
     {
@@ -1064,8 +1138,12 @@ function buildWizardSteps({
       id: 4,
       title: "Transferencias",
       counter: `${internalRows} posible(s)`,
-      description: "Detectamos plata movida entre tus cuentas para no inflar el mes.",
-      action: internalRows > 0 ? "Se omiten o revisan antes de contar." : "Sin pares sospechosos.",
+      description:
+        "Detectamos plata movida entre tus cuentas para no inflar el mes.",
+      action:
+        internalRows > 0
+          ? "Se omiten o revisan antes de contar."
+          : "Sin pares sospechosos.",
       blocked: false,
     },
     {
@@ -1086,17 +1164,26 @@ function buildWizardSteps({
       title: "Impacto",
       counter: `${importableRows} importable(s)`,
       description: "Revisá qué entra como gasto, ingreso o movimiento neutral.",
-      action: technicalNeutralRows > 0
-        ? `${technicalNeutralRows} técnica(s)/neutra(s) no impactan ingresos o gastos.`
-        : importableRows > 0 ? "Listo para confirmar." : "No hay filas nuevas para importar.",
+      action:
+        technicalNeutralRows > 0
+          ? `${technicalNeutralRows} técnica(s)/neutra(s) no impactan ingresos o gastos.`
+          : importableRows > 0
+            ? "Listo para confirmar."
+            : "No hay filas nuevas para importar.",
       blocked: importableRows === 0,
     },
     {
       id: 7,
       title: "Confirmar",
-      counter: hasResult ? "Finalizado" : currentStep >= 7 ? "Último paso" : "Pendiente",
+      counter: hasResult
+        ? "Finalizado"
+        : currentStep >= 7
+          ? "Último paso"
+          : "Pendiente",
       description: "Recién acá se crean movimientos reales.",
-      action: hasResult ? "Importación procesada." : "Confirmá solo si no quedan bloqueos.",
+      action: hasResult
+        ? "Importación procesada."
+        : "Confirmá solo si no quedan bloqueos.",
       blocked: false,
     },
   ];

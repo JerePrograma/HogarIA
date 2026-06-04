@@ -38,46 +38,50 @@ export const importRowStatusLabels: Record<TransactionImportRowStatus, string> =
     ERROR: "Error",
   };
 
-export const importPaymentChannelLabels: Record<TransactionImportPaymentChannel, string> =
-  {
-    UNKNOWN: "Sin canal",
-    CASH: "Efectivo",
-    BANK_TRANSFER: "Transferencia bancaria",
-    DEBIN: "DEBIN",
-    CUENTA_DNI: "Cuenta DNI",
-    DEBIT_CARD: "Tarjeta de débito",
-    CREDIT_CARD: "Tarjeta de crédito",
-    DIRECT_DEBIT: "Débito directo",
-    POS_TRANSFER: "Transferencia POS",
-    ATM: "Cajero / punto efectivo",
-    MONEY_MARKET_YIELD: "Rendimiento diario",
-    TRANSPORT_CARD: "Tarjeta transporte",
-    QR_PAYMENT: "Pago QR",
-    CARD_FOREIGN_CURRENCY: "Tarjeta moneda extranjera",
-    MERCADO_PAGO: "Mercado Pago",
-    MERCADO_CREDITO: "Mercado Crédito",
-    INTERNAL_TRANSFER: "Transferencia interna",
-    OTHER: "Otro",
-  };
+export const importPaymentChannelLabels: Record<
+  TransactionImportPaymentChannel,
+  string
+> = {
+  UNKNOWN: "Sin canal",
+  CASH: "Efectivo",
+  BANK_TRANSFER: "Transferencia bancaria",
+  DEBIN: "DEBIN",
+  CUENTA_DNI: "Cuenta DNI",
+  DEBIT_CARD: "Tarjeta de débito",
+  CREDIT_CARD: "Tarjeta de crédito",
+  DIRECT_DEBIT: "Débito directo",
+  POS_TRANSFER: "Transferencia POS",
+  ATM: "Cajero / punto efectivo",
+  MONEY_MARKET_YIELD: "Rendimiento diario",
+  TRANSPORT_CARD: "Tarjeta transporte",
+  QR_PAYMENT: "Pago QR",
+  CARD_FOREIGN_CURRENCY: "Tarjeta moneda extranjera",
+  MERCADO_PAGO: "Mercado Pago",
+  MERCADO_CREDITO: "Mercado Crédito",
+  INTERNAL_TRANSFER: "Transferencia interna",
+  OTHER: "Otro",
+};
 
-export const importBalanceImpactLabels: Record<TransactionImportBalanceImpact, string> =
-  {
-    OPERATING_INCOME: "Ingreso operativo",
-    CONSUMPTION_EXPENSE: "Consumo",
-    SAVING_OUTFLOW: "Ahorro",
-    INVESTMENT_OUTFLOW: "Inversión",
-    DEBT_OUTFLOW: "Pago de deuda",
-    RECOVERABLE_OUTFLOW: "Egreso recuperable",
-    PRINCIPAL_RECOVERY: "Recupero de capital",
-    INTEREST_INCOME: "Interés ganado",
-    REFUND_OR_REIMBURSEMENT: "Reintegro",
-    INTERNAL_TRANSFER: "Transferencia interna",
-    EXTERNAL_TRANSFER: "Transferencia externa",
-    NEUTRAL_ADJUSTMENT: "Ajuste neutro",
-    IGNORED: "Ignorado",
-    TECHNICAL: "Técnico",
-    UNKNOWN: "Sin impacto",
-  };
+export const importBalanceImpactLabels: Record<
+  TransactionImportBalanceImpact,
+  string
+> = {
+  OPERATING_INCOME: "Ingreso operativo",
+  CONSUMPTION_EXPENSE: "Consumo",
+  SAVING_OUTFLOW: "Ahorro",
+  INVESTMENT_OUTFLOW: "Inversión",
+  DEBT_OUTFLOW: "Pago de deuda",
+  RECOVERABLE_OUTFLOW: "Egreso recuperable",
+  PRINCIPAL_RECOVERY: "Recupero de capital",
+  INTEREST_INCOME: "Interés ganado",
+  REFUND_OR_REIMBURSEMENT: "Reintegro",
+  INTERNAL_TRANSFER: "Transferencia interna",
+  EXTERNAL_TRANSFER: "Transferencia externa",
+  NEUTRAL_ADJUSTMENT: "Ajuste neutro",
+  IGNORED: "Ignorado",
+  TECHNICAL: "Técnico",
+  UNKNOWN: "Sin impacto",
+};
 
 export const importClassificationStatusLabels: Record<
   TransactionImportClassificationStatus,
@@ -90,13 +94,15 @@ export const importClassificationStatusLabels: Record<
   IGNORED_BY_RULE: "Ignorada por regla",
 };
 
-export const importConfidenceLabels: Record<TransactionImportConfidence, string> =
-  {
-    HIGH: "Alta",
-    MEDIUM: "Media",
-    LOW: "Baja",
-    NONE: "Sin confianza",
-  };
+export const importConfidenceLabels: Record<
+  TransactionImportConfidence,
+  string
+> = {
+  HIGH: "Alta",
+  MEDIUM: "Media",
+  LOW: "Baja",
+  NONE: "Sin confianza",
+};
 
 export function getImportRowStatusTone(
   status: TransactionImportRowStatus,
@@ -124,8 +130,8 @@ export function getImportRowIssueMessage(
     createMissingFallbackCategory
   ) {
     return row.suggestedCategoryName
-      ? `Sugerida para revisar: ${row.suggestedCategoryName}. Se usará “Otros a revisar” al confirmar.`
-      : "Se usará “Otros a revisar” al confirmar.";
+      ? `Sugerida para revisar: ${row.suggestedCategoryName}. Se usará una categoría temporal compatible al confirmar.`
+      : "Se usará una categoría temporal compatible al confirmar.";
   }
 
   if (
@@ -137,14 +143,27 @@ export function getImportRowIssueMessage(
   }
 
   if (row.status === "REVIEW") {
-    return row.skipReason || row.classificationReason || "Requiere revisión manual antes de confirmar.";
+    return (
+      row.skipReason ||
+      row.classificationReason ||
+      "Requiere revisión manual antes de confirmar."
+    );
   }
-  if (row.status === "POSSIBLE_INTERNAL_TRANSFER" || row.status === "INTERNAL_TRANSFER_MATCHED") {
-    return row.skipReason || "Posible transferencia interna: mismo monto, fecha cercana y cuenta distinta. Se omite para no inflar ingresos/gastos.";
+  if (
+    row.status === "POSSIBLE_INTERNAL_TRANSFER" ||
+    row.status === "INTERNAL_TRANSFER_MATCHED"
+  ) {
+    return (
+      row.skipReason ||
+      "Posible transferencia interna: mismo monto, fecha cercana y cuenta distinta. Se omite para no inflar ingresos/gastos."
+    );
   }
 
   if (row.status === "POSSIBLE_CROSS_SOURCE_DUPLICATE") {
-    return row.skipReason || "Posible duplicado entre Banco Provincia y Mercado Pago. Revisar antes de contar ambos como consumo.";
+    return (
+      row.skipReason ||
+      "Posible duplicado entre Banco Provincia y Mercado Pago. Revisar antes de contar ambos como consumo."
+    );
   }
 
   if (row.status === "SKIPPED" && row.skipReason) {
