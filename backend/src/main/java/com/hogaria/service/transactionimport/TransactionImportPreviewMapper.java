@@ -43,16 +43,23 @@ public class TransactionImportPreviewMapper {
                 ? RowStatus.NEEDS_CATEGORY
                 : candidate.rowStatus();
 
-        if (status == RowStatus.READY
-                && candidate.categorySuggestionName() != null
-                && category == null) {
+        boolean canImportWithoutCategory = categoryResolver.canImportWithoutCategory(
+                candidate.classificationStatus(),
+                candidate.balanceImpact()
+        );
+
+        if (status == RowStatus.READY && category == null && !canImportWithoutCategory) {
             status = RowStatus.NEEDS_CATEGORY;
         }
 
-        if (status == RowStatus.NEEDS_CATEGORY
-                && category != null
-                && candidate.classificationStatus() != MoneyTransaction.ClassificationStatus.REVIEW) {
-            status = RowStatus.READY;
+        if (status == RowStatus.NEEDS_CATEGORY && canImportWithoutCategory) {
+            status = RowStatus.REVIEW;
+        }
+
+        if (status == RowStatus.NEEDS_CATEGORY && category != null) {
+            status = candidate.classificationStatus() == MoneyTransaction.ClassificationStatus.REVIEW
+                    ? RowStatus.REVIEW
+                    : RowStatus.READY;
         }
 
         var suggestedCategoryName = category == null

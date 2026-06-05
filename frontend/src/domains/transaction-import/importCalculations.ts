@@ -1,4 +1,10 @@
 import type { TransactionImportRow } from './types';
+import {
+  canImportWithoutCategory,
+  isImportableRow,
+  isTechnicalOrNeutralRow,
+  needsFallbackCategory,
+} from './importDerivedState';
 
 type RowStatus = TransactionImportRow['status'];
 
@@ -25,38 +31,19 @@ export function countImportRows(rows: TransactionImportRow[]) {
   );
 }
 
-export function canImportWithoutCategory(row: TransactionImportRow) {
-  if (row.status === 'NEEDS_CATEGORY') return false;
-
-  return (
-    row.status === 'REVIEW'
-    || row.classificationStatus === 'REVIEW'
-    || row.classificationStatus === 'NEEDS_CATEGORY'
-    || row.classificationStatus === 'TECHNICAL'
-    || row.balanceImpact === 'INTERNAL_TRANSFER'
-    || row.balanceImpact === 'NEUTRAL_ADJUSTMENT'
-    || row.balanceImpact === 'TECHNICAL'
-  );
-}
-
-export function isTechnicalOrNeutralRow(row: TransactionImportRow) {
-  return (
-    row.classificationStatus === 'TECHNICAL'
-    || row.balanceImpact === 'INTERNAL_TRANSFER'
-    || row.balanceImpact === 'NEUTRAL_ADJUSTMENT'
-    || row.balanceImpact === 'TECHNICAL'
-  );
-}
-
 export function countBlockingMissingCategoryRows(
   rows: TransactionImportRow[],
   createMissingFallbackCategory: boolean,
 ) {
   return rows.filter(
     (row) =>
-      row.status === 'NEEDS_CATEGORY'
-      && !row.suggestedCategoryId
-      && !createMissingFallbackCategory,
+      !row.suggestedCategoryId
+      && row.status !== 'ERROR'
+      && row.status !== 'SKIPPED'
+      && row.status !== 'DUPLICATE'
+      && row.status !== 'DUPLICATE_EXACT'
+      && !canImportWithoutCategory(row)
+      && !(createMissingFallbackCategory && needsFallbackCategory(row)),
   ).length;
 }
 
@@ -67,13 +54,7 @@ export function countImportableRows(
   createMissingFallbackCategory: boolean,
 ) {
   return rows.filter(
-    (row) =>
-      (row.status === 'READY' || row.status === 'NEEDS_CATEGORY' || row.status === 'REVIEW')
-      && (
-        Boolean(row.suggestedCategoryId)
-        || canImportWithoutCategory(row)
-        || (row.status === 'NEEDS_CATEGORY' && createMissingFallbackCategory)
-      ),
+    (row) => isImportableRow(row, createMissingFallbackCategory),
   ).length;
 }
 

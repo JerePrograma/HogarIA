@@ -58,6 +58,13 @@ public class TransactionImportCommitService {
         }
 
         var batch = batchStore.getBatchOrThrow(batchId);
+
+        if (!batch.getProfileId().equals(profileId)) {
+            throw new ForbiddenException("Batch does not belong to profile");
+        }
+
+        ensureAccountBelongsToProfile(batch.getAccountId(), profileId);
+
         var loadedRows = batchStore.loadRowSnapshots(batchId);
 
         if (loadedRows.isEmpty()) {
@@ -143,7 +150,10 @@ public class TransactionImportCommitService {
                 return TransactionImportCommitResult.duplicate();
             }
 
-            accumulator.warning("Fila " + commitRow.rowNumber() + ": marcada como duplicada, se intenta importar.");
+            var message = "Duplicado detectado. Confirmá la omisión de duplicados antes de importar.";
+            accumulator.error("Fila " + commitRow.rowNumber() + ": " + message);
+            batchStore.markImportRow(loadedRow.entity(), ImportRowStatus.ERROR, message);
+            return TransactionImportCommitResult.failed();
         }
 
         if (isReviewRisk(commitRow.status()) || isReviewRisk(previewRow.status())) {
@@ -221,6 +231,16 @@ public class TransactionImportCommitService {
                 accumulator.warning("Fila " + commitRow.rowNumber() + ": omitida por duplicado.");
                 batchStore.markImportRow(loadedRow.entity(), ImportRowStatus.SKIPPED, "Omitida por duplicado.");
                 return TransactionImportCommitResult.duplicate();
+            }
+
+            if (match.type().isDuplicate()) {
+                var message = ImportTextSupport.firstNonBlank(
+                        match.reason(),
+                        "Duplicado detectado durante la confirmación."
+                );
+                accumulator.error("Fila " + commitRow.rowNumber() + ": " + message);
+                batchStore.markImportRow(loadedRow.entity(), ImportRowStatus.ERROR, message);
+                return TransactionImportCommitResult.failed();
             }
 
             accumulator.warning(

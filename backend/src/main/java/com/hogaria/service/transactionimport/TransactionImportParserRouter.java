@@ -45,7 +45,7 @@ public class TransactionImportParserRouter {
 
         try {
             return switch (source) {
-                case AUTO -> parseDetectedExcel(file.getBytes(), profileId, accountId, null);
+                case AUTO -> parseAuto(file, profileId, accountId, year, month);
                 case BANCO_PROVINCIA -> parseDetectedExcel(
                         file.getBytes(),
                         profileId,
@@ -75,6 +75,22 @@ public class TransactionImportParserRouter {
         } catch (Exception ex) {
             throw new BadRequestException("Cannot parse file: " + ex.getMessage());
         }
+    }
+
+    private List<TransactionImportPreviewRow> parseAuto(
+            MultipartFile file,
+            UUID profileId,
+            UUID accountId,
+            Integer year,
+            Integer month
+    ) throws Exception {
+        var bytes = file.getBytes();
+
+        if (ImportFileTypeDetector.looksLikeExcelFile(bytes, file.getOriginalFilename())) {
+            return parseDetectedExcel(bytes, profileId, accountId, null);
+        }
+
+        return mercadoPagoDelimitedImportParser.parse(bytes, profileId, accountId, year, month);
     }
 
     private List<TransactionImportPreviewRow> parseMercadoPago(

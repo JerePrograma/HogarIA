@@ -19,7 +19,6 @@ import com.hogaria.repository.TransactionImportReferenceRepository;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 
@@ -109,10 +108,12 @@ public class TransactionImportBatchStore {
 
                         return new LoadedPreviewRow(previewRow, entity);
                     } catch (Exception ignored) {
-                        return null;
+                        throw new BadRequestException(
+                                "No se pudo leer la fila persistida " + entity.getRowNumber()
+                                        + " del batch " + batchId + "."
+                        );
                     }
                 })
-                .filter(Objects::nonNull)
                 .toList();
     }
 

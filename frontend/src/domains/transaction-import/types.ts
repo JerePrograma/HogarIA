@@ -88,6 +88,11 @@ export interface TransactionImportPreview {
   needsCategoryRows?: number;
   reviewRows?: number;
   errorRows?: number;
+  internalTransferRows?: number;
+  technicalNeutralRows?: number;
+  blockedRows?: number;
+  blockingCategoryRows?: number;
+  crossSourceRiskRows?: number;
   rows: TransactionImportRow[];
   warnings?: string[];
   errors?: string[];

@@ -102,6 +102,26 @@ class TransactionImportRuleClassifierTest {
     assertEquals(ClassificationLayer.SOURCE_SPECIFIC, result.classificationLayer());
   }
 
+  @Test
+  void mercadoPagoRefundIsNeutralAdjustmentInsteadOfExpense() {
+    var result = classifier.classifyMercadoPago(
+            new BigDecimal("3413.00"),
+            "Uber",
+            "Devolución de dinero",
+            "",
+            "",
+            "",
+            "true",
+            "",
+            "",
+            MoneyTransaction.PaymentChannel.MERCADO_PAGO
+    );
+
+    assertEquals(MoneyTransaction.MovementType.ADJUSTMENT, result.movementType());
+    assertEquals(MoneyTransaction.BalanceImpact.REFUND_OR_REIMBURSEMENT, result.balanceImpact());
+    assertEquals("RULE_MP_REFUND", result.classificationReason());
+  }
+
   private void assertResult(
           String name,
           String expectedCategoryKey,

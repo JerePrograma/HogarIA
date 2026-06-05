@@ -107,15 +107,15 @@ public class BancoProvinciaMovimientosExcelParser extends ExcelImportParserSuppo
     var extendedDescription = value(values, detection.headerIndexes(), "Descripción Extendida");
     var merchantName = value(values, detection.headerIndexes(), "Nombre Comercio");
 
-    if (dateText.isBlank() && amountText.isBlank() && description.isBlank()) {
-      return null;
+    if (dateText.isBlank() || amountText.isBlank()) {
+      throw new IllegalArgumentException("Faltan fecha o importe.");
     }
 
     var realDate = parseBancoProvinciaDate(dateText);
     var signedAmount = parseAmount(amountText);
 
     if (signedAmount.signum() == 0) {
-      return null;
+      throw new IllegalArgumentException("Importe cero.");
     }
 
     var merchant = merchantExtractor.fromBancoProvincia(description, extendedDescription, merchantName);

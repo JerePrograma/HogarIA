@@ -51,12 +51,16 @@ export function isCategoryTypeCompatibleWithMovement(
     );
   }
 
-  /**
-   * TRANSFER y ADJUSTMENT tienen semántica más técnica.
-   * El backend los acepta con mayor libertad.
-   */
-  if (movementType === "TRANSFER" || movementType === "ADJUSTMENT") {
-    return true;
+  if (movementType === "TRANSFER") {
+    return (
+      categoryType === "SAVING" ||
+      categoryType === "INVESTMENT" ||
+      categoryType === "VARIABLE_EXPENSE"
+    );
+  }
+
+  if (movementType === "ADJUSTMENT") {
+    return categoryType !== "INCOME";
   }
 
   return false;

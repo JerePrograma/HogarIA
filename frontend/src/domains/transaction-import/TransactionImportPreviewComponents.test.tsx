@@ -84,7 +84,9 @@ describe("transaction import preview components", () => {
         importableRows={8}
         duplicateRows={2}
         invalidRows={1}
-        ignoredRows={1}
+        blockedRows={4}
+        blockingCategoryRows={1}
+        internalTransferRows={2}
         suggestedCategoryRows={6}
         reviewRows={3}
         needsCategoryRows={2}
@@ -99,7 +101,7 @@ describe("transaction import preview components", () => {
     expect(screen.getByText("6")).toBeInTheDocument();
     expect(screen.getByText("3")).toBeInTheDocument();
     expect(screen.getAllByText("2").length).toBeGreaterThan(0);
-    expect(screen.getByText("4")).toBeInTheDocument();
+    expect(screen.getAllByText("4").length).toBeGreaterThan(0);
   });
 
   it("shows duplicate rows and the skip reason before import", () => {
@@ -139,7 +141,7 @@ describe("transaction import preview components", () => {
     const categorySelect = screen
       .getAllByRole("combobox")
       .find((select) =>
-        within(select).queryByRole("option", { name: "Taxi y apps" }),
+        within(select).queryByRole("option", { name: /Taxi y apps/ }),
       );
 
     expect(categorySelect).toBeDefined();
@@ -169,14 +171,14 @@ describe("transaction import preview components", () => {
     expect(onCommit).toHaveBeenCalledTimes(1);
   });
 
-  it("does not disable confirmation for REVIEW rows without category", () => {
+  it("does not disable confirmation for technical REVIEW rows without category", () => {
     const rows = [
       buildRow({
         status: "REVIEW",
-        movementType: "INCOME",
-        balanceImpact: "UNKNOWN",
-        classificationStatus: "REVIEW",
-        classificationReason: "RULE_MP_GENERIC_INFLOW_REVIEW",
+        movementType: "TRANSFER",
+        balanceImpact: "INTERNAL_TRANSFER",
+        classificationStatus: "TECHNICAL",
+        classificationReason: "RULE_MP_FUNDING_TRANSFER",
         suggestedCategoryId: null,
         suggestedCategoryName: null,
       }),
@@ -195,6 +197,27 @@ describe("transaction import preview components", () => {
     );
 
     expect(screen.getByRole("button", { name: "Confirmar importación" })).toBeEnabled();
+  });
+
+  it("shows internal transfers without increasing duplicate count", () => {
+    render(
+      <ImportPreviewSummary
+        totalRows={1}
+        importableRows={1}
+        duplicateRows={0}
+        invalidRows={0}
+        blockedRows={0}
+        blockingCategoryRows={0}
+        internalTransferRows={1}
+        reviewRows={1}
+        needsCategoryRows={0}
+        technicalNeutralRows={1}
+      />,
+    );
+
+    expect(screen.getByText("Transferencias").nextElementSibling).toHaveTextContent("1");
+    expect(screen.getByText("Duplicadas").nextElementSibling).toHaveTextContent("0");
+    expect(screen.queryByText(/Otros a revisar/i)).not.toBeInTheDocument();
   });
 
   it("disables confirmation for NEEDS_CATEGORY rows until fallback is enabled", () => {

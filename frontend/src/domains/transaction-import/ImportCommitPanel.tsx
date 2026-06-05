@@ -20,7 +20,7 @@ export function ImportCommitPanel({
         {hasMissingCategory ? (
           <p className="mensaje-warning">
             Hay filas NEEDS_CATEGORY sin categoría. Asigná una categoría o activá
-            “Otros a revisar” antes de confirmar.
+            una categoría temporal compatible antes de confirmar.
           </p>
         ) : (
           <p className="muted">

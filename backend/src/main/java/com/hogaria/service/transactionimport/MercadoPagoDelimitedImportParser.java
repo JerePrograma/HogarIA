@@ -163,10 +163,6 @@ public class MercadoPagoDelimitedImportParser {
                         month
                 );
 
-                if (candidate == null) {
-                    continue;
-                }
-
                 outputRowNumber++;
                 candidates.add(candidate);
             } catch (Exception ex) {
@@ -226,14 +222,14 @@ public class MercadoPagoDelimitedImportParser {
         );
 
         if (originDateText.isBlank() || amountText.isBlank()) {
-            return null;
+            throw new IllegalArgumentException("Faltan fecha o monto neto.");
         }
 
         var parsedDate = parseMercadoPagoDateTime(originDateText);
         var signedAmount = parseAmount(amountText);
 
         if (signedAmount.signum() == 0) {
-            return null;
+            throw new IllegalArgumentException("Importe cero.");
         }
 
         var operationId = firstHeaderValue(

@@ -42,7 +42,9 @@ public class TransactionImportCategoryResolver {
             return previewRow.suggestedCategoryId();
         }
 
-        if (!request.createMissingFallbackCategory() || previewRow.status() != RowStatus.NEEDS_CATEGORY) {
+        if (!request.createMissingFallbackCategory()
+                || canImportWithoutCategory(previewRow)
+                || !needsFallbackCategory(previewRow)) {
             return null;
         }
 
@@ -58,20 +60,17 @@ public class TransactionImportCategoryResolver {
     }
 
     public boolean canImportWithoutCategory(TransactionImportPreviewRow row) {
-        if (row.status() == RowStatus.NEEDS_CATEGORY) {
-            return false;
-        }
+        return canImportWithoutCategory(row.classificationStatus(), row.balanceImpact());
+    }
 
-        return row.status() == RowStatus.REVIEW
-                || row.status() == RowStatus.POSSIBLE_INTERNAL_TRANSFER
-                || row.status() == RowStatus.INTERNAL_TRANSFER_MATCHED
-                || row.status() == RowStatus.POSSIBLE_CROSS_SOURCE_DUPLICATE
-                || row.classificationStatus() == MoneyTransaction.ClassificationStatus.REVIEW
-                || row.classificationStatus() == MoneyTransaction.ClassificationStatus.NEEDS_CATEGORY
-                || row.classificationStatus() == MoneyTransaction.ClassificationStatus.TECHNICAL
-                || row.balanceImpact() == MoneyTransaction.BalanceImpact.INTERNAL_TRANSFER
-                || row.balanceImpact() == MoneyTransaction.BalanceImpact.NEUTRAL_ADJUSTMENT
-                || row.balanceImpact() == MoneyTransaction.BalanceImpact.TECHNICAL;
+    public boolean canImportWithoutCategory(
+            MoneyTransaction.ClassificationStatus classificationStatus,
+            MoneyTransaction.BalanceImpact balanceImpact
+    ) {
+        return classificationStatus == MoneyTransaction.ClassificationStatus.TECHNICAL
+                || balanceImpact == MoneyTransaction.BalanceImpact.INTERNAL_TRANSFER
+                || balanceImpact == MoneyTransaction.BalanceImpact.NEUTRAL_ADJUSTMENT
+                || balanceImpact == MoneyTransaction.BalanceImpact.TECHNICAL;
     }
 
     public MoneyTransaction.Status importStatusFor(TransactionImportPreviewRow row, UUID categoryId) {
@@ -87,6 +86,11 @@ public class TransactionImportCategoryResolver {
         }
 
         return MoneyTransaction.Status.PENDING;
+    }
+
+    public boolean needsFallbackCategory(TransactionImportPreviewRow row) {
+        return row.status() == RowStatus.NEEDS_CATEGORY
+                || row.classificationStatus() == MoneyTransaction.ClassificationStatus.NEEDS_CATEGORY;
     }
 
     public MoneyTransaction.ClassificationStatus inferClassificationStatus(

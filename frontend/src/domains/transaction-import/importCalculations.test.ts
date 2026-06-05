@@ -30,8 +30,21 @@ function buildRow(overrides: Partial<TransactionImportRow> = {}): TransactionImp
 }
 
 describe("transaction import calculations", () => {
-  it("does not block confirmation for REVIEW rows without category", () => {
+  it("blocks operational REVIEW rows without category", () => {
     const rows = [buildRow()];
+
+    expect(countBlockingMissingCategoryRows(rows, false)).toBe(1);
+    expect(countImportableRows(rows, false)).toBe(0);
+  });
+
+  it("does not block technical REVIEW rows without category", () => {
+    const rows = [
+      buildRow({
+        movementType: "TRANSFER",
+        balanceImpact: "INTERNAL_TRANSFER",
+        classificationStatus: "TECHNICAL",
+      }),
+    ];
 
     expect(countBlockingMissingCategoryRows(rows, false)).toBe(0);
     expect(countImportableRows(rows, false)).toBe(1);

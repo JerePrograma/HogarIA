@@ -121,16 +121,7 @@ export function ImportRowsTable({
                 categoriesById,
               );
 
-              function isExistingMovementStatus(status: TransactionImportRow["status"]) {
-                return [
-                  "DUPLICATE",
-                  "DUPLICATE_EXACT",
-                  "POSSIBLE_INTERNAL_TRANSFER",
-                  "INTERNAL_TRANSFER_MATCHED",
-                  "POSSIBLE_CROSS_SOURCE_DUPLICATE",
-                  "SKIPPED",
-                ].includes(status);
-              }
+              const locked = isLockedImportRowStatus(row.status);
 
               return (
                 <tr key={row.rowNumber}>
@@ -215,7 +206,7 @@ export function ImportRowsTable({
                       <select
                         className="input-ui"
                         value={row.movementType}
-                        disabled={isExistingMovementStatus(row.status)}
+                        disabled={locked}
                         onChange={(event) =>
                           updateRow(row.rowNumber, {
                             movementType: event.target
@@ -240,6 +231,7 @@ export function ImportRowsTable({
                       <ImportRowCategorySelect
                         row={row}
                         categories={categories}
+                        disabled={locked}
                         onChange={(categoryId) =>
                           updateRow(row.rowNumber, {
                             suggestedCategoryId: categoryId,

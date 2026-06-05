@@ -153,17 +153,13 @@ export function getImportRowIssueMessage(
     row.status === "POSSIBLE_INTERNAL_TRANSFER" ||
     row.status === "INTERNAL_TRANSFER_MATCHED"
   ) {
-    return (
-      row.skipReason ||
-      "Posible transferencia interna: mismo monto, fecha cercana y cuenta distinta. Se omite para no inflar ingresos/gastos."
-    );
+    return row.status === "INTERNAL_TRANSFER_MATCHED"
+      ? "Transferencia interna detectada. Se importará como movimiento técnico/neutro, sin impacto operativo."
+      : "Posible transferencia interna. Se puede importar como movimiento técnico/neutro para no inflar ingresos o gastos.";
   }
 
   if (row.status === "POSSIBLE_CROSS_SOURCE_DUPLICATE") {
-    return (
-      row.skipReason ||
-      "Posible duplicado entre Banco Provincia y Mercado Pago. Revisar antes de contar ambos como consumo."
-    );
+    return "Posible duplicado entre fuentes. Revisalo antes de confirmar; no se trata como duplicado exacto.";
   }
 
   if (row.status === "SKIPPED" && row.skipReason) {

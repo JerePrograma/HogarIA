@@ -7,9 +7,10 @@ interface Props {
   row: TransactionImportRow;
   categories: Category[];
   onChange: (categoryId: string | null) => void;
+  disabled?: boolean;
 }
 
-export function ImportRowCategorySelect({ row, categories, onChange }: Props) {
+export function ImportRowCategorySelect({ row, categories, onChange, disabled = false }: Props) {
   const compatibleCategories = getSelectableCategoriesForImportRow(
     row,
     categories,
@@ -25,6 +26,7 @@ export function ImportRowCategorySelect({ row, categories, onChange }: Props) {
     <select
       className="input-ui"
       value={row.suggestedCategoryId ?? ""}
+      disabled={disabled}
       onChange={(event) => onChange(event.target.value || null)}
     >
       <option value="">Sin categoría asignada</option>

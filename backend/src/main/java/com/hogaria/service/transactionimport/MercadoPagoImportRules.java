@@ -57,6 +57,25 @@ final class MercadoPagoImportRules {
                     Confidence.HIGH
             ));
 
+    rule(rules, ClassificationLayer.SOURCE_SPECIFIC, 30, "RULE_MP_REFUND", "operationType",
+            movement -> containsAny(normalizer, movement, "operationType", "devolucion", "reembolso", "refund"),
+            movement -> result(
+                    movement,
+                    ClassificationLayer.SOURCE_SPECIFIC,
+                    "operationType",
+                    movement.operationType(),
+                    MoneyTransaction.MovementType.ADJUSTMENT,
+                    MoneyTransaction.BalanceImpact.REFUND_OR_REIMBURSEMENT,
+                    movement.paymentChannel(),
+                    "reintegrosydevoluciones",
+                    "Reintegros y devoluciones",
+                    MoneyTransaction.ClassificationStatus.CLASSIFIED,
+                    "RULE_MP_REFUND",
+                    Confidence.HIGH,
+                    RowStatus.READY,
+                    "Devolución detectada: no se cuenta como ingreso operativo ni como consumo."
+            ));
+
     text(rules, 100, "RULE_MP_SUBE_TRANSPORT", new String[]{"sube", "carga tarjeta sube", "pasajes"}, "transportepublico", "Transporte público", MoneyTransaction.PaymentChannel.TRANSPORT_CARD);
     text(rules, 110, "RULE_MP_UBER", new String[]{"uber"}, "taxiyapps", "Taxi y apps", MoneyTransaction.PaymentChannel.MERCADO_PAGO);
     text(rules, 120, "RULE_MP_DIA_SUPERMARKET", new String[]{"compra en dia", "dia"}, "supermercado", "Supermercado", MoneyTransaction.PaymentChannel.MERCADO_PAGO);

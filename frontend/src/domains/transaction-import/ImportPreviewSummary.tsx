@@ -3,7 +3,9 @@ interface Props {
   importableRows: number;
   duplicateRows: number;
   invalidRows: number;
-  ignoredRows: number;
+  blockedRows: number;
+  blockingCategoryRows: number;
+  internalTransferRows: number;
   reviewRows?: number;
   needsCategoryRows?: number;
   technicalNeutralRows?: number;
@@ -35,14 +37,14 @@ export function ImportPreviewSummary({
   importableRows,
   duplicateRows,
   invalidRows,
-  ignoredRows,
+  blockedRows,
+  blockingCategoryRows,
+  internalTransferRows,
   reviewRows = 0,
   needsCategoryRows = 0,
   technicalNeutralRows = 0,
   suggestedCategoryRows = 0,
 }: Props) {
-  const blockedRows = invalidRows + ignoredRows;
-
   return (
     <section className="import-preview-summary" aria-label="Resumen de previsualización">
       <SummaryItem
@@ -76,8 +78,15 @@ export function ImportPreviewSummary({
       <SummaryItem
         title="Necesitan categoría"
         value={needsCategoryRows}
-        helper="Requieren categoría manual o fallback."
+        helper="Filas detectadas como pendientes de categoría."
         tone={needsCategoryRows > 0 ? 'warning' : 'neutral'}
+      />
+
+      <SummaryItem
+        title="Bloqueadas por categoría"
+        value={blockingCategoryRows}
+        helper="No tienen una decisión de categoría compatible."
+        tone={blockingCategoryRows > 0 ? 'warning' : 'neutral'}
       />
 
       <SummaryItem
@@ -85,6 +94,13 @@ export function ImportPreviewSummary({
         value={reviewRows}
         helper="Pueden quedar pendientes o neutrales."
         tone={reviewRows > 0 ? 'warning' : 'neutral'}
+      />
+
+      <SummaryItem
+        title="Transferencias"
+        value={internalTransferRows}
+        helper="Internas/técnicas, sin impacto operativo."
+        tone={internalTransferRows > 0 ? 'info' : 'neutral'}
       />
 
       <SummaryItem
@@ -97,7 +113,7 @@ export function ImportPreviewSummary({
       <SummaryItem
         title="Bloqueadas"
         value={blockedRows}
-        helper="Errores u omisiones detectadas."
+        helper="Filas que no se crearán con la decisión actual."
         tone={blockedRows > 0 ? 'danger' : 'neutral'}
       />
 

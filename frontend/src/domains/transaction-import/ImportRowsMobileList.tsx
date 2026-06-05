@@ -26,6 +26,10 @@ interface Props {
   onUpdateRow: (rowNumber: number, patch: Partial<TransactionImportRow>) => void;
 }
 
+function isLockedImportRowStatus(status: TransactionImportRow["status"]) {
+  return ["DUPLICATE", "DUPLICATE_EXACT", "SKIPPED", "ERROR"].includes(status);
+}
+
 function compactMeta(row: TransactionImportRow) {
   return [
     row.paymentChannel
@@ -56,6 +60,7 @@ export function ImportRowsMobileList({
       {rows.map((row) => {
         const issueMessage = getImportRowIssueMessage(row, createMissingFallbackCategory);
         const categoryName = getSuggestedCategoryName(row, categoriesById);
+        const locked = isLockedImportRowStatus(row.status);
 
         return (
           <article key={row.rowNumber} className="import-row-card">
@@ -89,6 +94,7 @@ export function ImportRowsMobileList({
                 <select
                   className="input-ui"
                   value={row.movementType}
+                  disabled={locked}
                   onChange={(event) =>
                     onUpdateRow(row.rowNumber, {
                       movementType: event.target.value as TransactionImportMovementType,
@@ -109,6 +115,7 @@ export function ImportRowsMobileList({
                 <ImportRowCategorySelect
                   row={row}
                   categories={categories}
+                  disabled={locked}
                   onChange={(categoryId) =>
                     onUpdateRow(row.rowNumber, { suggestedCategoryId: categoryId })
                   }

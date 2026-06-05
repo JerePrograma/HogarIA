@@ -111,15 +111,19 @@ public class MercadoPagoSettlementExcelParser extends ExcelImportParserSupport i
     var approvalDateText = value(values, detection.headerIndexes(), "FECHA DE APROBACIÓN");
     var amountText = value(values, detection.headerIndexes(), "MONTO NETO DE LA OPERACIÓN QUE IMPACTÓ TU DINERO");
 
-    if (originDateText.isBlank() && amountText.isBlank()) {
-      return null;
+    if (originDateText.isBlank() && approvalDateText.isBlank()) {
+      throw new IllegalArgumentException("Falta fecha de origen/aprobación.");
+    }
+
+    if (amountText.isBlank()) {
+      throw new IllegalArgumentException("Falta monto neto que impactó el dinero.");
     }
 
     var parsedDate = parseMercadoPagoDateTime(firstNonBlank(originDateText, approvalDateText));
     var signedAmount = parseAmount(amountText);
 
     if (signedAmount.signum() == 0) {
-      return null;
+      throw new IllegalArgumentException("Importe cero.");
     }
 
     var operationId = value(values, detection.headerIndexes(), "ID DE OPERACIÓN EN MERCADO PAGO");

@@ -105,7 +105,9 @@ public class TransactionImportDtos {
                                                  int duplicateRows, int skippedRows, int unresolvedRows, List<TransactionImportPreviewRow> rows,
                                                  List<String> warnings, List<String> errors,
                                                  String detectedFormat, int suggestedCategoryRows, int needsCategoryRows,
-                                                 int reviewRows, int errorRows) {
+                                                 int reviewRows, int errorRows, int internalTransferRows,
+                                                 int technicalNeutralRows, int blockedRows,
+                                                 int blockingCategoryRows, int crossSourceRiskRows) {
     public TransactionImportPreviewResponse(UUID batchId, TransactionImportSource source, UUID accountId, int totalRows, int importableRows,
                                             int duplicateRows, int skippedRows, int unresolvedRows, List<TransactionImportPreviewRow> rows,
                                             List<String> warnings, List<String> errors) {
@@ -125,7 +127,12 @@ public class TransactionImportDtos {
               rows == null ? 0 : (int) rows.stream().filter(row -> row.suggestedCategoryId() != null).count(),
               unresolvedRows,
               rows == null ? 0 : (int) rows.stream().filter(row -> row.status() == RowStatus.REVIEW).count(),
-              rows == null ? 0 : (int) rows.stream().filter(row -> row.status() == RowStatus.ERROR).count()
+              rows == null ? 0 : (int) rows.stream().filter(row -> row.status() == RowStatus.ERROR).count(),
+              0,
+              0,
+              Math.max(0, totalRows - importableRows),
+              unresolvedRows,
+              0
       );
     }
   }

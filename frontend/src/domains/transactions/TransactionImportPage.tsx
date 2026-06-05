@@ -2,7 +2,10 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
 import { queryKeys } from "../../domain/queryKeys";
-import { getCategoryDisplayName } from "../../domain/transactionRules";
+import {
+  getCategoryDisplayName,
+  isCategoryTypeCompatibleWithMovement,
+} from "../../domain/transactionRules";
 import { listAccounts } from "../../api/accountsApi";
 import { listCategories } from "../../api/categoriesApi";
 import {
@@ -109,34 +112,6 @@ function buildCommitPayload(
   };
 }
 
-function isCategoryCompatibleWithImportedMovement(
-  row: TransactionImportRow,
-  categoriesById: Map<string, { type: string }>,
-): boolean {
-  if (!row.suggestedCategoryId) return true;
-
-  const category = categoriesById.get(row.suggestedCategoryId);
-  if (!category) return true;
-
-  if (row.movementType === "INCOME") {
-    return category.type === "INCOME";
-  }
-
-  if (row.movementType === "SAVING") {
-    return category.type === "SAVING" || category.type === "INVESTMENT";
-  }
-
-  if (row.movementType === "EXPENSE") {
-    return (
-      category.type === "FIXED_EXPENSE" ||
-      category.type === "VARIABLE_EXPENSE" ||
-      category.type === "DEBT"
-    );
-  }
-
-  return true;
-}
-
 export function TransactionImportPage() {
   const { profileId = "" } = useParams();
   const qc = useQueryClient();
@@ -229,39 +204,46 @@ export function TransactionImportPage() {
     },
   });
 
-  const incompatibleRows = useMemo(
+  const incompatibleRowNumbers = useMemo(
     () =>
-      rows.filter(
+      new Set(
+        rows.filter(
         (row) =>
-          (row.status === "READY" ||
-            row.status === "NEEDS_CATEGORY" ||
-            row.status === "REVIEW") &&
-          !isCategoryCompatibleWithImportedMovement(row, categoriesById),
-      ).length,
+          !["DUPLICATE", "DUPLICATE_EXACT", "SKIPPED", "ERROR"].includes(
+            row.status,
+          ) &&
+          Boolean(row.suggestedCategoryId) &&
+          Boolean(categoriesById.get(row.suggestedCategoryId ?? "")) &&
+          !isCategoryTypeCompatibleWithMovement(
+            categoriesById.get(row.suggestedCategoryId ?? "")!.type,
+            row.movementType,
+          ),
+        ).map((row) => row.rowNumber),
+      ),
     [categoriesById, rows],
   );
+  const incompatibleRows = incompatibleRowNumbers.size;
 
   const derived = useMemo(
     () =>
       buildImportDerivedState(
         rows,
         createMissingFallbackCategory,
-        incompatibleRows,
+        incompatibleRowNumbers,
         skipDuplicatesConfirmed,
       ),
     [
       rows,
       createMissingFallbackCategory,
-      incompatibleRows,
+      incompatibleRowNumbers,
       skipDuplicatesConfirmed,
     ],
   );
 
   const invalidRows = derived.errorRows;
-  const ignoredRows = derived.skippedRows;
   const duplicateRows = derived.duplicateRows;
-  const exactDuplicateRows = derived.exactDuplicateRows;
   const needsCategoryRows = derived.needsCategoryRows;
+  const missingCategoryRows = derived.missingCategoryRows;
   const unresolvedRows = derived.blockingMissingCategoryRows;
   const reviewRows = derived.reviewRows;
   const technicalNeutralRows = derived.technicalNeutralRows;
@@ -339,10 +321,7 @@ export function TransactionImportPage() {
   const canCommit = Boolean(
     preview?.batchId &&
     importableRows > 0 &&
-    unresolvedRows === 0 &&
-    invalidRows === 0 &&
-    incompatibleRows === 0 &&
-    (exactDuplicateRows === 0 || skipDuplicatesConfirmed) &&
+    !derived.hasBlockingIssues &&
     !commitMutation.isPending,
   );
 
@@ -396,16 +375,18 @@ export function TransactionImportPage() {
   };
 
   const duplicateDecisionMissing =
-    exactDuplicateRows > 0 && !skipDuplicatesConfirmed;
+    duplicateRows > 0 && !skipDuplicatesConfirmed;
   const hasPreviewRows = rows.length > 0;
 
   const wizardSteps = buildWizardSteps({
     currentStep,
     totalRows: preview?.totalRows ?? rows.length,
     invalidRows,
-    exactDuplicateRows,
     internalRows: derived.internalTransferRows,
     blockingCategoryRows: derived.blockingMissingCategoryRows,
+    missingCategoryRows: derived.missingCategoryRows,
+    fallbackCoveredRows: derived.fallbackCoveredRows,
+    categoryOptionalRows: derived.categoryOptionalRows,
     duplicateRows: derived.duplicateRows,
     reviewRows,
     technicalNeutralRows,
@@ -636,7 +617,9 @@ export function TransactionImportPage() {
                   importableRows={importableRows}
                   duplicateRows={duplicateRows}
                   invalidRows={invalidRows}
-                  ignoredRows={ignoredRows}
+                  blockedRows={derived.blockedRows}
+                  blockingCategoryRows={derived.blockingMissingCategoryRows}
+                  internalTransferRows={derived.internalTransferRows}
                   reviewRows={reviewRows}
                   needsCategoryRows={needsCategoryRows}
                   technicalNeutralRows={technicalNeutralRows}
@@ -680,7 +663,7 @@ export function TransactionImportPage() {
                       }
                     />
                     <span>
-                      Omitir duplicados exactos detectados en este archivo
+                      Omitir duplicados reales detectados en este archivo
                     </span>
                   </label>
                 </section>
@@ -703,7 +686,7 @@ export function TransactionImportPage() {
                           {unresolvedRows} fila(s) necesitan categoría.
                         </strong>
                         <span>
-                          Asigná una categoría o activá “Otros a revisar” para
+                          Asigná una categoría o activá una categoría temporal compatible para
                           continuar. Las filas en revisión técnica o neutra no
                           bloquean por categoría.
                         </span>
@@ -713,7 +696,7 @@ export function TransactionImportPage() {
                     {duplicateDecisionMissing ? (
                       <div className="mensaje-warning">
                         <strong>
-                          {exactDuplicateRows} duplicado(s) exacto(s).
+                          {duplicateRows} duplicado(s) real(es).
                         </strong>
                         <span>
                           Marcá que querés omitirlos antes de confirmar.
@@ -726,7 +709,7 @@ export function TransactionImportPage() {
                 {!importableRows ? (
                   <EmptyState
                     title="No hay filas importables"
-                    message="No hay filas nuevas para importar. Se detectaron duplicados, transferencias internas u operaciones omitidas por seguridad. Podés revisar recategorización de movimientos existentes."
+                    message="No hay filas nuevas para importar con la decisión actual. Revisá duplicados, categorías y errores antes de confirmar."
                   />
                 ) : null}
 
@@ -1022,9 +1005,24 @@ export function TransactionImportPage() {
                   <strong>{importableRows}</strong>
                 </div>
 
-                <div className={needsCategoryRows > 0 ? "tone-warning" : ""}>
+                <div className={missingCategoryRows > 0 ? "tone-warning" : ""}>
                   <span>Sin categoría</span>
-                  <strong>{needsCategoryRows}</strong>
+                  <strong>{missingCategoryRows}</strong>
+                </div>
+
+                <div className={unresolvedRows > 0 ? "tone-warning" : ""}>
+                  <span>Bloqueadas por categoría</span>
+                  <strong>{unresolvedRows}</strong>
+                </div>
+
+                <div>
+                  <span>Cubiertas por fallback</span>
+                  <strong>{derived.fallbackCoveredRows}</strong>
+                </div>
+
+                <div>
+                  <span>Sin categoría, no bloquean</span>
+                  <strong>{derived.categoryOptionalRows}</strong>
                 </div>
 
                 <div className={reviewRows > 0 ? "tone-warning" : ""}>
@@ -1035,6 +1033,11 @@ export function TransactionImportPage() {
                 <div className={technicalNeutralRows > 0 ? "tone-neutral" : ""}>
                   <span>Técnicas/neutras</span>
                   <strong>{technicalNeutralRows}</strong>
+                </div>
+
+                <div className={derived.internalTransferRows > 0 ? "tone-neutral" : ""}>
+                  <span>Transferencias internas</span>
+                  <strong>{derived.internalTransferRows}</strong>
                 </div>
 
                 <div className={duplicateRows > 0 ? "tone-neutral" : ""}>
@@ -1063,7 +1066,7 @@ export function TransactionImportPage() {
 
               <ul className="transaction-import-rule-list">
                 <li>Las filas listas se importan.</li>
-                <li>Los duplicados se omiten por defecto.</li>
+                <li>Los duplicados se omiten cuando confirmás esa decisión.</li>
                 <li>Las filas con error no se importan.</li>
                 <li>Las filas sin categoría dependen de la regla fallback.</li>
               </ul>
@@ -1080,9 +1083,11 @@ function buildWizardSteps({
   totalRows,
   invalidRows,
   duplicateRows,
-  exactDuplicateRows,
   internalRows,
   blockingCategoryRows,
+  missingCategoryRows,
+  fallbackCoveredRows,
+  categoryOptionalRows,
   reviewRows,
   technicalNeutralRows,
   incompatibleRows,
@@ -1095,9 +1100,11 @@ function buildWizardSteps({
   totalRows: number;
   invalidRows: number;
   duplicateRows: number;
-  exactDuplicateRows: number;
   internalRows: number;
   blockingCategoryRows: number;
+  missingCategoryRows: number;
+  fallbackCoveredRows: number;
+  categoryOptionalRows: number;
   reviewRows: number;
   technicalNeutralRows: number;
   incompatibleRows: number;
@@ -1130,7 +1137,7 @@ function buildWizardSteps({
       counter: `${duplicateRows} detectado(s)`,
       description: "Evitamos contar dos veces el mismo gasto o ingreso.",
       action: duplicateDecisionMissing
-        ? `Omití explícitamente ${exactDuplicateRows} duplicado(s) exacto(s).`
+        ? `Omití explícitamente ${duplicateRows} duplicado(s) real(es).`
         : "Sin bloqueo por duplicados.",
       blocked: duplicateDecisionMissing,
     },
@@ -1142,7 +1149,7 @@ function buildWizardSteps({
         "Detectamos plata movida entre tus cuentas para no inflar el mes.",
       action:
         internalRows > 0
-          ? "Se omiten o revisan antes de contar."
+          ? "Se importan como movimientos técnicos/neutros, sin inflar el mes."
           : "Sin pares sospechosos.",
       blocked: false,
     },
@@ -1154,6 +1161,8 @@ function buildWizardSteps({
       action:
         blockingCategoryRows > 0 || incompatibleRows > 0
           ? "Elegí categorías compatibles o usá fallback antes de confirmar."
+          : fallbackCoveredRows > 0 || categoryOptionalRows > 0
+            ? `${missingCategoryRows} sin categoría: ${fallbackCoveredRows} con fallback y ${categoryOptionalRows} técnica(s)/neutra(s).`
           : reviewRows > 0
             ? "Hay filas en revisión que pueden importarse sin confirmar impacto operativo."
             : "Categorías listas.",

@@ -58,7 +58,11 @@ public class TransactionImportDuplicateDetector {
             }
 
             if (row.source() != null && row.sourceOperationId() != null) {
-                var operationKey = row.source().name() + "|" + row.sourceOperationId();
+                var operationKey = row.source().name()
+                        + "|" + row.sourceOperationId()
+                        + "|" + row.realDate()
+                        + "|" + amountKey(row.rawSignedAmount())
+                        + "|" + row.movementType();
 
                 if (!seenOperations.add(operationKey)) {
                     resolved.add(copyWithStatus(row, new TransactionImportMatch(
@@ -130,11 +134,18 @@ public class TransactionImportDuplicateDetector {
                     null
             );
 
-            if (!matches.isEmpty()) {
+            var sameFinancialRow = matches
+                    .stream()
+                    .filter(transaction -> Objects.equals(transaction.getRealDate(), row.realDate()))
+                    .filter(transaction -> sameAmount(transaction.getAmount(), row.amount()))
+                    .filter(transaction -> Objects.equals(transaction.getMovementType(), row.movementType()))
+                    .findFirst();
+
+            if (sameFinancialRow.isPresent()) {
                 return new TransactionImportMatch(
                         TransactionImportMatchType.SOURCE_DUPLICATE,
-                        matches.get(0).getId(),
-                        "Duplicado de origen: source + sourceOperationId."
+                        sameFinancialRow.get().getId(),
+                        "Duplicado de origen: misma operación y misma firma contable."
                 );
             }
         }
@@ -147,12 +158,18 @@ public class TransactionImportDuplicateDetector {
         );
 
         for (var transaction : nearby) {
+            if (transaction.getStatus() == MoneyTransaction.Status.IGNORED
+                    || transaction.getClassificationStatus() == MoneyTransaction.ClassificationStatus.IGNORED_BY_RULE) {
+                continue;
+            }
+
             if (Objects.equals(transaction.getAccountId(), accountId)
-                    && normalizeDescription(transaction.getDescription()).equals(normalizeDescription(row.normalizedDescription()))) {
+                    && Objects.equals(transaction.getRealDate(), row.realDate())
+                    && Objects.equals(transaction.getMovementType(), row.movementType())) {
                 return new TransactionImportMatch(
                         TransactionImportMatchType.STRONG_SAME_ACCOUNT_DUPLICATE,
                         transaction.getId(),
-                        "Duplicado fuerte en misma cuenta/fecha/monto."
+                        "Duplicado fuerte en misma cuenta, fecha, monto y tipo."
                 );
             }
 
@@ -201,6 +218,10 @@ public class TransactionImportDuplicateDetector {
         var matchedTransaction = match.matchedTransactionId() == null
                 ? null
                 : txRepository.findById(match.matchedTransactionId()).orElse(null);
+        boolean internalTransferRisk = match.type() == TransactionImportMatchType.POSSIBLE_INTERNAL_TRANSFER
+                || match.type() == TransactionImportMatchType.INTERNAL_TRANSFER_MATCHED;
+        boolean crossSourceRisk = match.type() == TransactionImportMatchType.POSSIBLE_CROSS_SOURCE_DUPLICATE;
+        boolean keepSuggestedCategory = !internalTransferRisk || isTechnicalTransferCategory(row.suggestedCategoryId());
 
         return new TransactionImportPreviewRow(
                 row.rowNumber(),
@@ -214,9 +235,9 @@ public class TransactionImportDuplicateDetector {
                 row.rawSignedAmount(),
                 row.amount(),
                 row.currency(),
-                row.movementType(),
-                row.suggestedCategoryId(),
-                row.suggestedCategoryName(),
+                internalTransferRisk ? MoneyTransaction.MovementType.TRANSFER : row.movementType(),
+                keepSuggestedCategory ? row.suggestedCategoryId() : null,
+                keepSuggestedCategory ? row.suggestedCategoryName() : null,
                 row.confidence(),
                 resolvedStatus,
                 match.reason(),
@@ -236,10 +257,14 @@ public class TransactionImportDuplicateDetector {
                 row.merchantName(),
                 row.counterparty(),
                 row.counterpartyDocumentHash(),
-                row.paymentChannel(),
-                row.balanceImpact(),
-                row.classificationStatus(),
-                row.classificationReason(),
+                internalTransferRisk ? MoneyTransaction.PaymentChannel.INTERNAL_TRANSFER : row.paymentChannel(),
+                internalTransferRisk ? MoneyTransaction.BalanceImpact.INTERNAL_TRANSFER : row.balanceImpact(),
+                match.type() == TransactionImportMatchType.INTERNAL_TRANSFER_MATCHED
+                        ? MoneyTransaction.ClassificationStatus.TECHNICAL
+                        : internalTransferRisk || crossSourceRisk
+                        ? MoneyTransaction.ClassificationStatus.REVIEW
+                        : row.classificationStatus(),
+                match.type().isReviewOnlyRisk() ? match.type().name() : row.classificationReason(),
                 row.classificationLayer(),
                 row.classificationMatchedField(),
                 row.classificationMatchedValue(),
@@ -360,5 +385,28 @@ public class TransactionImportDuplicateDetector {
         }
 
         return "";
+    }
+
+    private boolean sameAmount(java.math.BigDecimal left, java.math.BigDecimal right) {
+        return left != null && right != null && left.compareTo(right) == 0;
+    }
+
+    private String amountKey(java.math.BigDecimal amount) {
+        return amount == null ? "" : amount.stripTrailingZeros().toPlainString();
+    }
+
+    private boolean isTechnicalTransferCategory(UUID categoryId) {
+        if (categoryId == null) {
+            return false;
+        }
+
+        return categoryRepository
+                .findById(categoryId)
+                .filter(category -> Boolean.TRUE.equals(category.getTechnical()))
+                .map(Category::getType)
+                .filter(type -> type == Category.Type.SAVING
+                        || type == Category.Type.INVESTMENT
+                        || type == Category.Type.VARIABLE_EXPENSE)
+                .isPresent();
     }
 }

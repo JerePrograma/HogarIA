@@ -5,6 +5,8 @@ import com.hogaria.dto.TransactionImportDtos.TransactionImportPreviewRow;
 import com.hogaria.dto.TransactionImportDtos.TransactionImportSource;
 import com.hogaria.exception.ForbiddenException;
 import com.hogaria.exception.NotFoundException;
+import com.hogaria.exception.BadRequestException;
+import com.hogaria.repository.AccountRepository;
 import com.hogaria.repository.ExcelImportBatchRepository;
 import com.hogaria.repository.FinancialProfileRepository;
 import java.util.Map;
@@ -19,6 +21,7 @@ public class TransactionImportPreviewService {
     private static final String DEFAULT_CURRENCY = "ARS";
 
     private final FinancialProfileRepository profileRepository;
+    private final AccountRepository accountRepository;
     private final ExcelImportBatchRepository batchRepository;
     private final TransactionImportParserRouter parserRouter;
     private final TransactionImportDuplicateDetector duplicateDetector;
@@ -27,6 +30,7 @@ public class TransactionImportPreviewService {
 
     public TransactionImportPreviewService(
             FinancialProfileRepository profileRepository,
+            AccountRepository accountRepository,
             ExcelImportBatchRepository batchRepository,
             TransactionImportParserRouter parserRouter,
             TransactionImportDuplicateDetector duplicateDetector,
@@ -34,6 +38,7 @@ public class TransactionImportPreviewService {
             TransactionImportSummaryFactory summaryFactory
     ) {
         this.profileRepository = profileRepository;
+        this.accountRepository = accountRepository;
         this.batchRepository = batchRepository;
         this.parserRouter = parserRouter;
         this.duplicateDetector = duplicateDetector;
@@ -51,6 +56,7 @@ public class TransactionImportPreviewService {
             Integer month
     ) {
         ensureProfileBelongsToUser(profileId, userId);
+        ensureAccountBelongsToProfile(accountId, profileId);
 
         var requestedSource = source == null ? TransactionImportSource.AUTO : source;
         var rows = parserRouter.parse(requestedSource, file, profileId, accountId, year, month);
@@ -96,7 +102,11 @@ public class TransactionImportPreviewService {
             throw new NotFoundException("Batch has no readable rows");
         }
 
-        return summaryFactory.summarize(batchId, rows.get(0).source(), null, rows);
+        var source = batch.getSource() == null
+                ? rows.get(0).source()
+                : TransactionImportSource.valueOf(batch.getSource());
+
+        return summaryFactory.summarize(batchId, source, batch.getAccountId(), rows);
     }
 
     private TransactionImportSource resolveActualSource(
@@ -123,5 +133,11 @@ public class TransactionImportPreviewService {
         profileRepository
                 .findByIdAndUserId(profileId, userId)
                 .orElseThrow(() -> new ForbiddenException("Profile does not belong to user"));
+    }
+
+    private void ensureAccountBelongsToProfile(UUID accountId, UUID profileId) {
+        if (accountId == null || !accountRepository.existsByIdAndProfileId(accountId, profileId)) {
+            throw new BadRequestException("Account does not belong to profile");
+        }
     }
 }

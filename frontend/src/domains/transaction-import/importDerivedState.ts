@@ -6,7 +6,10 @@ export interface ImportDerivedState {
   totalRows: number;
   readyRows: number;
   needsCategoryRows: number;
+  missingCategoryRows: number;
   blockingMissingCategoryRows: number;
+  fallbackCoveredRows: number;
+  categoryOptionalRows: number;
   duplicateRows: number;
   exactDuplicateRows: number;
   crossSourceRiskRows: number;
@@ -23,7 +26,7 @@ export interface ImportDerivedState {
 export function buildImportDerivedState(
   rows: TransactionImportRow[],
   createMissingFallbackCategory: boolean,
-  incompatibleRows: number,
+  incompatibleRowNumbers: ReadonlySet<number>,
   skipDuplicatesConfirmed: boolean,
 ): ImportDerivedState {
   const totalRows = rows.length;
@@ -50,32 +53,69 @@ export function buildImportDerivedState(
 
   const reviewRows = rows.filter(isReviewRow).length;
 
-  const blockingMissingCategoryRows = rows.filter(
-    (row) =>
-      row.status === "NEEDS_CATEGORY" &&
-      !row.suggestedCategoryId &&
-      !createMissingFallbackCategory,
+  const missingCategoryRows = rows.filter(
+    (row) => !row.suggestedCategoryId && !isNonImportableStatus(row),
   ).length;
 
-  const importableRows = rows.filter((row) =>
-    isImportableRow(row, createMissingFallbackCategory),
+  const blockingMissingCategoryRows = rows.filter(
+    (row) =>
+      !row.suggestedCategoryId &&
+      !isNonImportableStatus(row) &&
+      !canImportWithoutCategory(row) &&
+      !(createMissingFallbackCategory && needsFallbackCategory(row)),
+  ).length;
+
+  const fallbackCoveredRows = rows.filter(
+    (row) =>
+      !row.suggestedCategoryId &&
+      !canImportWithoutCategory(row) &&
+      createMissingFallbackCategory &&
+      needsFallbackCategory(row) &&
+      !isNonImportableStatus(row),
+  ).length;
+
+  const categoryOptionalRows = rows.filter(
+    (row) =>
+      !row.suggestedCategoryId &&
+      canImportWithoutCategory(row) &&
+      !isNonImportableStatus(row),
+  ).length;
+
+  const importableRows = rows.filter(
+    (row) =>
+      !incompatibleRowNumbers.has(row.rowNumber) &&
+      isImportableRow(row, createMissingFallbackCategory),
   ).length;
 
   const duplicateDecisionMissing =
-    exactDuplicateRows > 0 && !skipDuplicatesConfirmed;
+    duplicateRows > 0 && !skipDuplicatesConfirmed;
 
-  const blockedRows =
-    errorRows +
-    skippedRows +
-    blockingMissingCategoryRows +
-    incompatibleRows +
-    (duplicateDecisionMissing ? exactDuplicateRows : 0);
+  const blockedRows = rows.filter(
+    (row) =>
+      row.status === "ERROR" ||
+      row.status === "SKIPPED" ||
+      incompatibleRowNumbers.has(row.rowNumber) ||
+      (!isNonImportableStatus(row) &&
+        !row.suggestedCategoryId &&
+        !canImportWithoutCategory(row) &&
+        !(createMissingFallbackCategory && needsFallbackCategory(row))) ||
+      isBlockingDuplicateRow(row),
+  ).length;
+
+  const hasBlockingIssues =
+    errorRows > 0 ||
+    blockingMissingCategoryRows > 0 ||
+    incompatibleRowNumbers.size > 0 ||
+    duplicateDecisionMissing;
 
   return {
     totalRows,
     readyRows,
     needsCategoryRows,
+    missingCategoryRows,
     blockingMissingCategoryRows,
+    fallbackCoveredRows,
+    categoryOptionalRows,
     duplicateRows,
     exactDuplicateRows,
     crossSourceRiskRows,
@@ -86,7 +126,7 @@ export function buildImportDerivedState(
     errorRows,
     importableRows,
     blockedRows,
-    hasBlockingIssues: blockedRows > 0,
+    hasBlockingIssues,
   };
 }
 
@@ -135,16 +175,7 @@ export function isReviewRow(row: TransactionImportRow): boolean {
 }
 
 export function canImportWithoutCategory(row: TransactionImportRow): boolean {
-  if (row.status === "NEEDS_CATEGORY") {
-    return false;
-  }
-
   return (
-    row.status === "REVIEW" ||
-    row.status === "POSSIBLE_INTERNAL_TRANSFER" ||
-    row.status === "INTERNAL_TRANSFER_MATCHED" ||
-    row.status === "POSSIBLE_CROSS_SOURCE_DUPLICATE" ||
-    row.classificationStatus === "REVIEW" ||
     row.classificationStatus === "TECHNICAL" ||
     row.balanceImpact === "INTERNAL_TRANSFER" ||
     row.balanceImpact === "NEUTRAL_ADJUSTMENT" ||
@@ -172,5 +203,20 @@ export function isImportableRow(
     return true;
   }
 
-  return row.status === "NEEDS_CATEGORY" && createMissingFallbackCategory;
+  return createMissingFallbackCategory && needsFallbackCategory(row);
+}
+
+export function needsFallbackCategory(row: TransactionImportRow): boolean {
+  return (
+    row.status === "NEEDS_CATEGORY" ||
+    row.classificationStatus === "NEEDS_CATEGORY"
+  );
+}
+
+function isNonImportableStatus(row: TransactionImportRow): boolean {
+  return (
+    row.status === "ERROR" ||
+    row.status === "SKIPPED" ||
+    isBlockingDuplicateRow(row)
+  );
 }
