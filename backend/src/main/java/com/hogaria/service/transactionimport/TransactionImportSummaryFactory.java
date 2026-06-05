@@ -158,8 +158,7 @@ public class TransactionImportSummaryFactory {
     }
 
     private boolean isInternalTransfer(TransactionImportPreviewRow row) {
-        return row.status() == RowStatus.POSSIBLE_INTERNAL_TRANSFER
-                || row.status() == RowStatus.INTERNAL_TRANSFER_MATCHED
+        return row.status() == RowStatus.INTERNAL_TRANSFER_MATCHED
                 || row.balanceImpact() == com.hogaria.entity.MoneyTransaction.BalanceImpact.INTERNAL_TRANSFER
                 || row.paymentChannel() == com.hogaria.entity.MoneyTransaction.PaymentChannel.INTERNAL_TRANSFER
                 || (row.classificationStatus() == com.hogaria.entity.MoneyTransaction.ClassificationStatus.TECHNICAL

@@ -2,8 +2,14 @@ package com.hogaria.entity;
 
 public enum ImportRowStatus {
     READY,
+    NEEDS_CATEGORY,
+    REVIEW,
+    DUPLICATE,
+    DUPLICATE_EXACT,
+    POSSIBLE_INTERNAL_TRANSFER,
+    INTERNAL_TRANSFER_MATCHED,
+    POSSIBLE_CROSS_SOURCE_DUPLICATE,
     IMPORTED,
     SKIPPED,
-    WARNING,
     ERROR
 }

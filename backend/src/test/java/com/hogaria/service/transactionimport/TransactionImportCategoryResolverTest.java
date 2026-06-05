@@ -43,7 +43,7 @@ class TransactionImportCategoryResolverTest {
     }
 
     @Test
-    void canImportWithoutCategoryOnlyForTechnicalOrNeutralSemantics() {
+    void canImportReviewWithoutCategoryAsPendingAndTechnicalOrNeutralAsConfirmed() {
         assertTrue(resolver.canImportWithoutCategory(row(
                 RowStatus.REVIEW,
                 MoneyTransaction.MovementType.TRANSFER,
@@ -56,7 +56,7 @@ class TransactionImportCategoryResolverTest {
                 MoneyTransaction.BalanceImpact.NEUTRAL_ADJUSTMENT,
                 MoneyTransaction.ClassificationStatus.REVIEW
         )));
-        assertFalse(resolver.canImportWithoutCategory(row(
+        assertTrue(resolver.canImportWithoutCategory(row(
                 RowStatus.REVIEW,
                 MoneyTransaction.MovementType.EXPENSE,
                 MoneyTransaction.BalanceImpact.CONSUMPTION_EXPENSE,

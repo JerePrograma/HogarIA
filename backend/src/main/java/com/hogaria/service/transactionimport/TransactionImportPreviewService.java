@@ -27,6 +27,7 @@ public class TransactionImportPreviewService {
     private final TransactionImportDuplicateDetector duplicateDetector;
     private final TransactionImportBatchStore batchStore;
     private final TransactionImportSummaryFactory summaryFactory;
+    private final ImportInternalTransferMatchingService internalTransferMatchingService;
 
     public TransactionImportPreviewService(
             FinancialProfileRepository profileRepository,
@@ -35,7 +36,8 @@ public class TransactionImportPreviewService {
             TransactionImportParserRouter parserRouter,
             TransactionImportDuplicateDetector duplicateDetector,
             TransactionImportBatchStore batchStore,
-            TransactionImportSummaryFactory summaryFactory
+            TransactionImportSummaryFactory summaryFactory,
+            ImportInternalTransferMatchingService internalTransferMatchingService
     ) {
         this.profileRepository = profileRepository;
         this.accountRepository = accountRepository;
@@ -44,6 +46,7 @@ public class TransactionImportPreviewService {
         this.duplicateDetector = duplicateDetector;
         this.batchStore = batchStore;
         this.summaryFactory = summaryFactory;
+        this.internalTransferMatchingService = internalTransferMatchingService;
     }
 
     public TransactionImportPreviewResponse preview(
@@ -82,7 +85,8 @@ public class TransactionImportPreviewService {
 
         batchStore.savePreviewRows(batch.getId(), actualSource, resolvedRows);
 
-        return summaryFactory.summarize(batch.getId(), actualSource, accountId, resolvedRows);
+        var matchedRows = internalTransferMatchingService.applyToBatch(profileId, batch.getId());
+        return summaryFactory.summarize(batch.getId(), actualSource, accountId, matchedRows);
     }
 
     public TransactionImportPreviewResponse getBatch(UUID userId, UUID profileId, UUID batchId) {

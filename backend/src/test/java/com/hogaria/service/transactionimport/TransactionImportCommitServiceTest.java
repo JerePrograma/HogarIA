@@ -35,6 +35,7 @@ class TransactionImportCommitServiceTest {
         var batchStore = org.mockito.Mockito.mock(TransactionImportBatchStore.class);
         var duplicateDetector = org.mockito.Mockito.mock(TransactionImportDuplicateDetector.class);
         var categoryResolver = org.mockito.Mockito.mock(TransactionImportCategoryResolver.class);
+        var internalTransfers = org.mockito.Mockito.mock(ImportInternalTransferMatchingService.class);
         var userId = UUID.randomUUID();
         var profileId = UUID.randomUUID();
         var accountId = UUID.randomUUID();
@@ -67,7 +68,7 @@ class TransactionImportCommitServiceTest {
         when(txService.create(any(TransactionCreateRequest.class), eq(userId), any(TransactionService.TransactionMetadata.class)))
                 .thenReturn(response);
         var service = new TransactionImportCommitService(
-                profiles, accounts, txService, batchStore, duplicateDetector, categoryResolver
+                profiles, accounts, txService, batchStore, duplicateDetector, categoryResolver, internalTransfers
         );
         var request = new TransactionImportCommitRequest(List.of(
                 new TransactionImportCommitRow(

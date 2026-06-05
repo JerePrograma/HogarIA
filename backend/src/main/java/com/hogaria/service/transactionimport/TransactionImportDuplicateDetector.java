@@ -165,19 +165,21 @@ public class TransactionImportDuplicateDetector {
 
             if (Objects.equals(transaction.getAccountId(), accountId)
                     && Objects.equals(transaction.getRealDate(), row.realDate())
-                    && Objects.equals(transaction.getMovementType(), row.movementType())) {
+                    && Objects.equals(transaction.getMovementType(), row.movementType())
+                    && sameSource(row, transaction)
+                    && sameStrongSignature(row, transaction)) {
                 return new TransactionImportMatch(
                         TransactionImportMatchType.STRONG_SAME_ACCOUNT_DUPLICATE,
                         transaction.getId(),
-                        "Duplicado fuerte en misma cuenta, fecha, monto y tipo."
+                        "Duplicado fuerte en misma cuenta, fuente, fecha, monto, tipo y firma normalizada."
                 );
             }
 
             if (isBancoProvinciaMercadoPagoFundingPair(row, transaction)) {
                 return new TransactionImportMatch(
-                        TransactionImportMatchType.INTERNAL_TRANSFER_MATCHED,
+                        TransactionImportMatchType.POSSIBLE_INTERNAL_TRANSFER,
                         transaction.getId(),
-                        "Fondeo Banco Provincia ↔ Mercado Pago detectado: mismo monto y fecha cercana. Se marca para revisión técnica."
+                        "Posible fondeo Banco Provincia ↔ Mercado Pago por monto y fecha cercana. Requiere own_id/match explícito."
                 );
             }
 
@@ -218,10 +220,10 @@ public class TransactionImportDuplicateDetector {
         var matchedTransaction = match.matchedTransactionId() == null
                 ? null
                 : txRepository.findById(match.matchedTransactionId()).orElse(null);
-        boolean internalTransferRisk = match.type() == TransactionImportMatchType.POSSIBLE_INTERNAL_TRANSFER
-                || match.type() == TransactionImportMatchType.INTERNAL_TRANSFER_MATCHED;
+        boolean confirmedInternalTransfer = match.type() == TransactionImportMatchType.INTERNAL_TRANSFER_MATCHED;
+        boolean possibleInternalTransfer = match.type() == TransactionImportMatchType.POSSIBLE_INTERNAL_TRANSFER;
         boolean crossSourceRisk = match.type() == TransactionImportMatchType.POSSIBLE_CROSS_SOURCE_DUPLICATE;
-        boolean keepSuggestedCategory = !internalTransferRisk || isTechnicalTransferCategory(row.suggestedCategoryId());
+        boolean keepSuggestedCategory = !confirmedInternalTransfer || isTechnicalTransferCategory(row.suggestedCategoryId());
 
         return new TransactionImportPreviewRow(
                 row.rowNumber(),
@@ -235,7 +237,7 @@ public class TransactionImportDuplicateDetector {
                 row.rawSignedAmount(),
                 row.amount(),
                 row.currency(),
-                internalTransferRisk ? MoneyTransaction.MovementType.TRANSFER : row.movementType(),
+                confirmedInternalTransfer ? MoneyTransaction.MovementType.TRANSFER : row.movementType(),
                 keepSuggestedCategory ? row.suggestedCategoryId() : null,
                 keepSuggestedCategory ? row.suggestedCategoryName() : null,
                 row.confidence(),
@@ -257,11 +259,11 @@ public class TransactionImportDuplicateDetector {
                 row.merchantName(),
                 row.counterparty(),
                 row.counterpartyDocumentHash(),
-                internalTransferRisk ? MoneyTransaction.PaymentChannel.INTERNAL_TRANSFER : row.paymentChannel(),
-                internalTransferRisk ? MoneyTransaction.BalanceImpact.INTERNAL_TRANSFER : row.balanceImpact(),
-                match.type() == TransactionImportMatchType.INTERNAL_TRANSFER_MATCHED
+                row.paymentChannel(),
+                confirmedInternalTransfer ? MoneyTransaction.BalanceImpact.INTERNAL_TRANSFER : row.balanceImpact(),
+                confirmedInternalTransfer
                         ? MoneyTransaction.ClassificationStatus.TECHNICAL
-                        : internalTransferRisk || crossSourceRisk
+                        : possibleInternalTransfer || crossSourceRisk
                         ? MoneyTransaction.ClassificationStatus.REVIEW
                         : row.classificationStatus(),
                 match.type().isReviewOnlyRisk() ? match.type().name() : row.classificationReason(),
@@ -324,9 +326,7 @@ public class TransactionImportDuplicateDetector {
         var text = normalizeText(value);
 
         return text.contains("DEBITO DEBIN")
-                || text.contains("DB.DEBIN")
-                || text.contains("DEBITO CUENTA DNI")
-                || text.contains("TRASPASO");
+                || text.contains("DB.DEBIN");
     }
 
     private boolean isMercadoPagoInternalFunding(String value) {
@@ -358,6 +358,21 @@ public class TransactionImportDuplicateDetector {
 
     private String normalizeDescription(String value) {
         return normalizeText(value).replaceAll("\\s+", " ").trim();
+    }
+
+    private boolean sameSource(TransactionImportPreviewRow row, MoneyTransaction transaction) {
+        return row.source() != null
+                && transaction.getSource() != null
+                && row.source().name().equalsIgnoreCase(transaction.getSource());
+    }
+
+    private boolean sameStrongSignature(TransactionImportPreviewRow row, MoneyTransaction transaction) {
+        var rowSignature = normalizeDescription(firstNonBlank(row.normalizedDescription(), row.rawDescription()));
+        var transactionSignature = normalizeDescription(firstNonBlank(
+                transaction.getNormalizedDescription(),
+                transaction.getDescription()
+        ));
+        return !rowSignature.isBlank() && rowSignature.equals(transactionSignature);
     }
 
     private String normalizeText(String value) {

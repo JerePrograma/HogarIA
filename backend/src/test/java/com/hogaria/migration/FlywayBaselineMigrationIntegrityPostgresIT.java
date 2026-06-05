@@ -18,7 +18,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 @Testcontainers(disabledWithoutDocker = true)
 class FlywayBaselineMigrationIntegrityPostgresIT {
 
-    private static final int EXPECTED_ACTIVE_GLOBAL_CATEGORY_COUNT = 56;
+    private static final int EXPECTED_ACTIVE_GLOBAL_CATEGORY_COUNT = 57;
     private static final int EXPECTED_GLOBAL_MERCHANT_ALIAS_COUNT = 15;
 
     @Container
@@ -63,6 +63,8 @@ class FlywayBaselineMigrationIntegrityPostgresIT {
                 "excel_import_row",
                 "merchant_alias",
                 "counterparty_alias",
+                "import_counterparty_alias",
+                "import_internal_transfer_match",
                 "classification_rule",
                 "transaction_classification_audit",
                 "monthly_plan_item",
@@ -74,6 +76,8 @@ class FlywayBaselineMigrationIntegrityPostgresIT {
 
         assertColumnNullable("money_transaction", "category_id");
         assertColumnExists("money_transaction", "classification_explanation_json");
+        assertColumnExists("money_transaction", "counterparty_document_hash");
+        assertColumnExists("money_transaction", "external_sequence");
         assertColumnExists("excel_import_row", "raw_json");
         assertColumnExists("excel_import_row", "merchant_name");
         assertColumnExists("excel_import_row", "extended_description");
@@ -81,6 +85,10 @@ class FlywayBaselineMigrationIntegrityPostgresIT {
         assertColumnExists("excel_import_row", "source_hash");
         assertColumnExists("excel_import_row", "counterparty_document_hash");
         assertColumnExists("excel_import_row", "classification_explanation_json");
+        assertColumnExists("excel_import_row", "signed_amount");
+        assertColumnExists("excel_import_row", "amount_abs");
+        assertColumnExists("excel_import_row", "operation_datetime");
+        assertColumnExists("excel_import_row", "balance_impact");
         assertColumnExists("transaction_import_reference", "classification_explanation_json");
         assertColumnNullable("external_loan_sync_config", "account_id");
         assertColumnNullable("external_loan_sync_config", "loan_disbursement_category_id");
@@ -91,16 +99,17 @@ class FlywayBaselineMigrationIntegrityPostgresIT {
         assertIndexExists("ux_category_global_key_type");
         assertIndexExists("ux_account_profile_key_currency_active");
         assertIndexExists("ux_money_tx_profile_source_hash");
-        assertIndexExists("ux_money_tx_profile_source_operation_idempotent");
+        assertIndexExists("ux_money_tx_profile_source_operation_signature");
         assertIndexExists("idx_transaction_import_reference_profile_source_hash");
         assertIndexExists("ux_merchant_alias_global_source_alias");
         assertIndexExists("ux_merchant_alias_profile_source_alias");
         assertIndexExists("ux_counterparty_alias_profile_source_document");
+        assertIndexExists("ux_import_counterparty_alias_profile_type_identifier");
         assertIndexExists("ux_classification_rule_profile_reason");
 
         assertIndexDoesNotExist("ux_money_tx_profile_source_operation_strict");
         assertIndexDefinitionContains("ux_money_tx_profile_source_hash", "status <> 'IGNORED'");
-        assertIndexDefinitionContains("ux_money_tx_profile_source_operation_idempotent", "classification_status <> 'IGNORED_BY_RULE'");
+        assertIndexDefinitionContains("ux_money_tx_profile_source_operation_signature", "classification_status <> 'IGNORED_BY_RULE'");
     }
 
     @Test
@@ -171,6 +180,7 @@ class FlywayBaselineMigrationIntegrityPostgresIT {
         assertChildCategoryExists("Ingresos", "Sueldo");
         assertChildCategoryExists("Ingresos", "Intereses y rendimientos");
         assertChildCategoryExists("Ingresos", "Rendimiento Mercado Pago");
+        assertChildCategoryExists("Ingresos", "Ingresos por servicios y proyectos");
         assertChildCategoryExists("Alimentación", "Supermercado");
         assertChildCategoryExists("Alimentación", "Delivery y restaurantes");
         assertChildCategoryExists("Transporte", "Transporte público");
@@ -245,14 +255,16 @@ class FlywayBaselineMigrationIntegrityPostgresIT {
     }
 
     @Test
-    void flywayHistoryContainsOnlyTheSingleBaselineMigration() {
+    void flywayHistoryContainsBaselineAndFinancialImportRefactor() {
         assertThat(count("SELECT count(*) FROM flyway_schema_history WHERE success = TRUE"))
-                .isEqualTo(1);
-        assertThat(jdbc.queryForObject(
-                "SELECT script FROM flyway_schema_history WHERE success = TRUE",
+                .isEqualTo(2);
+        assertThat(jdbc.queryForList(
+                "SELECT script FROM flyway_schema_history WHERE success = TRUE ORDER BY installed_rank",
                 String.class
-        ))
-                .isEqualTo("V1__baseline_schema_and_seed.sql");
+        )).containsExactly(
+                "V1__baseline_schema_and_seed.sql",
+                "V2__financial_import_matching_and_audit.sql"
+        );
     }
 
     private static Set<String> publicTables() {

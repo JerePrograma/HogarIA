@@ -76,6 +76,26 @@ final class MercadoPagoImportRules {
                     "Devolución detectada: no se cuenta como ingreso operativo ni como consumo."
             ));
 
+    rule(rules, ClassificationLayer.SOURCE_SPECIFIC, 40, "RULE_MP_CASHBACK", "rawDescription",
+            movement -> isPositive(movement)
+                    && containsAny(normalizer, movement, "rawDescription", "se acredito dinero", "cashback", "beneficio"),
+            movement -> result(
+                    movement,
+                    ClassificationLayer.SOURCE_SPECIFIC,
+                    "rawDescription",
+                    movement.rawDescription(),
+                    MoneyTransaction.MovementType.INCOME,
+                    MoneyTransaction.BalanceImpact.REFUND_OR_REIMBURSEMENT,
+                    movement.paymentChannel(),
+                    "beneficiosypromociones",
+                    "Beneficios y promociones",
+                    MoneyTransaction.ClassificationStatus.CLASSIFIED,
+                    "RULE_MP_CASHBACK",
+                    Confidence.HIGH,
+                    RowStatus.READY,
+                    "Beneficio/reintegro: no se cuenta como ingreso operativo."
+            ));
+
     text(rules, 100, "RULE_MP_SUBE_TRANSPORT", new String[]{"sube", "carga tarjeta sube", "pasajes"}, "transportepublico", "Transporte público", MoneyTransaction.PaymentChannel.TRANSPORT_CARD);
     text(rules, 110, "RULE_MP_UBER", new String[]{"uber"}, "taxiyapps", "Taxi y apps", MoneyTransaction.PaymentChannel.MERCADO_PAGO);
     text(rules, 120, "RULE_MP_DIA_SUPERMARKET", new String[]{"compra en dia", "dia"}, "supermercado", "Supermercado", MoneyTransaction.PaymentChannel.MERCADO_PAGO);
@@ -102,7 +122,7 @@ final class MercadoPagoImportRules {
                       "normalizedDescription",
                       firstNonBlank(movement.rawDescription(), movement.extendedDescription()),
                       isPayment ? MoneyTransaction.MovementType.EXPENSE : MoneyTransaction.MovementType.ADJUSTMENT,
-                      isPayment ? MoneyTransaction.BalanceImpact.DEBT_OUTFLOW : MoneyTransaction.BalanceImpact.NEUTRAL_ADJUSTMENT,
+                      isPayment ? MoneyTransaction.BalanceImpact.DEBT_OUTFLOW : MoneyTransaction.BalanceImpact.LOAN_ORIGINATION,
                       MoneyTransaction.PaymentChannel.MERCADO_CREDITO,
                       "mercadocredito",
                       "Mercado Crédito",
@@ -115,7 +135,7 @@ final class MercadoPagoImportRules {
             });
 
     rule(rules, ClassificationLayer.SOURCE_SPECIFIC, 300, "RULE_MP_FUNDING_TRANSFER", "rawDescription",
-            movement -> containsAny(normalizer, movement, "normalizedDescription",
+            movement -> isPositive(movement) && containsAny(normalizer, movement, "normalizedDescription",
                     "pago debin",
                     "bank transfer",
                     "transferencia bancaria",
@@ -127,16 +147,16 @@ final class MercadoPagoImportRules {
                     ClassificationLayer.SOURCE_SPECIFIC,
                     "normalizedDescription",
                     firstNonBlank(movement.rawDescription(), movement.extendedDescription()),
-                    MoneyTransaction.MovementType.TRANSFER,
-                    MoneyTransaction.BalanceImpact.INTERNAL_TRANSFER,
+                    MoneyTransaction.MovementType.INCOME,
+                    MoneyTransaction.BalanceImpact.UNKNOWN,
                     movement.paymentChannel(),
-                    "fondeomercadopago",
-                    "Fondeo Mercado Pago",
-                    MoneyTransaction.ClassificationStatus.TECHNICAL,
+                    null,
+                    null,
+                    MoneyTransaction.ClassificationStatus.REVIEW,
                     "RULE_MP_FUNDING_TRANSFER",
                     Confidence.MEDIUM,
                     RowStatus.REVIEW,
-                    "Fondeo/transferencia de Mercado Pago. No impacta como ingreso operativo."
+                    "Transferencia/fondeo candidato. Sólo será interno con match fuerte contra una cuenta propia."
             ));
 
     rule(rules, ClassificationLayer.SOURCE_SPECIFIC, 310, "RULE_MP_PAYMENT_LINK_REVIEW", "rawDescription",
@@ -171,6 +191,23 @@ final class MercadoPagoImportRules {
                     "RULE_MP_GENERIC_DETAIL_REVIEW",
                     Confidence.LOW,
                     "Detalle genérico. Usar historial confirmado o revisión manual; no se autoclasifica por pagador."
+            ));
+
+    rule(rules, ClassificationLayer.GENERIC_FALLBACK, 850, "RULE_MP_UNKNOWN_MERCHANT_REVIEW", "merchant",
+            movement -> isNegative(movement) && !isBlank(movement.merchantRaw()),
+            movement -> review(
+                    movement,
+                    ClassificationLayer.GENERIC_FALLBACK,
+                    "merchant",
+                    movement.merchantRaw(),
+                    MoneyTransaction.MovementType.EXPENSE,
+                    MoneyTransaction.BalanceImpact.CONSUMPTION_EXPENSE,
+                    movement.paymentChannel(),
+                    null,
+                    null,
+                    "RULE_MP_UNKNOWN_MERCHANT_REVIEW",
+                    Confidence.LOW,
+                    "Comercio sin alias confiable. Es consumo real pendiente de categoría."
             ));
 
     rule(rules, ClassificationLayer.GENERIC_FALLBACK, 900, "NO_IMPORT_RULE", "normalizedDescription",
@@ -270,6 +307,14 @@ final class MercadoPagoImportRules {
     return movement.amount() != null && movement.amount().signum() < 0
             ? MoneyTransaction.MovementType.EXPENSE
             : MoneyTransaction.MovementType.INCOME;
+  }
+
+  private static boolean isPositive(NormalizedImportMovement movement) {
+    return movement.amount() != null && movement.amount().signum() > 0;
+  }
+
+  private static boolean isNegative(NormalizedImportMovement movement) {
+    return movement.amount() != null && movement.amount().signum() < 0;
   }
 
   private static boolean isBlank(String value) {

@@ -62,9 +62,7 @@ public class BudgetPlanningSuggestionService {
     private static final Pattern NON_ALNUM = Pattern.compile("[^\\p{Alnum}\\s]");
 
     private static final Set<String> EXCLUDED_CLASSIFICATION_REASONS = Set.of(
-            "POSSIBLE_INTERNAL_TRANSFER",
             "INTERNAL_TRANSFER_MATCHED",
-            "POSSIBLE_CROSS_SOURCE_DUPLICATE",
             "USER_MARKED_INTERNAL_TRANSFER",
             "USER_IGNORED_CROSS_SOURCE"
     );

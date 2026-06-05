@@ -27,6 +27,7 @@ class FinancialCashFlowClassifierTest {
   @Test
   void possibleCrossSourceDuplicateIsNotConsumptionByDefault() {
     var tx = tx(MoneyTransaction.MovementType.EXPENSE, "POSSIBLE_CROSS_SOURCE_DUPLICATE");
+    tx.setClassificationStatus(MoneyTransaction.ClassificationStatus.REVIEW);
 
     assertEquals(CashFlowTreatment.UNKNOWN, classifier.classify(tx, variableCategory(), null));
   }

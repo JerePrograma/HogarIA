@@ -691,7 +691,7 @@ public class DashboardService {
           externalTransfer = externalTransfer.add(amount);
           gross = gross.add(amount);
         }
-        case NEUTRAL_ADJUSTMENT -> neutral = neutral.add(amount);
+        case CASH_WITHDRAWAL, LOAN_ORIGINATION, NEUTRAL_ADJUSTMENT -> neutral = neutral.add(amount);
         case UNKNOWN -> {
           if (tx.getMovementType() == MoneyTransaction.MovementType.EXPENSE) {
             unknown = unknown.add(amount);
@@ -785,16 +785,13 @@ public class DashboardService {
         || impact.balanceImpact() == MoneyTransaction.BalanceImpact.INTERNAL_TRANSFER
         || hasAnyReason(
             tx,
-            "POSSIBLE_INTERNAL_TRANSFER",
             "INTERNAL_TRANSFER_MATCHED",
-            "TRANSFER_UNMATCHED",
             "USER_MARKED_INTERNAL_TRANSFER");
   }
 
   private boolean isDuplicateExcluded(MoneyTransaction tx) {
     return hasAnyReason(
         tx,
-        "POSSIBLE_CROSS_SOURCE_DUPLICATE",
         "USER_IGNORED_CROSS_SOURCE",
         "DUPLICATE_RESOLVED_KEEP",
         "EXACT_DUPLICATE",

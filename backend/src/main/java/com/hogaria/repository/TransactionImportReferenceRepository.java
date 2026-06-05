@@ -9,6 +9,8 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface TransactionImportReferenceRepository extends JpaRepository<TransactionImportReference, UUID> {
+  Optional<TransactionImportReference> findByProfileIdAndImportRowId(UUID profileId, UUID importRowId);
+
   Optional<TransactionImportReference> findByProfileIdAndAccountIdAndImportSourceAndSourceHash(
           UUID profileId,
           UUID accountId,

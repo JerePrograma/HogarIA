@@ -99,22 +99,30 @@ public class TransactionImportBatchStore {
         return rowRepository
                 .findByBatchIdOrderByRowNumber(batchId)
                 .stream()
-                .map(entity -> {
-                    try {
-                        var previewRow = objectMapper.readValue(
-                                entity.getRawJson(),
-                                TransactionImportPreviewRow.class
-                        );
-
-                        return new LoadedPreviewRow(previewRow, entity);
-                    } catch (Exception ignored) {
-                        throw new BadRequestException(
-                                "No se pudo leer la fila persistida " + entity.getRowNumber()
-                                        + " del batch " + batchId + "."
-                        );
-                    }
-                })
+                .map(this::toLoadedPreviewRow)
                 .toList();
+    }
+
+    public List<ImportInternalTransferMatcher.ImportRowSnapshot> loadProfileRowSnapshots(UUID profileId) {
+        return rowRepository.findByProfileIdOrderByBatchAndRow(profileId)
+                .stream()
+                .map(this::toLoadedPreviewRow)
+                .map(loaded -> new ImportInternalTransferMatcher.ImportRowSnapshot(
+                        loaded.entity().getId(),
+                        loaded.entity().getBatchId(),
+                        loaded.previewRow()
+                ))
+                .toList();
+    }
+
+    public void updatePreviewRow(UUID importRowId, TransactionImportPreviewRow previewRow) {
+        if (importRowId == null || previewRow == null) {
+            return;
+        }
+        rowRepository.findById(importRowId).ifPresent(entity -> {
+            applyPreviewRow(entity, previewRow);
+            rowRepository.save(entity);
+        });
     }
 
     public void markImportRow(ExcelImportRow row, ImportRowStatus status, String message) {
@@ -221,43 +229,77 @@ public class TransactionImportBatchStore {
             TransactionImportPreviewRow row
     ) {
         try {
-            rowRepository.save(
-                    ExcelImportRow.builder()
+            var entity = ExcelImportRow.builder()
                             .batchId(batchId)
                             .sheetName(ImportTextSupport.firstNonBlank(
                                     row.sheetName(),
                                     source == null ? null : source.name()
                             ))
-                            .rowNumber(row.rowNumber())
-                            .concept(ImportTextSupport.truncate(row.rawDescription(), 255))
-                            .month(row.budgetDate() == null ? null : row.budgetDate().getMonthValue())
-                            .realDate(row.realDate())
-                            .budgetDate(row.budgetDate())
-                            .amount(row.amount())
-                            .movementType(row.movementType())
-                            .sourceOperationId(row.sourceOperationId())
-                            .sourceHash(row.sourceHash())
-                            .externalSequence(row.externalSequence())
-                            .rawDescription(ImportTextSupport.truncate(row.rawDescription(), 255))
-                            .normalizedDescription(ImportTextSupport.truncate(row.normalizedDescription(), 500))
-                            .extendedDescription(ImportTextSupport.truncate(row.extendedDescription(), 500))
-                            .merchantName(ImportTextSupport.truncate(row.merchantName(), 255))
-                            .counterpartyName(ImportTextSupport.truncate(row.counterparty(), 255))
-                            .counterpartyDocumentHash(row.counterpartyDocumentHash())
-                            .paymentChannel(row.paymentChannel())
-                            .classificationStatus(row.classificationStatus())
-                            .classificationReason(ImportTextSupport.truncate(row.classificationReason(), 255))
-                            .classificationExplanationJson(row.classificationExplanationJson())
-                            .targetEntity(row.targetEntity())
-                            .status(TransactionImportRowStatusMapper.toImportRowStatus(row.status()))
-                            .errorMessage(row.skipReason())
-                            .rawJson(objectMapper.writeValueAsString(row))
-                            .build()
-            );
+                            .build();
+            applyPreviewRow(entity, row);
+            rowRepository.save(entity);
         } catch (Exception ex) {
             throw new BadRequestException(
                     "No se pudo guardar la fila de preview " + row.rowNumber() + ": " + ex.getMessage()
             );
+        }
+    }
+
+    private LoadedPreviewRow toLoadedPreviewRow(ExcelImportRow entity) {
+        try {
+            return new LoadedPreviewRow(
+                    objectMapper.readValue(entity.getRawJson(), TransactionImportPreviewRow.class),
+                    entity
+            );
+        } catch (Exception ignored) {
+            throw new BadRequestException(
+                    "No se pudo leer la fila persistida " + entity.getRowNumber()
+                            + " del batch " + entity.getBatchId() + "."
+            );
+        }
+    }
+
+    private void applyPreviewRow(ExcelImportRow entity, TransactionImportPreviewRow row) {
+        try {
+            entity.setRowNumber(row.rowNumber());
+            entity.setConcept(ImportTextSupport.truncate(row.rawDescription(), 255));
+            entity.setMonth(row.budgetDate() == null ? null : row.budgetDate().getMonthValue());
+            entity.setRealDate(row.realDate());
+            entity.setBudgetDate(row.budgetDate());
+            entity.setAmount(row.amount());
+            entity.setSignedAmount(row.rawSignedAmount());
+            entity.setAmountAbs(row.amount());
+            entity.setMovementType(row.movementType());
+            entity.setSource(row.source() == null ? null : row.source().name());
+            entity.setSourceOperationId(row.sourceOperationId());
+            entity.setSourceHash(row.sourceHash());
+            entity.setExternalSequence(row.externalSequence());
+            entity.setOperationDateTime(row.operationDateTime());
+            entity.setOperationDateTimePrecision(row.operationDateTimePrecision());
+            entity.setRawDescription(ImportTextSupport.truncate(row.rawDescription(), 255));
+            entity.setNormalizedDescription(ImportTextSupport.truncate(row.normalizedDescription(), 500));
+            entity.setExtendedDescription(ImportTextSupport.truncate(row.extendedDescription(), 500));
+            entity.setMerchantName(ImportTextSupport.truncate(row.merchantName(), 255));
+            entity.setCounterpartyName(ImportTextSupport.truncate(row.counterparty(), 255));
+            entity.setCounterparty(ImportTextSupport.truncate(row.counterparty(), 255));
+            entity.setCounterpartyDocumentHash(row.counterpartyDocumentHash());
+            entity.setPaymentChannel(row.paymentChannel());
+            entity.setBalanceImpact(row.balanceImpact());
+            entity.setClassificationStatus(row.classificationStatus());
+            entity.setClassificationReason(ImportTextSupport.truncate(row.classificationReason(), 255));
+            entity.setClassificationLayer(row.classificationLayer());
+            entity.setClassificationMatchedField(ImportTextSupport.truncate(row.classificationMatchedField(), 80));
+            entity.setClassificationMatchedValue(ImportTextSupport.truncate(row.classificationMatchedValue(), 500));
+            entity.setClassificationExplanationJson(row.classificationExplanationJson());
+            entity.setSuggestedCategoryId(row.suggestedCategoryId());
+            entity.setSuggestedCategoryName(ImportTextSupport.truncate(row.suggestedCategoryName(), 255));
+            entity.setTargetEntity(row.targetEntity());
+            entity.setStatus(TransactionImportRowStatusMapper.toImportRowStatus(row.status()));
+            entity.setErrorMessage(ImportTextSupport.truncate(row.skipReason(), 1000));
+            entity.setWarning(ImportTextSupport.truncate(row.skipReason(), 1000));
+            entity.setRawJson(objectMapper.writeValueAsString(row));
+        } catch (Exception ex) {
+            throw new BadRequestException("No se pudo persistir snapshot de fila: " + ex.getMessage());
         }
     }
 

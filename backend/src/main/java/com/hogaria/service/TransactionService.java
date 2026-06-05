@@ -1006,6 +1006,8 @@ public class TransactionService {
                 .paymentChannel(metadata != null && metadata.paymentChannel() != null ? metadata.paymentChannel() : request.paymentChannel())
                 .balanceImpact(metadata != null && metadata.balanceImpact() != null ? metadata.balanceImpact() : MoneyTransaction.BalanceImpact.UNKNOWN)
                 .counterparty(firstNonBlank(metadata == null ? null : metadata.counterparty(), request.counterparty()))
+                .counterpartyDocumentHash(metadata == null ? null : metadata.counterpartyDocumentHash())
+                .externalSequence(metadata == null ? null : metadata.externalSequence())
                 .classificationStatus(classificationStatus)
                 .classificationReason(firstNonBlank(metadata == null ? null : metadata.classificationReason(), request.classificationReason()))
                 .classificationExplanationJson(firstNonBlank(metadata == null ? null : metadata.classificationExplanationJson(), request.classificationExplanationJson()))
@@ -1424,6 +1426,8 @@ public class TransactionService {
                 transaction.getBalanceImpact(),
                 transaction.getPaymentChannel(),
                 transaction.getCounterparty(),
+                transaction.getCounterpartyDocumentHash(),
+                transaction.getExternalSequence(),
                 transaction.getClassificationStatus(),
                 transaction.getClassificationReason(),
                 transaction.getClassificationExplanationJson(),
@@ -1504,7 +1508,9 @@ public class TransactionService {
             String classificationExplanationJson,
             MoneyTransaction.BalanceImpact balanceImpact,
             UUID importBatchId,
-            UUID internalTransferGroupId
+            UUID internalTransferGroupId,
+            String counterpartyDocumentHash,
+            String externalSequence
     ) {
     }
 

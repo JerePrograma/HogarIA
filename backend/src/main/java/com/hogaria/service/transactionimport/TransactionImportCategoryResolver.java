@@ -68,6 +68,7 @@ public class TransactionImportCategoryResolver {
             MoneyTransaction.BalanceImpact balanceImpact
     ) {
         return classificationStatus == MoneyTransaction.ClassificationStatus.TECHNICAL
+                || classificationStatus == MoneyTransaction.ClassificationStatus.REVIEW
                 || balanceImpact == MoneyTransaction.BalanceImpact.INTERNAL_TRANSFER
                 || balanceImpact == MoneyTransaction.BalanceImpact.NEUTRAL_ADJUSTMENT
                 || balanceImpact == MoneyTransaction.BalanceImpact.TECHNICAL;

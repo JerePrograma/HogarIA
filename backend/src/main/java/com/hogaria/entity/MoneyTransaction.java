@@ -112,6 +112,12 @@ public class MoneyTransaction {
     @Column(name = "counterparty", length = 255)
     private String counterparty;
 
+    @Column(name = "counterparty_document_hash", length = 64)
+    private String counterpartyDocumentHash;
+
+    @Column(name = "external_sequence", length = 120)
+    private String externalSequence;
+
     @Builder.Default
     @Enumerated(EnumType.STRING)
     @Column(name = "classification_status", nullable = false, length = 40)
@@ -174,6 +180,8 @@ public class MoneyTransaction {
         REFUND_OR_REIMBURSEMENT,
         INTERNAL_TRANSFER,
         EXTERNAL_TRANSFER,
+        CASH_WITHDRAWAL,
+        LOAN_ORIGINATION,
         NEUTRAL_ADJUSTMENT,
         IGNORED,
         TECHNICAL,

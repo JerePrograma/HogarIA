@@ -31,6 +31,7 @@ class TransactionImportPreviewServiceTest {
         var duplicates = org.mockito.Mockito.mock(TransactionImportDuplicateDetector.class);
         var batchStore = org.mockito.Mockito.mock(TransactionImportBatchStore.class);
         var summaryFactory = org.mockito.Mockito.mock(TransactionImportSummaryFactory.class);
+        var internalTransfers = org.mockito.Mockito.mock(ImportInternalTransferMatchingService.class);
         var userId = UUID.randomUUID();
         var profileId = UUID.randomUUID();
         var accountId = UUID.randomUUID();
@@ -51,6 +52,7 @@ class TransactionImportPreviewServiceTest {
                 eq(profileId), eq(accountId), eq(TransactionImportSource.MERCADO_PAGO),
                 eq("movimientos.xlsx"), eq("ARS"), eq(2026), eq(5), any()
         )).thenReturn(ExcelImportBatch.builder().id(batchId).profileId(profileId).accountId(accountId).build());
+        when(internalTransfers.applyToBatch(profileId, batchId)).thenReturn(List.of(row));
         when(summaryFactory.summarize(batchId, TransactionImportSource.MERCADO_PAGO, accountId, List.of(row)))
                 .thenReturn(response);
         var service = new TransactionImportPreviewService(
@@ -60,7 +62,8 @@ class TransactionImportPreviewServiceTest {
                 parser,
                 duplicates,
                 batchStore,
-                summaryFactory
+                summaryFactory,
+                internalTransfers
         );
 
         var actual = service.preview(

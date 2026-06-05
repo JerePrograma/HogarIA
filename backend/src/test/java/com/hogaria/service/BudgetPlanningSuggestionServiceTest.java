@@ -153,6 +153,7 @@ class BudgetPlanningSuggestionServiceTest {
         UUID categoryId = addCategory("Compras", Category.Type.VARIABLE_EXPENSE);
         MoneyTransaction duplicate = tx(categoryId, MoneyTransaction.MovementType.EXPENSE, 2026, 5, "5000", "Compra tarjeta");
         duplicate.setClassificationReason("POSSIBLE_CROSS_SOURCE_DUPLICATE");
+        duplicate.setClassificationStatus(MoneyTransaction.ClassificationStatus.REVIEW);
         stubTransactions(List.of(duplicate));
 
         var response = service.preview(userId, profileId, preview(SuggestionMode.CURRENT_MONTH_ONLY, SuggestionTarget.BUDGET));

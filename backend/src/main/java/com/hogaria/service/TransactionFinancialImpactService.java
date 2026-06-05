@@ -16,7 +16,8 @@ public class TransactionFinancialImpactService {
                 || tx.getClassificationStatus() == MoneyTransaction.ClassificationStatus.IGNORED_BY_RULE
                 || tx.getBalanceImpact() == MoneyTransaction.BalanceImpact.IGNORED;
         boolean technical = tx.getClassificationStatus() == MoneyTransaction.ClassificationStatus.TECHNICAL
-                || tx.getBalanceImpact() == MoneyTransaction.BalanceImpact.TECHNICAL;
+                || tx.getBalanceImpact() == MoneyTransaction.BalanceImpact.TECHNICAL
+                || category != null && Boolean.TRUE.equals(category.getTechnical());
 
         boolean income = treatment == CashFlowTreatment.EARNED_INCOME
                 || treatment == CashFlowTreatment.INTEREST_INCOME;
@@ -92,11 +93,11 @@ public class TransactionFinancialImpactService {
                 case "RULE_MERCADO_CREDITO_DEBT_PAYMENT" -> {
                     return CashFlowTreatment.DEBT_OUTFLOW;
                 }
-                case "POSSIBLE_INTERNAL_TRANSFER", "INTERNAL_TRANSFER_MATCHED", "USER_MARKED_INTERNAL_TRANSFER",
-                        "TRANSFER_UNMATCHED", "RULE_MP_FUNDING_TRANSFER", "RULE_INTERNAL_TRANSFER_TRASPASO" -> {
+                case "INTERNAL_TRANSFER_MATCHED", "USER_MARKED_INTERNAL_TRANSFER",
+                        "RULE_INTERNAL_TRANSFER_OWN_ACCOUNT" -> {
                     return CashFlowTreatment.INTERNAL_TRANSFER;
                 }
-                case "POSSIBLE_CROSS_SOURCE_DUPLICATE", "USER_IGNORED_CROSS_SOURCE" -> {
+                case "USER_IGNORED_CROSS_SOURCE" -> {
                     return CashFlowTreatment.UNKNOWN;
                 }
                 default -> {
@@ -109,20 +110,37 @@ public class TransactionFinancialImpactService {
             return CashFlowTreatment.INTERNAL_TRANSFER;
         }
 
+        if (category != null
+                && Boolean.TRUE.equals(category.getTechnical())
+                && tx.getBalanceImpact() != MoneyTransaction.BalanceImpact.INTERNAL_TRANSFER) {
+            return CashFlowTreatment.NEUTRAL_ADJUSTMENT;
+        }
+
+        if ((tx.getClassificationStatus() == MoneyTransaction.ClassificationStatus.REVIEW
+                || tx.getClassificationStatus() == MoneyTransaction.ClassificationStatus.NEEDS_CATEGORY)
+                && category == null
+                && isOperationalBalanceImpact(tx.getBalanceImpact())) {
+            return CashFlowTreatment.UNKNOWN;
+        }
+
         var explicitTreatment = treatmentFromBalanceImpact(tx.getBalanceImpact());
         if (explicitTreatment != null) {
             return explicitTreatment;
         }
 
-        if (tx.getClassificationStatus() == MoneyTransaction.ClassificationStatus.TECHNICAL
-                && tx.getMovementType() == MoneyTransaction.MovementType.TRANSFER) {
-            return CashFlowTreatment.INTERNAL_TRANSFER;
+        if (tx.getClassificationStatus() == MoneyTransaction.ClassificationStatus.TECHNICAL) {
+            return CashFlowTreatment.NEUTRAL_ADJUSTMENT;
+        }
+
+        if ((tx.getClassificationStatus() == MoneyTransaction.ClassificationStatus.REVIEW
+                || tx.getClassificationStatus() == MoneyTransaction.ClassificationStatus.NEEDS_CATEGORY)
+                && (tx.getBalanceImpact() == null
+                || tx.getBalanceImpact() == MoneyTransaction.BalanceImpact.UNKNOWN)) {
+            return CashFlowTreatment.UNKNOWN;
         }
 
         if (tx.getMovementType() == MoneyTransaction.MovementType.TRANSFER) {
-            return isInternalTransferText(tx)
-                    ? CashFlowTreatment.INTERNAL_TRANSFER
-                    : CashFlowTreatment.EXTERNAL_TRANSFER;
+            return CashFlowTreatment.EXTERNAL_TRANSFER;
         }
 
         if (tx.getMovementType() == MoneyTransaction.MovementType.ADJUSTMENT) {
@@ -192,6 +210,8 @@ public class TransactionFinancialImpactService {
             case REFUND_OR_REIMBURSEMENT -> MoneyTransaction.BalanceImpact.REFUND_OR_REIMBURSEMENT;
             case INTERNAL_TRANSFER -> MoneyTransaction.BalanceImpact.INTERNAL_TRANSFER;
             case EXTERNAL_TRANSFER -> MoneyTransaction.BalanceImpact.EXTERNAL_TRANSFER;
+            case CASH_WITHDRAWAL -> MoneyTransaction.BalanceImpact.CASH_WITHDRAWAL;
+            case LOAN_ORIGINATION -> MoneyTransaction.BalanceImpact.LOAN_ORIGINATION;
             case NEUTRAL_ADJUSTMENT -> MoneyTransaction.BalanceImpact.NEUTRAL_ADJUSTMENT;
             case UNKNOWN -> MoneyTransaction.BalanceImpact.UNKNOWN;
         };
@@ -214,6 +234,8 @@ public class TransactionFinancialImpactService {
             case REFUND_OR_REIMBURSEMENT -> CashFlowTreatment.REFUND_OR_REIMBURSEMENT;
             case INTERNAL_TRANSFER -> CashFlowTreatment.INTERNAL_TRANSFER;
             case EXTERNAL_TRANSFER -> CashFlowTreatment.EXTERNAL_TRANSFER;
+            case CASH_WITHDRAWAL -> CashFlowTreatment.CASH_WITHDRAWAL;
+            case LOAN_ORIGINATION -> CashFlowTreatment.LOAN_ORIGINATION;
             case NEUTRAL_ADJUSTMENT -> CashFlowTreatment.NEUTRAL_ADJUSTMENT;
             case IGNORED, TECHNICAL, UNKNOWN -> null;
         };
@@ -222,6 +244,8 @@ public class TransactionFinancialImpactService {
     private boolean isNeutralTreatment(CashFlowTreatment treatment) {
         return treatment == CashFlowTreatment.INTERNAL_TRANSFER
                 || treatment == CashFlowTreatment.EXTERNAL_TRANSFER
+                || treatment == CashFlowTreatment.CASH_WITHDRAWAL
+                || treatment == CashFlowTreatment.LOAN_ORIGINATION
                 || treatment == CashFlowTreatment.NEUTRAL_ADJUSTMENT
                 || treatment == CashFlowTreatment.RECOVERABLE_OUTFLOW
                 || treatment == CashFlowTreatment.PRINCIPAL_RECOVERY
@@ -229,22 +253,20 @@ public class TransactionFinancialImpactService {
                 || treatment == CashFlowTreatment.UNKNOWN;
     }
 
+    private boolean isOperationalBalanceImpact(MoneyTransaction.BalanceImpact balanceImpact) {
+        return balanceImpact == MoneyTransaction.BalanceImpact.OPERATING_INCOME
+                || balanceImpact == MoneyTransaction.BalanceImpact.INTEREST_INCOME
+                || balanceImpact == MoneyTransaction.BalanceImpact.CONSUMPTION_EXPENSE
+                || balanceImpact == MoneyTransaction.BalanceImpact.DEBT_OUTFLOW
+                || balanceImpact == MoneyTransaction.BalanceImpact.SAVING_OUTFLOW
+                || balanceImpact == MoneyTransaction.BalanceImpact.INVESTMENT_OUTFLOW;
+    }
+
     private boolean isRefundText(MoneyTransaction tx) {
         var description = text(tx);
         return description.contains("REINTEGRO")
                 || description.contains("REFUND")
                 || description.contains("DEVOL");
-    }
-
-    private boolean isInternalTransferText(MoneyTransaction tx) {
-        var description = text(tx);
-        return description.contains("INTERNA")
-                || description.contains("INTERNAL")
-                || description.contains("DEBIN")
-                || description.contains("CUENTA DNI")
-                || description.contains("FONDEO")
-                || description.contains("TRASPASO")
-                || description.contains("MERCADO PAGO");
     }
 
     private String text(MoneyTransaction tx) {

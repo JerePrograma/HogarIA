@@ -2,6 +2,7 @@ package com.hogaria.service.transactionimport;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -134,7 +135,7 @@ class TransactionImportDuplicateDetectorTest {
     }
 
     @Test
-    void internalTransferMatchBecomesTechnicalReviewRiskNotDuplicate() {
+    void fundingPairWithoutOwnAliasStaysPossibleAndIsNotNeutralized() {
         var existing = tx(
                 UUID.randomUUID(),
                 TransactionImportSource.MERCADO_PAGO,
@@ -153,11 +154,11 @@ class TransactionImportDuplicateDetectorTest {
                 MoneyTransaction.MovementType.EXPENSE
         ))).get(0);
 
-        assertEquals(RowStatus.INTERNAL_TRANSFER_MATCHED, resolved.status());
-        assertEquals(MoneyTransaction.MovementType.TRANSFER, resolved.movementType());
-        assertEquals(MoneyTransaction.BalanceImpact.INTERNAL_TRANSFER, resolved.balanceImpact());
-        assertEquals(MoneyTransaction.ClassificationStatus.TECHNICAL, resolved.classificationStatus());
-        assertFalse(TransactionImportMatchType.INTERNAL_TRANSFER_MATCHED.isDuplicate());
+        assertEquals(RowStatus.POSSIBLE_INTERNAL_TRANSFER, resolved.status());
+        assertEquals(MoneyTransaction.MovementType.EXPENSE, resolved.movementType());
+        assertNotEquals(MoneyTransaction.BalanceImpact.INTERNAL_TRANSFER, resolved.balanceImpact());
+        assertEquals(MoneyTransaction.ClassificationStatus.REVIEW, resolved.classificationStatus());
+        assertFalse(TransactionImportMatchType.POSSIBLE_INTERNAL_TRANSFER.isDuplicate());
     }
 
     private com.hogaria.dto.TransactionImportDtos.TransactionImportPreviewRow row(

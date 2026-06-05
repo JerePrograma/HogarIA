@@ -2,6 +2,7 @@ package com.hogaria.service.transactionimport;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -120,6 +121,52 @@ class TransactionImportRuleClassifierTest {
     assertEquals(MoneyTransaction.MovementType.ADJUSTMENT, result.movementType());
     assertEquals(MoneyTransaction.BalanceImpact.REFUND_OR_REIMBURSEMENT, result.balanceImpact());
     assertEquals("RULE_MP_REFUND", result.classificationReason());
+  }
+
+  @Test
+  void mercadoPagoFundingCandidateIsReviewAndNotInternalTransfer() {
+    var result = classifier.classifyMercadoPago(
+            new BigDecimal("10000.00"),
+            "Bank Transfer",
+            "Pago aprobado",
+            "bank_transfer",
+            "Cuenta bancaria digital",
+            "",
+            "true",
+            "",
+            "",
+            MoneyTransaction.PaymentChannel.BANK_TRANSFER
+    );
+
+    assertEquals(MoneyTransaction.ClassificationStatus.REVIEW, result.classificationStatus());
+    assertEquals(MoneyTransaction.MovementType.INCOME, result.movementType());
+    assertEquals(MoneyTransaction.BalanceImpact.UNKNOWN, result.balanceImpact());
+    assertNotEquals(MoneyTransaction.BalanceImpact.INTERNAL_TRANSFER, result.balanceImpact());
+  }
+
+  @Test
+  void bancoProvinciaSystemscorpIsOperatingIncomeAndCdniPurchaseIsConsumptionReview() {
+    var systemscorp = classifier.classifyBancoProvincia(
+            new BigDecimal("500000.00"),
+            "CREDITO TRASPASO CAJERO AUTOM.",
+            "TRANSF DE SYSTEMSCORP SA (30693532570)",
+            "",
+            MoneyTransaction.PaymentChannel.BANK_TRANSFER,
+            "SYSTEMSCORP SA"
+    );
+    var cdniPurchase = classifier.classifyBancoProvincia(
+            new BigDecimal("-4500.00"),
+            "PAGO CON TRANSFERENCIA CDNI",
+            "PAGO CT CDNI 05/05 CAFETERIA",
+            "",
+            MoneyTransaction.PaymentChannel.CUENTA_DNI,
+            "CAFETERIA"
+    );
+
+    assertEquals(MoneyTransaction.BalanceImpact.OPERATING_INCOME, systemscorp.balanceImpact());
+    assertEquals("RULE_SYSTEMSCORP_OPERATING_INCOME", systemscorp.classificationReason());
+    assertEquals(MoneyTransaction.ClassificationStatus.REVIEW, cdniPurchase.classificationStatus());
+    assertEquals(MoneyTransaction.BalanceImpact.CONSUMPTION_EXPENSE, cdniPurchase.balanceImpact());
   }
 
   private void assertResult(

@@ -49,7 +49,8 @@ class TransactionImportSecurityTest {
                 parser,
                 org.mockito.Mockito.mock(TransactionImportDuplicateDetector.class),
                 org.mockito.Mockito.mock(TransactionImportBatchStore.class),
-                org.mockito.Mockito.mock(TransactionImportSummaryFactory.class)
+                org.mockito.Mockito.mock(TransactionImportSummaryFactory.class),
+                org.mockito.Mockito.mock(ImportInternalTransferMatchingService.class)
         );
 
         assertThrows(BadRequestException.class, () -> service.preview(
@@ -131,7 +132,8 @@ class TransactionImportSecurityTest {
                 txService,
                 batchStore,
                 org.mockito.Mockito.mock(TransactionImportDuplicateDetector.class),
-                org.mockito.Mockito.mock(TransactionImportCategoryResolver.class)
+                org.mockito.Mockito.mock(TransactionImportCategoryResolver.class),
+                org.mockito.Mockito.mock(ImportInternalTransferMatchingService.class)
         );
         var request = new TransactionImportCommitRequest(List.of(
                 new TransactionImportCommitRow(
@@ -157,7 +159,8 @@ class TransactionImportSecurityTest {
                 org.mockito.Mockito.mock(TransactionService.class),
                 batchStore,
                 org.mockito.Mockito.mock(TransactionImportDuplicateDetector.class),
-                org.mockito.Mockito.mock(TransactionImportCategoryResolver.class)
+                org.mockito.Mockito.mock(TransactionImportCategoryResolver.class),
+                org.mockito.Mockito.mock(ImportInternalTransferMatchingService.class)
         );
     }
 }

@@ -201,7 +201,7 @@ class DashboardServiceTest {
   }
 
   @Test
-  void possibleInternalTransferDoesNotCountAsDefinitiveRealExpense() {
+  void possibleInternalTransferWithConfirmedConsumptionCategoryCountsAsRealExpense() {
     var userId = UUID.randomUUID();
     var profileId = UUID.randomUUID();
     var expenseCat = UUID.randomUUID();
@@ -222,10 +222,10 @@ class DashboardServiceTest {
 
     var res = localService.getMonthlySummary(userId, profileId, 2026, 5);
 
-    assertEquals(BigDecimal.ZERO, res.realConfirmedSummary().confirmedExpenses());
-    assertEquals(BigDecimal.ZERO, res.realVsPlanned().totalRealConfirmed());
-    assertEquals(1, res.realConfirmedSummary().excludedInternalTransferCount());
-    assertEquals(amount, res.realConfirmedSummary().excludedInternalTransferAmount());
+    assertEquals(amount, res.realConfirmedSummary().confirmedExpenses());
+    assertEquals(amount, res.realVsPlanned().totalRealConfirmed());
+    assertEquals(0, res.realConfirmedSummary().excludedInternalTransferCount());
+    assertEquals(BigDecimal.ZERO, res.realConfirmedSummary().excludedInternalTransferAmount());
   }
 
   @Test
@@ -257,8 +257,8 @@ class DashboardServiceTest {
     assertEquals(BigDecimal.ZERO, res.realConfirmedSummary().confirmedIncome());
     assertEquals(BigDecimal.ZERO, res.realConfirmedSummary().confirmedExpenses());
     assertEquals(BigDecimal.ZERO, res.realVsPlanned().totalRealConfirmed());
-    assertEquals(2, res.realConfirmedSummary().excludedInternalTransferCount());
-    assertEquals(new BigDecimal("800000.00"), res.realConfirmedSummary().excludedInternalTransferAmount());
+    assertEquals(0, res.realConfirmedSummary().excludedInternalTransferCount());
+    assertEquals(BigDecimal.ZERO, res.realConfirmedSummary().excludedInternalTransferAmount());
   }
 
   @Test

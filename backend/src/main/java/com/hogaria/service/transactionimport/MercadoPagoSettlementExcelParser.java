@@ -175,18 +175,27 @@ public class MercadoPagoSettlementExcelParser extends ExcelImportParserSupport i
 
     var normalizedDescription = normalizer.normalize(joinUseful(rawDescription, extendedDescription));
     var sourceOperationId = firstNonBlank(operationId, identificationNumber, purchaseId, orderId);
+    var sourceSignature = joinUseful(
+            sourceOperationId,
+            parsedDate.operationDateTime().toString(),
+            signedAmount.toPlainString(),
+            operationType,
+            paymentMethodType,
+            paymentMethod,
+            normalizedDescription
+    );
     var sourceHash = sourceOperationId.isBlank()
             ? hashService.fromFallback(
             profileId,
             accountId,
             TransactionImportSource.MERCADO_PAGO,
-            parsedDate.realDate() + "|" + signedAmount + "|" + normalizedDescription + "|" + extendedDescription
+            sourceSignature + "|" + extendedDescription
     )
             : hashService.fromFallback(
             profileId,
             accountId,
             TransactionImportSource.MERCADO_PAGO,
-            sourceOperationId + "|" + signedAmount + "|" + parsedDate.realDate()
+            sourceSignature
     );
     var raw = rawMap(detection.headers(), values, detection.displayName(), detection.sheetName(), rowNumber);
     raw.put("_signedAmount", signedAmount.toPlainString());

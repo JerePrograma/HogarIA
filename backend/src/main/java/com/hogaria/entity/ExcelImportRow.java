@@ -59,6 +59,9 @@ public class ExcelImportRow {
     @Column(name = "movement_type", length = 40)
     private MoneyTransaction.MovementType movementType;
 
+    @Column(name = "source", length = 40)
+    private String source;
+
     @Column(name = "source_operation_id", length = 120)
     private String sourceOperationId;
 
@@ -83,8 +86,24 @@ public class ExcelImportRow {
     @Column(name = "counterparty_name", length = 255)
     private String counterpartyName;
 
+    @Column(name = "counterparty", length = 255)
+    private String counterparty;
+
     @Column(name = "counterparty_document_hash", length = 64)
     private String counterpartyDocumentHash;
+
+    @Column(name = "operation_datetime")
+    private LocalDateTime operationDateTime;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "operation_datetime_precision", length = 20)
+    private MoneyTransaction.OperationDateTimePrecision operationDateTimePrecision;
+
+    @Column(name = "signed_amount", precision = 19, scale = 2)
+    private BigDecimal signedAmount;
+
+    @Column(name = "amount_abs", precision = 19, scale = 2)
+    private BigDecimal amountAbs;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "payment_channel", length = 40)
@@ -97,9 +116,28 @@ public class ExcelImportRow {
     @Column(name = "classification_reason", length = 255)
     private String classificationReason;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "balance_impact", length = 40)
+    private MoneyTransaction.BalanceImpact balanceImpact;
+
+    @Column(name = "classification_layer", length = 40)
+    private String classificationLayer;
+
+    @Column(name = "classification_matched_field", length = 80)
+    private String classificationMatchedField;
+
+    @Column(name = "classification_matched_value", length = 500)
+    private String classificationMatchedValue;
+
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "classification_explanation_json", columnDefinition = "jsonb")
     private String classificationExplanationJson;
+
+    @Column(name = "suggested_category_id")
+    private UUID suggestedCategoryId;
+
+    @Column(name = "suggested_category_name", length = 255)
+    private String suggestedCategoryName;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "target_entity", length = 40)
@@ -111,6 +149,9 @@ public class ExcelImportRow {
 
     @Column(name = "error_message", length = 1000)
     private String errorMessage;
+
+    @Column(name = "warning", length = 1000)
+    private String warning;
 
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "raw_json", columnDefinition = "jsonb")

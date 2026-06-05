@@ -59,6 +59,49 @@ final class BancoProvinciaImportRules {
                     null
             ));
 
+    source(rules, 21, "RULE_SYSTEMSCORP_OPERATING_INCOME", "extendedDescription",
+            movement -> isPositive(movement)
+                    && containsAny(normalizer, movement, "rawDescription", "credito traspaso cajero autom")
+                    && containsAny(normalizer, movement, "extendedDescription", "systemscorp sa"),
+            movement -> result(
+                    movement,
+                    ClassificationLayer.SOURCE_SPECIFIC,
+                    "extendedDescription",
+                    movement.extendedDescription(),
+                    MoneyTransaction.MovementType.INCOME,
+                    MoneyTransaction.BalanceImpact.OPERATING_INCOME,
+                    movement.paymentChannel(),
+                    "ingresosporserviciosyproyectos",
+                    "Ingresos por servicios y proyectos",
+                    MoneyTransaction.ClassificationStatus.CLASSIFIED,
+                    "RULE_SYSTEMSCORP_OPERATING_INCOME",
+                    Confidence.HIGH,
+                    RowStatus.READY,
+                    null
+            ));
+
+    source(rules, 22, "RULE_BP_INCOMING_TRANSFER_REVIEW", "rawDescription",
+            movement -> isPositive(movement)
+                    && containsAny(normalizer, movement, "rawDescription",
+                    "credito traspaso cajero autom",
+                    "credito cuenta dni",
+                    "credito debin",
+                    "credito transferencia i"),
+            movement -> review(
+                    movement,
+                    ClassificationLayer.SOURCE_SPECIFIC,
+                    "rawDescription",
+                    movement.rawDescription(),
+                    MoneyTransaction.MovementType.INCOME,
+                    MoneyTransaction.BalanceImpact.UNKNOWN,
+                    movement.paymentChannel(),
+                    "transferenciasrecibidas",
+                    "Transferencias recibidas",
+                    "RULE_BP_INCOMING_TRANSFER_REVIEW",
+                    Confidence.LOW,
+                    "Transferencia entrante externa: puede ser ingreso, recupero, préstamo, devolución o transferencia familiar."
+            ));
+
     source(rules, 30, "RULE_BENEFIT_REIMBURSEMENT", "rawDescription",
             movement -> containsAny(normalizer, movement, "rawDescription", "benef pei cuenta dni", "beneficio", "benef "),
             movement -> result(
@@ -110,6 +153,45 @@ final class BancoProvinciaImportRules {
                     Confidence.HIGH,
                     RowStatus.READY,
                     null
+            ));
+
+    source(rules, 60, "RULE_BP_REFUND_COVERAGE", "rawDescription",
+            movement -> isPositive(movement)
+                    && (containsAny(normalizer, movement, "rawDescription", "devolucion", "credito cobertura")
+                    || containsAny(normalizer, movement, "extendedDescription", "devolucion")),
+            movement -> result(
+                    movement,
+                    ClassificationLayer.SOURCE_SPECIFIC,
+                    "rawDescription",
+                    movement.rawDescription(),
+                    MoneyTransaction.MovementType.INCOME,
+                    MoneyTransaction.BalanceImpact.REFUND_OR_REIMBURSEMENT,
+                    movement.paymentChannel(),
+                    "beneficiosypromociones",
+                    "Beneficios y promociones",
+                    MoneyTransaction.ClassificationStatus.CLASSIFIED,
+                    "RULE_BP_REFUND_COVERAGE",
+                    Confidence.HIGH,
+                    RowStatus.READY,
+                    "Devolución/reintegro: no es ingreso operativo."
+            ));
+
+    source(rules, 70, "RULE_BP_CASH_WITHDRAWAL", "rawDescription",
+            movement -> isNegative(movement)
+                    && containsAny(normalizer, movement, "rawDescription", "extrac.fondos cajero autom", "extrac fondos cajero autom"),
+            movement -> review(
+                    movement,
+                    ClassificationLayer.SOURCE_SPECIFIC,
+                    "rawDescription",
+                    movement.rawDescription(),
+                    MoneyTransaction.MovementType.TRANSFER,
+                    MoneyTransaction.BalanceImpact.CASH_WITHDRAWAL,
+                    MoneyTransaction.PaymentChannel.ATM,
+                    null,
+                    null,
+                    "RULE_BP_CASH_WITHDRAWAL",
+                    Confidence.MEDIUM,
+                    "Retiro de efectivo. Vincular a una cuenta de caja o revisar; no se cuenta como consumo por sí mismo."
             ));
 
     merchant(rules, 100, "RULE_MERCHANT_UBER", "PAYU*AR*UBER", "taxiyapps", "Taxi y apps", MoneyTransaction.PaymentChannel.DEBIT_CARD);
@@ -210,6 +292,62 @@ final class BancoProvinciaImportRules {
                     "Delivery y restaurantes",
                     "RULE_CDNI_DELIVERY_RESTAURANT",
                     Confidence.HIGH
+            ));
+
+    fallback(rules, 870, "RULE_CDNI_PURCHASE_REVIEW",
+            movement -> isNegative(movement)
+                    && containsAny(normalizer, movement, "rawDescription",
+                    "pago con transferencia cdni",
+                    "compra con transferencia cdni"),
+            movement -> review(
+                    movement,
+                    ClassificationLayer.GENERIC_FALLBACK,
+                    "rawDescription",
+                    movement.rawDescription(),
+                    MoneyTransaction.MovementType.EXPENSE,
+                    MoneyTransaction.BalanceImpact.CONSUMPTION_EXPENSE,
+                    MoneyTransaction.PaymentChannel.CUENTA_DNI,
+                    null,
+                    null,
+                    "RULE_CDNI_PURCHASE_REVIEW",
+                    Confidence.LOW,
+                    "Compra real por transferencia Cuenta DNI pendiente de categoría."
+            ));
+
+    fallback(rules, 880, "RULE_FOREIGN_CURRENCY_DEBIT_PURCHASE_REVIEW",
+            movement -> isNegative(movement)
+                    && containsAny(normalizer, movement, "rawDescription", "pago con t.d. en m.e."),
+            movement -> review(
+                    movement,
+                    ClassificationLayer.GENERIC_FALLBACK,
+                    "rawDescription",
+                    movement.rawDescription(),
+                    MoneyTransaction.MovementType.EXPENSE,
+                    MoneyTransaction.BalanceImpact.CONSUMPTION_EXPENSE,
+                    MoneyTransaction.PaymentChannel.CARD_FOREIGN_CURRENCY,
+                    null,
+                    null,
+                    "RULE_FOREIGN_CURRENCY_DEBIT_PURCHASE_REVIEW",
+                    Confidence.LOW,
+                    "Consumo con tarjeta en moneda extranjera pendiente de categoría."
+            ));
+
+    fallback(rules, 890, "RULE_BP_OUTGOING_BANK_TRANSFER_REVIEW",
+            movement -> isNegative(movement)
+                    && containsAny(normalizer, movement, "rawDescription", "bip db transferencia"),
+            movement -> review(
+                    movement,
+                    ClassificationLayer.GENERIC_FALLBACK,
+                    "rawDescription",
+                    movement.rawDescription(),
+                    MoneyTransaction.MovementType.TRANSFER,
+                    MoneyTransaction.BalanceImpact.EXTERNAL_TRANSFER,
+                    MoneyTransaction.PaymentChannel.BANK_TRANSFER,
+                    null,
+                    null,
+                    "RULE_BP_OUTGOING_BANK_TRANSFER_REVIEW",
+                    Confidence.LOW,
+                    "Transferencia bancaria saliente externa. No es interna sin alias propio confirmado."
             ));
 
     fallback(rules, 900, "RULE_CHANNEL_TRANSFER_REVIEW",
@@ -355,5 +493,13 @@ final class BancoProvinciaImportRules {
     return movement.amount() != null && movement.amount().signum() < 0
             ? MoneyTransaction.MovementType.EXPENSE
             : MoneyTransaction.MovementType.INCOME;
+  }
+
+  private static boolean isPositive(NormalizedImportMovement movement) {
+    return movement.amount() != null && movement.amount().signum() > 0;
+  }
+
+  private static boolean isNegative(NormalizedImportMovement movement) {
+    return movement.amount() != null && movement.amount().signum() < 0;
   }
 }

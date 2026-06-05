@@ -28,6 +28,7 @@ public class TransactionImportCommitService {
     private final TransactionImportBatchStore batchStore;
     private final TransactionImportDuplicateDetector duplicateDetector;
     private final TransactionImportCategoryResolver categoryResolver;
+    private final ImportInternalTransferMatchingService internalTransferMatchingService;
 
     public TransactionImportCommitService(
             FinancialProfileRepository profileRepository,
@@ -35,7 +36,8 @@ public class TransactionImportCommitService {
             TransactionService txService,
             TransactionImportBatchStore batchStore,
             TransactionImportDuplicateDetector duplicateDetector,
-            TransactionImportCategoryResolver categoryResolver
+            TransactionImportCategoryResolver categoryResolver,
+            ImportInternalTransferMatchingService internalTransferMatchingService
     ) {
         this.profileRepository = profileRepository;
         this.accountRepository = accountRepository;
@@ -43,6 +45,7 @@ public class TransactionImportCommitService {
         this.batchStore = batchStore;
         this.duplicateDetector = duplicateDetector;
         this.categoryResolver = categoryResolver;
+        this.internalTransferMatchingService = internalTransferMatchingService;
     }
 
     public TransactionImportCommitResponse commit(
@@ -296,7 +299,9 @@ public class TransactionImportCommitService {
                             previewRow.classificationExplanationJson(),
                             previewRow.balanceImpact(),
                             batchId,
-                            null
+                            null,
+                            previewRow.counterpartyDocumentHash(),
+                            previewRow.externalSequence()
                     )
             );
 
@@ -316,6 +321,7 @@ public class TransactionImportCommitService {
                     categoryId
             );
 
+            internalTransferMatchingService.attachTransaction(profileId, loadedRow.entity().getId(), response.id());
             batchStore.markImportRow(loadedRow.entity(), ImportRowStatus.IMPORTED, null);
 
             return TransactionImportCommitResult.created(response.id());

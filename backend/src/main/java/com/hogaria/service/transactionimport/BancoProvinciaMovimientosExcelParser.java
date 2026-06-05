@@ -120,6 +120,7 @@ public class BancoProvinciaMovimientosExcelParser extends ExcelImportParserSuppo
 
     var merchant = merchantExtractor.fromBancoProvincia(description, extendedDescription, merchantName);
     var counterparty = counterpartyExtractor.fromBancoProvincia(extendedDescription, merchant);
+    var operationDate = ImportOperationDateSupport.bancoProvinciaOperationDate(realDate, extendedDescription);
     var normalizedDescription = normalizer.normalize(joinUseful(description, extendedDescription, merchant.raw()));
     var paymentChannel = classifier.inferBancoProvinciaPaymentChannel(description, extendedDescription);
     var sourceHash = hashService.fromFallback(
@@ -135,13 +136,14 @@ public class BancoProvinciaMovimientosExcelParser extends ExcelImportParserSuppo
     raw.put("_merchantNormalized", merchant.normalized() == null ? "" : merchant.normalized());
     raw.put("_counterparty", counterparty.raw() == null ? "" : counterparty.raw());
     raw.put("_counterpartyDocumentHash", counterparty.documentHash() == null ? "" : counterparty.documentHash());
+    raw.put("_operationDate", operationDate.toString());
 
     var normalizedMovement = new NormalizedImportMovement(
             TransactionImportSource.BANCO_PROVINCIA,
             sequence.isBlank() ? null : sequence,
             sourceHash,
             realDate,
-            realDate.atStartOfDay(),
+            operationDate.atStartOfDay(),
             signedAmount,
             DEFAULT_CURRENCY,
             description,
@@ -172,7 +174,7 @@ public class BancoProvinciaMovimientosExcelParser extends ExcelImportParserSuppo
             .externalSequence(sequence.isBlank() ? null : sequence)
             .realDate(realDate)
             .budgetDate(realDate)
-            .operationDateTime(realDate.atStartOfDay())
+            .operationDateTime(operationDate.atStartOfDay())
             .operationDateTimePrecision(MoneyTransaction.OperationDateTimePrecision.DATE_ONLY)
             .signedAmount(signedAmount)
             .amountAbs(signedAmount.abs())

@@ -80,6 +80,52 @@ class CashFlowImpactTest {
         assertFalse(service.analyze(technical, null, null).impactsOperationalBalance());
     }
 
+    @Test
+    void possibleInternalTransferReasonDoesNotMakeTransferInternal() {
+        var possible = tx(MoneyTransaction.MovementType.EXPENSE);
+        possible.setClassificationStatus(MoneyTransaction.ClassificationStatus.REVIEW);
+        possible.setClassificationReason("POSSIBLE_INTERNAL_TRANSFER");
+
+        var impact = service.analyze(possible, null, null);
+
+        assertFalse(impact.internalTransfer());
+        assertEquals(MoneyTransaction.BalanceImpact.UNKNOWN, impact.balanceImpact());
+        assertFalse(impact.impactsOperationalBalance());
+    }
+
+    @Test
+    void reviewNeedsCategoryBeforeOperationalConsumptionButCanImpactAfterManualCategory() {
+        var review = tx(MoneyTransaction.MovementType.EXPENSE);
+        review.setClassificationStatus(MoneyTransaction.ClassificationStatus.REVIEW);
+        review.setBalanceImpact(MoneyTransaction.BalanceImpact.CONSUMPTION_EXPENSE);
+
+        assertFalse(service.analyze(review, null, null).impactsOperationalBalance());
+        assertTrue(service.analyze(review, category(Category.Type.VARIABLE_EXPENSE), null).impactsOperationalBalance());
+    }
+
+    @Test
+    void technicalCategoryNeverBecomesConsumptionBecauseItsTypeIsVariableExpense() {
+        var technicalCategory = category(Category.Type.VARIABLE_EXPENSE);
+        technicalCategory.setTechnical(true);
+        var impact = service.analyze(tx(MoneyTransaction.MovementType.EXPENSE), technicalCategory, null);
+
+        assertFalse(impact.impactsConsumptionExpense());
+        assertFalse(impact.impactsOperationalBalance());
+        assertTrue(impact.technical());
+    }
+
+    @Test
+    void loanOriginationAndRefundDoNotBecomeOperatingIncome() {
+        var loan = tx(MoneyTransaction.MovementType.ADJUSTMENT);
+        loan.setBalanceImpact(MoneyTransaction.BalanceImpact.LOAN_ORIGINATION);
+        var refund = tx(MoneyTransaction.MovementType.INCOME);
+        refund.setBalanceImpact(MoneyTransaction.BalanceImpact.REFUND_OR_REIMBURSEMENT);
+
+        assertFalse(service.analyze(loan, null, null).impactsIncome());
+        assertFalse(service.analyze(loan, null, null).impactsOperationalBalance());
+        assertFalse(service.analyze(refund, category(Category.Type.INCOME), null).impactsIncome());
+    }
+
     private MoneyTransaction tx(MoneyTransaction.MovementType movementType) {
         return MoneyTransaction.builder()
                 .id(UUID.randomUUID())

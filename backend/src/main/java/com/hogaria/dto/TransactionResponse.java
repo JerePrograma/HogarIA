@@ -23,6 +23,8 @@ public record TransactionResponse(
         MoneyTransaction.BalanceImpact balanceImpact,
         MoneyTransaction.PaymentChannel paymentChannel,
         String counterparty,
+        String counterpartyDocumentHash,
+        String externalSequence,
         MoneyTransaction.ClassificationStatus classificationStatus,
         String classificationReason,
         String classificationExplanationJson,
