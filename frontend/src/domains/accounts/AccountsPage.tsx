@@ -140,66 +140,119 @@ export function AccountsPage() {
           ) : null}
 
           {accounts.length > 0 ? (
-            <div className="tabla-ui">
-              <table className="table-compact">
-                <thead>
-                  <tr>
-                    <th>Nombre</th>
-                    <th>Tipo</th>
-                    <th>Moneda</th>
-                    <th>Límite</th>
-                    <th>Cierre/Venc.</th>
-                    <th>Estado</th>
-                    <th>Acciones</th>
-                  </tr>
-                </thead>
-
-                <tbody>
-                  {accounts.map((account) => (
-                    <tr key={account.id}>
-                      <td>
-                        <strong>{account.name}</strong>
-                      </td>
-                      <td>{labelOrValue(accountTypeLabels, account.accountType)}</td>
-                      <td>{account.currency}</td>
-                      <td>{account.creditLimit ?? '-'}</td>
-                      <td>
-                        {account.statementCloseDay ?? '-'} / {account.dueDay ?? '-'}
-                      </td>
-                      <td>
-                        <StatusBadge
-                          tone={account.active ? 'ok' : 'watch'}
-                          label={account.active ? 'Activa' : 'Inactiva'}
-                        />
-                      </td>
-                      <td>
-                        <div className="row-actions">
-                          <button
-                            type="button"
-                            className="boton-secundario"
-                            onClick={() => toggleMutation.mutate(account)}
-                            disabled={toggleMutation.isPending}
-                          >
-                            {account.active ? 'Desactivar' : 'Activar'}
-                          </button>
-
-                          <button
-                            type="button"
-                            className="boton-danger"
-                            onClick={() =>
-                              window.confirm('¿Desactivar cuenta?') &&
-                              deleteMutation.mutate(account.id)
-                            }
-                            disabled={deleteMutation.isPending}
-                          >
-                            Eliminar
-                          </button>
-                        </div>
-                      </td>
+            <div className="crud-responsive">
+              <div className="tabla-ui crud-table">
+                <table className="table-compact">
+                  <thead>
+                    <tr>
+                      <th>Nombre</th>
+                      <th>Tipo</th>
+                      <th>Moneda</th>
+                      <th>Límite</th>
+                      <th>Cierre/Venc.</th>
+                      <th>Estado</th>
+                      <th>Acciones</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+
+                  <tbody>
+                    {accounts.map((account) => (
+                      <tr key={account.id}>
+                        <td>
+                          <strong>{account.name}</strong>
+                        </td>
+                        <td>{labelOrValue(accountTypeLabels, account.accountType)}</td>
+                        <td>{account.currency}</td>
+                        <td>{account.creditLimit ?? '-'}</td>
+                        <td>
+                          {account.statementCloseDay ?? '-'} / {account.dueDay ?? '-'}
+                        </td>
+                        <td>
+                          <StatusBadge
+                            tone={account.active ? 'ok' : 'watch'}
+                            label={account.active ? 'Activa' : 'Inactiva'}
+                          />
+                        </td>
+                        <td>
+                          <div className="row-actions">
+                            <button
+                              type="button"
+                              className="boton-secundario"
+                              onClick={() => toggleMutation.mutate(account)}
+                              disabled={toggleMutation.isPending}
+                            >
+                              {account.active ? 'Desactivar' : 'Activar'}
+                            </button>
+
+                            <button
+                              type="button"
+                              className="boton-danger"
+                              onClick={() =>
+                                window.confirm('¿Desactivar cuenta?') &&
+                                deleteMutation.mutate(account.id)
+                              }
+                              disabled={deleteMutation.isPending}
+                            >
+                              Eliminar
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="crud-mobile-list">
+                {accounts.map((account) => (
+                  <article key={account.id} className="crud-mobile-card">
+                    <header>
+                      <div>
+                        <strong>{account.name}</strong>
+                        <span>{labelOrValue(accountTypeLabels, account.accountType)} · {account.currency}</span>
+                      </div>
+                      <StatusBadge
+                        tone={account.active ? 'ok' : 'watch'}
+                        label={account.active ? 'Activa' : 'Inactiva'}
+                      />
+                    </header>
+
+                    <dl>
+                      <div>
+                        <dt>Límite</dt>
+                        <dd>{account.creditLimit ?? '-'}</dd>
+                      </div>
+                      <div>
+                        <dt>Cierre / venc.</dt>
+                        <dd>{account.statementCloseDay ?? '-'} / {account.dueDay ?? '-'}</dd>
+                      </div>
+                    </dl>
+
+                    <div className="row-actions">
+                      <button
+                        type="button"
+                        className="boton-secundario"
+                        onClick={() => toggleMutation.mutate(account)}
+                        disabled={toggleMutation.isPending}
+                      >
+                        {account.active ? 'Desactivar' : 'Activar'}
+                      </button>
+
+                      <button
+                        type="button"
+                        className="boton-danger"
+                        onClick={() =>
+                          window.confirm('¿Desactivar cuenta?') &&
+                          deleteMutation.mutate(account.id)
+                        }
+                        disabled={deleteMutation.isPending}
+                      >
+                        Eliminar
+                      </button>
+                    </div>
+                  </article>
+                ))}
+              </div>
             </div>
           ) : null}
         </section>

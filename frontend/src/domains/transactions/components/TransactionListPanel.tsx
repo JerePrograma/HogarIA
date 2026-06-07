@@ -147,275 +147,308 @@ export function TransactionListPanel({
       </div>
 
       <div className="transactions-toolbar">
-        <label className="transactions-search">
-          Buscar
-          <input
-            className="input-ui"
-            value={filters.search}
-            placeholder="Descripción, cuenta, categoría, canal o clasificación"
-            onChange={(event) =>
-              onFiltersChange({ search: event.target.value })
+        <div className="transactions-toolbar-head">
+          <label className="transactions-search">
+            Buscar movimientos
+            <input
+              className="input-ui"
+              value={filters.search}
+              placeholder="Descripción, cuenta, categoría, canal o regla"
+              onChange={(event) =>
+                onFiltersChange({ search: event.target.value })
+              }
+            />
+          </label>
+
+          <div className="transactions-filter-summary">
+            <strong>{filteredTransactions.length}</strong>
+            <span>visibles</span>
+          </div>
+        </div>
+
+        <div className="transactions-filter-chips" aria-label="Filtros rápidos">
+          <button
+            type="button"
+            className={`tx-filter-chip ${filters.status === "PENDING" ? "active" : ""}`}
+            onClick={() =>
+              onFiltersChange({
+                status: filters.status === "PENDING" ? ALL : "PENDING",
+              })
             }
-          />
-        </label>
-
-        <div className="transactions-filter-grid">
-          <label>
-            Cuenta
-            <select
-              className="input-ui"
-              value={filters.accountId}
-              onChange={(event) =>
-                onFiltersChange({
-                  accountId: event.target.value,
-                })
-              }
-            >
-              <option value={ALL}>Todas</option>
-              {accounts.map((account) => (
-                <option key={account.id} value={account.id}>
-                  {account.name}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label>
-            Categoría
-            <select
-              className="input-ui"
-              value={filters.categoryId}
-              onChange={(event) =>
-                onFiltersChange({
-                  categoryId: event.target.value,
-                })
-              }
-            >
-              <option value={ALL}>Todas</option>
-              <option value={WITHOUT_CATEGORY}>Sin categoría</option>
-              {categories.map((category) => (
-                <option key={category.id} value={category.id}>
-                  {getCategoryDisplayName(category)}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label>
-            Tipo
-            <select
-              className="input-ui"
-              value={filters.movementType}
-              onChange={(event) =>
-                onFiltersChange({
-                  movementType: event.target.value as MovementType | typeof ALL,
-                })
-              }
-            >
-              <option value={ALL}>Todos</option>
-              {movementTypeOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label>
-            Estado
-            <select
-              className="input-ui"
-              value={filters.status}
-              onChange={(event) =>
-                onFiltersChange({
-                  status: event.target.value as TransactionStatus | typeof ALL,
-                })
-              }
-            >
-              <option value={ALL}>Todos</option>
-              {transactionStatusOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label>
-            Origen
-            <select
-              className="input-ui"
-              value={filters.origin}
-              onChange={(event) =>
-                onFiltersChange({
-                  origin: event.target.value as TransactionFilters["origin"],
-                })
-              }
-            >
-              <option value={ALL}>Todos</option>
-              {transactionOriginOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label>
-            Clasificación
-            <select
-              className="input-ui"
-              value={filters.classificationStatus}
-              onChange={(event) =>
-                onFiltersChange({
-                  classificationStatus: event.target.value as
-                    | TransactionClassificationStatus
-                    | typeof ALL,
-                })
-              }
-            >
-              <option value={ALL}>Todas</option>
-              {classificationStatusOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label>
-            Canal
-            <select
-              className="input-ui"
-              value={filters.paymentChannel}
-              onChange={(event) =>
-                onFiltersChange({
-                  paymentChannel: event.target.value as
-                    | PaymentChannel
-                    | typeof ALL,
-                })
-              }
-            >
-              <option value={ALL}>Todos</option>
-              {paymentChannelOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label>
-            Source
-            <input
-              className="input-ui"
-              value={filters.source}
-              placeholder="BANCO_PROVINCIA, MERCADO_PAGO"
-              onChange={(event) => onFiltersChange({ source: event.target.value })}
-            />
-          </label>
-
-          <label>
-            Desde
-            <input
-              className="input-ui"
-              type="date"
-              value={filters.dateFrom}
-              onChange={(event) => onFiltersChange({ dateFrom: event.target.value })}
-            />
-          </label>
-
-          <label>
-            Hasta
-            <input
-              className="input-ui"
-              type="date"
-              value={filters.dateTo}
-              onChange={(event) => onFiltersChange({ dateTo: event.target.value })}
-            />
-          </label>
-
-          <label>
-            Monto exacto
-            <input
-              className="input-ui"
-              type="number"
-              step="0.01"
-              value={filters.exactAmount}
-              onChange={(event) =>
-                onFiltersChange({ exactAmount: event.target.value })
-              }
-            />
-          </label>
-
-          <label>
-            Impacto
-            <select
-              className="input-ui"
-              value={filters.impactKind}
-              onChange={(event) =>
-                onFiltersChange({
-                  impactKind: event.target.value as TransactionFilters["impactKind"],
-                })
-              }
-            >
-              <option value={ALL}>Todos</option>
-              <option value="NEUTRAL">No cambia el resultado</option>
-              <option value="OPERATING_INCOME">Ingreso real</option>
-              <option value="CONSUMPTION_EXPENSE">Gasto real</option>
-              <option value="INTERNAL_TRANSFER">Transferencia entre cuentas</option>
-              <option value="IGNORED">Ignorado</option>
-            </select>
-          </label>
+          >
+            Pendientes
+          </button>
+          <button
+            type="button"
+            className={`tx-filter-chip ${filters.onlyWithoutCategory || filters.categoryId === WITHOUT_CATEGORY ? "active" : ""}`}
+            onClick={() =>
+              onFiltersChange({
+                onlyWithoutCategory: !filters.onlyWithoutCategory,
+                categoryId: filters.onlyWithoutCategory ? ALL : WITHOUT_CATEGORY,
+              })
+            }
+          >
+            Sin categoría
+          </button>
+          <button
+            type="button"
+            className={`tx-filter-chip ${filters.onlyInternalTransfers ? "active" : ""}`}
+            onClick={() =>
+              onFiltersChange({
+                onlyInternalTransfers: !filters.onlyInternalTransfers,
+              })
+            }
+          >
+            Transferencias internas
+          </button>
+          <button
+            type="button"
+            className={`tx-filter-chip ${filters.onlyDuplicates ? "active" : ""}`}
+            onClick={() =>
+              onFiltersChange({ onlyDuplicates: !filters.onlyDuplicates })
+            }
+          >
+            Duplicados
+          </button>
+          <button
+            type="button"
+            className={`tx-filter-chip ${filters.onlyImported ? "active" : ""}`}
+            onClick={() =>
+              onFiltersChange({ onlyImported: !filters.onlyImported })
+            }
+          >
+            Importados
+          </button>
+          <button
+            type="button"
+            className={`tx-filter-chip ${filters.impactKind === "NEUTRAL" ? "active" : ""}`}
+            onClick={() =>
+              onFiltersChange({
+                impactKind: filters.impactKind === "NEUTRAL" ? ALL : "NEUTRAL",
+              })
+            }
+          >
+            Sin impacto operativo
+          </button>
         </div>
 
-        <div className="transactions-filter-grid">
-          <label>
-            <input
-              type="checkbox"
-              checked={filters.onlyDuplicates}
-              onChange={(event) =>
-                onFiltersChange({ onlyDuplicates: event.target.checked })
-              }
-            />{" "}
-            Solo duplicados
-          </label>
+        <details className="transactions-advanced-filters" open={activeFilterCount > 0}>
+          <summary>
+            <span>Filtros avanzados</span>
+            <strong>{activeFilterCount} activo(s)</strong>
+          </summary>
 
-          <label>
-            <input
-              type="checkbox"
-              checked={filters.onlyInternalTransfers}
-              onChange={(event) =>
-                onFiltersChange({
-                  onlyInternalTransfers: event.target.checked,
-                })
-              }
-            />{" "}
-            Solo transferencias internas
-          </label>
+          <div className="transactions-filter-grid">
+            <label>
+              Cuenta
+              <select
+                className="input-ui"
+                value={filters.accountId}
+                onChange={(event) =>
+                  onFiltersChange({
+                    accountId: event.target.value,
+                  })
+                }
+              >
+                <option value={ALL}>Todas</option>
+                {accounts.map((account) => (
+                  <option key={account.id} value={account.id}>
+                    {account.name}
+                  </option>
+                ))}
+              </select>
+            </label>
 
-          <label>
-            <input
-              type="checkbox"
-              checked={filters.onlyImported}
-              onChange={(event) =>
-                onFiltersChange({ onlyImported: event.target.checked })
-              }
-            />{" "}
-            Solo importados
-          </label>
+            <label>
+              Categoría
+              <select
+                className="input-ui"
+                value={filters.categoryId}
+                onChange={(event) =>
+                  onFiltersChange({
+                    categoryId: event.target.value,
+                    onlyWithoutCategory: event.target.value === WITHOUT_CATEGORY,
+                  })
+                }
+              >
+                <option value={ALL}>Todas</option>
+                <option value={WITHOUT_CATEGORY}>Sin categoría</option>
+                {categories.map((category) => (
+                  <option key={category.id} value={category.id}>
+                    {getCategoryDisplayName(category)}
+                  </option>
+                ))}
+              </select>
+            </label>
 
-          <label>
-            <input
-              type="checkbox"
-              checked={filters.onlyWithoutCategory}
-              onChange={(event) =>
-                onFiltersChange({ onlyWithoutCategory: event.target.checked })
-              }
-            />{" "}
-            Solo sin categoría
-          </label>
-        </div>
+            <label>
+              Tipo
+              <select
+                className="input-ui"
+                value={filters.movementType}
+                onChange={(event) =>
+                  onFiltersChange({
+                    movementType: event.target.value as MovementType | typeof ALL,
+                  })
+                }
+              >
+                <option value={ALL}>Todos</option>
+                {movementTypeOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label>
+              Estado
+              <select
+                className="input-ui"
+                value={filters.status}
+                onChange={(event) =>
+                  onFiltersChange({
+                    status: event.target.value as TransactionStatus | typeof ALL,
+                  })
+                }
+              >
+                <option value={ALL}>Todos</option>
+                {transactionStatusOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label>
+              Origen
+              <select
+                className="input-ui"
+                value={filters.origin}
+                onChange={(event) =>
+                  onFiltersChange({
+                    origin: event.target.value as TransactionFilters["origin"],
+                  })
+                }
+              >
+                <option value={ALL}>Todos</option>
+                {transactionOriginOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label>
+              Clasificación
+              <select
+                className="input-ui"
+                value={filters.classificationStatus}
+                onChange={(event) =>
+                  onFiltersChange({
+                    classificationStatus: event.target.value as
+                      | TransactionClassificationStatus
+                      | typeof ALL,
+                  })
+                }
+              >
+                <option value={ALL}>Todas</option>
+                {classificationStatusOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label>
+              Canal
+              <select
+                className="input-ui"
+                value={filters.paymentChannel}
+                onChange={(event) =>
+                  onFiltersChange({
+                    paymentChannel: event.target.value as
+                      | PaymentChannel
+                      | typeof ALL,
+                  })
+                }
+              >
+                <option value={ALL}>Todos</option>
+                {paymentChannelOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label>
+              Source
+              <input
+                className="input-ui"
+                value={filters.source}
+                placeholder="BANCO_PROVINCIA, MERCADO_PAGO"
+                onChange={(event) => onFiltersChange({ source: event.target.value })}
+              />
+            </label>
+
+            <label>
+              Desde
+              <input
+                className="input-ui"
+                type="date"
+                value={filters.dateFrom}
+                onChange={(event) => onFiltersChange({ dateFrom: event.target.value })}
+              />
+            </label>
+
+            <label>
+              Hasta
+              <input
+                className="input-ui"
+                type="date"
+                value={filters.dateTo}
+                onChange={(event) => onFiltersChange({ dateTo: event.target.value })}
+              />
+            </label>
+
+            <label>
+              Monto exacto
+              <input
+                className="input-ui"
+                type="number"
+                step="0.01"
+                value={filters.exactAmount}
+                onChange={(event) =>
+                  onFiltersChange({ exactAmount: event.target.value })
+                }
+              />
+            </label>
+
+            <label>
+              Impacto
+              <select
+                className="input-ui"
+                value={filters.impactKind}
+                onChange={(event) =>
+                  onFiltersChange({
+                    impactKind: event.target.value as TransactionFilters["impactKind"],
+                  })
+                }
+              >
+                <option value={ALL}>Todos</option>
+                <option value="NEUTRAL">No cambia el resultado</option>
+                <option value="OPERATING_INCOME">Ingreso real</option>
+                <option value="CONSUMPTION_EXPENSE">Gasto real</option>
+                <option value="INTERNAL_TRANSFER">Transferencia entre cuentas</option>
+                <option value="IGNORED">Ignorado</option>
+              </select>
+            </label>
+          </div>
+        </details>
       </div>
 
       {selectedCount > 0 ? (

@@ -78,13 +78,12 @@ export function TransactionTable({
                 />
               </th>
               <th>Fecha</th>
-              <th>Descripción</th>
-              <th>Cuenta</th>
-              <th>Categoría</th>
-              <th>Tipo</th>
+              <th>Movimiento</th>
+              <th>Cuenta / categoría</th>
+              <th>Impacto</th>
               <th className="amount-cell">Monto</th>
               <th>Estado</th>
-              <th>Acción rápida</th>
+              <th>Acciones</th>
             </tr>
           ) : (
             <tr>
@@ -188,9 +187,8 @@ function SimpleRow({
           aria-label="Seleccionar movimiento"
         />
       </td>
-      <td>
+      <td className="transactions-date-cell">
         <strong>{formatDate(transaction.realDate)}</strong>
-        <br />
         <span className="muted">Presupuesto: {formatDate(transaction.budgetDate)}</span>
       </td>
       <td>
@@ -199,13 +197,20 @@ function SimpleRow({
           <HumanBadges transaction={transaction} />
         </div>
       </td>
-      <td>{accountName}</td>
-      <td>{getCategoryDisplayName(category)}</td>
       <td>
+        <div className="transactions-account-cell">
+          <strong>{accountName}</strong>
+          <span>{getCategoryDisplayName(category)}</span>
+        </div>
+      </td>
+      <td>
+        <div className="transactions-impact-cell">
         <StatusBadge
           tone={movementTypeTones[transaction.movementType]}
           label={labelOrValue(movementTypeLabels, transaction.movementType)}
         />
+          <span>{humanImpact(transaction)}</span>
+        </div>
       </td>
       <td className="amount-cell">
         {formatMoney(transaction.amount, transaction.currency)}
@@ -271,26 +276,32 @@ function AuditRow({
           aria-label="Seleccionar movimiento"
         />
       </td>
-      <td>{transaction.description || "Sin descripción"}</td>
-      <td>{transaction.normalizedDescription || "-"}</td>
+      <td className="transactions-audit-description">{transaction.description || "Sin descripción"}</td>
+      <td className="transactions-audit-description">{transaction.normalizedDescription || "-"}</td>
       <td>
-        {labelOrValue(transactionOriginLabels, transaction.origin)}
-        {transaction.source ? <p className="compact-muted">{transaction.source}</p> : null}
+        <div className="transactions-audit-stack">
+          <strong>{labelOrValue(transactionOriginLabels, transaction.origin)}</strong>
+          {transaction.source ? <span>{transaction.source}</span> : null}
+        </div>
       </td>
       <td>
-        <ShortValue label="Operación" value={transaction.sourceOperationId} />
-        <ShortValue label="Hash" value={transaction.sourceHash} />
-        <ShortValue label="Repetido" value={transaction.duplicateFingerprint} />
-        <ShortValue label="Grupo" value={transaction.internalTransferGroupId} />
+        <div className="transactions-audit-stack">
+          <ShortValue label="Operación" value={transaction.sourceOperationId} />
+          <ShortValue label="Hash" value={transaction.sourceHash} />
+          <ShortValue label="Repetido" value={transaction.duplicateFingerprint} />
+          <ShortValue label="Grupo" value={transaction.internalTransferGroupId} />
+        </div>
       </td>
-      <td>{humanImpact(transaction)}</td>
+      <td>
+        <span className="badge badge-muted">{humanImpact(transaction)}</span>
+      </td>
       <td>
         <StatusBadge
           tone={classificationStatusTones[classificationStatus]}
           label={labelOrValue(classificationStatusLabels, classificationStatus)}
         />
         {transaction.classificationReason ? (
-          <p className="compact-muted">{transaction.classificationReason}</p>
+          <p className="transactions-audit-note">{transaction.classificationReason}</p>
         ) : null}
       </td>
       <td>{transaction.importBatchId ? shortId(transaction.importBatchId) : "-"}</td>
@@ -383,9 +394,9 @@ function ShortValue({ label, value }: { label: string; value?: string | null }) 
   if (!value) return null;
 
   return (
-    <p className="compact-muted">
+    <span>
       {label}: {shortId(value)}
-    </p>
+    </span>
   );
 }
 

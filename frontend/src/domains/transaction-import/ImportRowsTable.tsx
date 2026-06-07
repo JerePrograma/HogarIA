@@ -104,7 +104,7 @@ export function ImportRowsTable({
               <th className="amount-cell">Monto</th>
               <th>Tipo</th>
               <th>Categoría</th>
-              <th>Estado</th>
+              <th>Decisión</th>
             </tr>
           </thead>
 
@@ -124,7 +124,7 @@ export function ImportRowsTable({
               const locked = isLockedImportRowStatus(row.status);
 
               return (
-                <tr key={row.rowNumber}>
+                <tr key={row.rowNumber} data-import-status={row.status}>
                   <td>
                     <strong>#{row.rowNumber}</strong>
                   </td>
@@ -260,6 +260,7 @@ export function ImportRowsTable({
                   </td>
 
                   <td>
+                    <div className="import-row-status-cell">
                     <StatusBadge
                       tone={getImportRowStatusTone(row.status)}
                       label={labelOrFallback(
@@ -268,6 +269,10 @@ export function ImportRowsTable({
                         "Estado no reconocido",
                       )}
                     />
+                      {locked ? (
+                        <span>No se edita desde esta previsualización.</span>
+                      ) : null}
+                    </div>
                   </td>
                 </tr>
               );

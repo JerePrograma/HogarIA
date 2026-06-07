@@ -314,8 +314,9 @@ export function CategoriesPage() {
           ) : null}
 
           {filteredCategories.length > 0 ? (
-            <div className="tabla-ui">
-              <table className="table-compact">
+            <div className="crud-responsive">
+              <div className="tabla-ui crud-table">
+                <table className="table-compact">
                 <thead>
                   <tr>
                     <th>Ruta</th>
@@ -515,7 +516,192 @@ export function CategoriesPage() {
                     );
                   })}
                 </tbody>
-              </table>
+                </table>
+              </div>
+
+              <div className="crud-mobile-list category-mobile-list">
+                {ALL_GROUPS.map((group) => {
+                  const groupItems = groupedCategories.get(group) ?? [];
+                  if (groupItems.length === 0) return null;
+
+                  return (
+                    <section key={group} className="category-mobile-group">
+                      <div className="category-mobile-group-heading">
+                        <strong>{group}</strong>
+                        <span>{groupItems.length}</span>
+                      </div>
+
+                      {groupItems.map((category) => {
+                        const activeEditForm = editForm?.id === category.id ? editForm : null;
+                        const isEditing = Boolean(activeEditForm);
+                        const editableParentOptions = parentOptions.filter(
+                          (option) =>
+                            option.id !== category.id &&
+                            !buildDescendantIds(categories, category.id).has(option.id),
+                        );
+
+                        return (
+                          <article key={category.id} className="crud-mobile-card category-mobile-card">
+                            <header>
+                              <div
+                                className="category-mobile-title"
+                                data-depth={Math.min(category.depth ?? 0, 4)}
+                              >
+                                <strong>{getCategoryDisplayName(category)}</strong>
+                                <span>{category.categoryKey ?? 'Sin categoryKey'}</span>
+                              </div>
+
+                              <StatusBadge
+                                tone={category.active ? 'ok' : 'watch'}
+                                label={category.active ? 'Activa' : 'Inactiva'}
+                              />
+                            </header>
+
+                            {isEditing ? (
+                              <div className="form-grid">
+                                <label>
+                                  Nombre
+                                  <input
+                                    className="input-ui"
+                                    value={activeEditForm?.name ?? ''}
+                                    onChange={(event) =>
+                                      setEditForm((current) =>
+                                        current ? { ...current, name: event.target.value } : current,
+                                      )
+                                    }
+                                  />
+                                </label>
+                                <label>
+                                  Padre
+                                  <ParentSelect
+                                    value={activeEditForm?.parentId ?? ''}
+                                    categories={editableParentOptions}
+                                    onChange={(nextParentId) =>
+                                      setEditForm((current) =>
+                                        current
+                                          ? { ...current, parentId: nextParentId || null }
+                                          : current,
+                                      )
+                                    }
+                                  />
+                                </label>
+                                <label>
+                                  Tipo
+                                  <select
+                                    className="input-ui"
+                                    value={activeEditForm?.type ?? 'VARIABLE_EXPENSE'}
+                                    onChange={(event) =>
+                                      setEditForm((current) =>
+                                        current
+                                          ? { ...current, type: event.target.value as CategoryType }
+                                          : current,
+                                      )
+                                    }
+                                  >
+                                    {categoryTypeOptions.map((option) => (
+                                      <option key={option.value} value={option.value}>
+                                        {option.label}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </label>
+                                <label>
+                                  Alcance
+                                  <select
+                                    className="input-ui"
+                                    value={activeEditForm?.scope ?? 'PERSONAL'}
+                                    onChange={(event) =>
+                                      setEditForm((current) =>
+                                        current
+                                          ? { ...current, scope: event.target.value as EditableScope }
+                                          : current,
+                                      )
+                                    }
+                                  >
+                                    {categoryScopeOptions.map((option) => (
+                                      <option key={option.value} value={option.value}>
+                                        {option.label}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </label>
+                              </div>
+                            ) : (
+                              <dl>
+                                <div>
+                                  <dt>Tipo</dt>
+                                  <dd>{labelOrValue(categoryTypeLabels, category.type)}</dd>
+                                </div>
+                                <div>
+                                  <dt>Alcance</dt>
+                                  <dd>{labelOrValue(categoryScopeLabels, category.scope)}</dd>
+                                </div>
+                                <div>
+                                  <dt>Padre</dt>
+                                  <dd>{category.parentId ? parentName(categories, category.parentId) : 'Sin padre'}</dd>
+                                </div>
+                              </dl>
+                            )}
+
+                            {category.scope === 'GLOBAL' ? (
+                              <span className="compact-muted">Categoría global de solo lectura.</span>
+                            ) : isEditing ? (
+                              <div className="row-actions">
+                                <button
+                                  type="button"
+                                  className="boton-principal"
+                                  onClick={saveEdit}
+                                  disabled={!canSaveEdit}
+                                >
+                                  {updateMutation.isPending ? 'Guardando...' : 'Guardar'}
+                                </button>
+                                <button
+                                  type="button"
+                                  className="boton-secundario"
+                                  onClick={() => setEditForm(null)}
+                                  disabled={updateMutation.isPending}
+                                >
+                                  Cancelar
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="row-actions">
+                                <button
+                                  type="button"
+                                  className="boton-secundario"
+                                  onClick={() => startEdit(category)}
+                                  disabled={Boolean(editForm)}
+                                >
+                                  Editar
+                                </button>
+                                <button
+                                  type="button"
+                                  className="boton-secundario"
+                                  onClick={() => toggleMutation.mutate(category)}
+                                  disabled={toggleMutation.isPending || Boolean(editForm)}
+                                >
+                                  {category.active ? 'Desactivar' : 'Activar'}
+                                </button>
+                                <button
+                                  type="button"
+                                  className="boton-danger"
+                                  onClick={() =>
+                                    window.confirm('¿Desactivar categoría?') &&
+                                    deleteMutation.mutate(category.id)
+                                  }
+                                  disabled={deleteMutation.isPending || Boolean(editForm)}
+                                >
+                                  Eliminar
+                                </button>
+                              </div>
+                            )}
+                          </article>
+                        );
+                      })}
+                    </section>
+                  );
+                })}
+              </div>
             </div>
           ) : null}
         </section>

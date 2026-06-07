@@ -95,7 +95,7 @@ describe("transaction import preview components", () => {
     );
 
     expect(screen.getByText("Sugeridas")).toBeInTheDocument();
-    expect(screen.getByText("Review")).toBeInTheDocument();
+    expect(screen.getByText("A revisar")).toBeInTheDocument();
     expect(screen.getByText("Necesitan categoría")).toBeInTheDocument();
     expect(screen.getByText("Técnicas/neutras")).toBeInTheDocument();
     expect(screen.getByText("6")).toBeInTheDocument();

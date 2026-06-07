@@ -17,13 +17,20 @@ export function OperationalSummaryCards({ summary, realSummary }: Props) {
   const income = realSummary?.confirmedIncome ?? summary.confirmedIncome;
   const expenses = realSummary?.confirmedExpenses ?? summary.confirmedExpenses;
   const confirmedCount = realSummary?.confirmedCount ?? 0;
+  const pendingCount = realSummary?.pendingCount ?? 0;
+  const reviewCount = realSummary?.reviewCount ?? 0;
+  const withoutCategoryCount = realSummary?.withoutCategoryCount ?? 0;
+  const riskTone = toMetricTone(summary.financialRiskLevel);
 
   return (
-    <section>
+    <section className="dashboard-executive-summary">
       <div className="section-title">
         <div>
-          <p className="eyebrow">Situación actual</p>
-          <h2>Estado operativo del mes</h2>
+          <p className="eyebrow">Lectura rápida</p>
+          <h2>Lo importante del mes</h2>
+          <p className="muted">
+            Balance, flujo confirmado y calidad de datos para decidir por dónde seguir.
+          </p>
         </div>
 
         <StatusBadge
@@ -56,12 +63,27 @@ export function OperationalSummaryCards({ summary, realSummary }: Props) {
         />
 
         <MetricCard
-          title="Movimientos reales"
-          value={confirmedCount}
-          helper="Registros confirmados del período."
-          tone="info"
+          title="Pendientes / revisión"
+          value={pendingCount + reviewCount}
+          helper={`${pendingCount} pendiente(s), ${reviewCount} en revisión, ${withoutCategoryCount} sin categoría.`}
+          tone={pendingCount + reviewCount + withoutCategoryCount > 0 ? 'warning' : 'success'}
+        />
+
+        <MetricCard
+          title="Salud del mes"
+          value={financialRiskLevelLabels[summary.financialRiskLevel]}
+          helper={`${confirmedCount} movimiento(s) confirmado(s) sostienen esta lectura.`}
+          tone={riskTone}
         />
       </div>
     </section>
   );
+}
+
+function toMetricTone(
+  riskLevel: NonNullable<DashboardSummary['operationalSummary']>['financialRiskLevel'],
+) {
+  if (riskLevel === 'OK') return 'success';
+  if (riskLevel === 'WATCH') return 'warning';
+  return 'danger';
 }

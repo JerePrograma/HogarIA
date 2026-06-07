@@ -72,8 +72,8 @@ const rowStatusLabels: Record<string, string> = {
   POSSIBLE_INTERNAL_TRANSFER: "Posibles transferencias internas",
   INTERNAL_TRANSFER_MATCHED: "Transferencias internas",
   POSSIBLE_CROSS_SOURCE_DUPLICATE: "Posibles duplicados entre cuentas",
-  REVIEW: "Requieren revisión",
-  ERROR: "Con error",
+  REVIEW: "A revisar",
+  ERROR: "Error de archivo",
   SKIPPED: "Omitidas",
 };
 
@@ -504,7 +504,7 @@ export function TransactionImportPage() {
                 ? "Importación finalizada"
                 : preview
                   ? hasBlockingIssues
-                    ? "Revisión requerida"
+                    ? "Bloqueos por resolver"
                     : "Lista para confirmar"
                   : "Esperando archivo"}
             </strong>
@@ -595,8 +595,8 @@ export function TransactionImportPage() {
                     <p className="eyebrow">Paso 2</p>
                     <h2>Revisar y confirmar</h2>
                     <p className="muted">
-                      Revisá categorías, errores y duplicados antes de confirmar
-                      la importación.
+                      Separá bloqueos reales, duplicados y filas que sólo
+                      necesitan criterio antes de confirmar.
                     </p>
                   </div>
 
@@ -672,7 +672,7 @@ export function TransactionImportPage() {
                   <section className="transaction-import-alert-grid">
                     {invalidRows > 0 ? (
                       <div className="mensaje-error">
-                        <strong>{invalidRows} fila(s) con error.</strong>
+                        <strong>{invalidRows} fila(s) no importables por error.</strong>
                         <span>
                           No se van a importar. Revisá el archivo o corregí los
                           datos de origen.
@@ -683,7 +683,7 @@ export function TransactionImportPage() {
                     {unresolvedRows > 0 ? (
                       <div className="mensaje-warning">
                         <strong>
-                          {unresolvedRows} fila(s) necesitan categoría.
+                          {unresolvedRows} fila(s) bloqueadas por categoría.
                         </strong>
                         <span>
                           Asigná una categoría o activá una categoría temporal compatible para
@@ -696,13 +696,33 @@ export function TransactionImportPage() {
                     {duplicateDecisionMissing ? (
                       <div className="mensaje-warning">
                         <strong>
-                          {duplicateRows} duplicado(s) real(es).
+                          Falta decidir sobre {duplicateRows} duplicado(s).
                         </strong>
                         <span>
                           Marcá que querés omitirlos antes de confirmar.
                         </span>
                       </div>
                     ) : null}
+                  </section>
+                ) : null}
+
+                {preview ? (
+                  <section className="transaction-import-guidance-grid">
+                    <article>
+                      <span>Bloquean confirmación</span>
+                      <strong>{unresolvedRows + invalidRows + (duplicateDecisionMissing ? duplicateRows : 0)}</strong>
+                      <p>Categorías obligatorias, errores de archivo o duplicados sin decisión.</p>
+                    </article>
+                    <article>
+                      <span>Requieren criterio</span>
+                      <strong>{reviewRows}</strong>
+                      <p>Se pueden revisar sin tratarlas como error técnico.</p>
+                    </article>
+                    <article>
+                      <span>Impacto neutral</span>
+                      <strong>{technicalNeutralRows + derived.internalTransferRows}</strong>
+                      <p>Transferencias o técnicas que no inflan ingresos ni gastos.</p>
+                    </article>
                   </section>
                 ) : null}
 
@@ -1011,7 +1031,7 @@ export function TransactionImportPage() {
                 </div>
 
                 <div className={unresolvedRows > 0 ? "tone-warning" : ""}>
-                  <span>Bloqueadas por categoría</span>
+                  <span>Por resolver</span>
                   <strong>{unresolvedRows}</strong>
                 </div>
 
@@ -1026,7 +1046,7 @@ export function TransactionImportPage() {
                 </div>
 
                 <div className={reviewRows > 0 ? "tone-warning" : ""}>
-                  <span>En revisión</span>
+                  <span>A revisar</span>
                   <strong>{reviewRows}</strong>
                 </div>
 
@@ -1046,7 +1066,7 @@ export function TransactionImportPage() {
                 </div>
 
                 <div className={invalidRows > 0 ? "tone-danger" : ""}>
-                  <span>Con error</span>
+                  <span>Error de archivo</span>
                   <strong>{invalidRows}</strong>
                 </div>
               </div>
@@ -1067,8 +1087,9 @@ export function TransactionImportPage() {
               <ul className="transaction-import-rule-list">
                 <li>Las filas listas se importan.</li>
                 <li>Los duplicados se omiten cuando confirmás esa decisión.</li>
-                <li>Las filas con error no se importan.</li>
-                <li>Las filas sin categoría dependen de la regla fallback.</li>
+                <li>Las filas con error de archivo no se importan.</li>
+                <li>Las filas sin categoría se resuelven con categoría manual o temporal.</li>
+                <li>Las transferencias internas entran como impacto neutral cuando corresponde.</li>
               </ul>
             </section>
           </aside>

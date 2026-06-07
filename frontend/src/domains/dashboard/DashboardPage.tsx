@@ -64,20 +64,6 @@ export function DashboardPage() {
                   Ir a planificación
                 </Button>
               </div>
-              <div className="page-actions">
-                <Button tone="secondary" to={`${routePaths.planning(profileId)}/monthly`}>
-                  Planificar próximo mes
-                </Button>
-                <Button tone="secondary" to={`${routePaths.planning(profileId)}/monthly/external-debts/banco-provincia`}>
-                  Revisar cuotas futuras
-                </Button>
-                <Button tone="secondary" to={`${routePaths.transactions(profileId)}?onlyWithoutCategory=true`}>
-                  Completar sin categoría
-                </Button>
-                <Button tone="secondary" to={`${routePaths.transactions(profileId)}?onlyInternalTransfers=true`}>
-                  Resolver transferencias
-                </Button>
-              </div>
             </div>
           }
         />
@@ -114,7 +100,54 @@ export function DashboardPage() {
               <OperationalAlerts alerts={dashboardAlerts} />
             </section>
 
-            <section className="grid gap-4 xl:grid-cols-4">
+            <section aria-label="Acciones rápidas">
+              <div className="section-title">
+                <div>
+                  <p className="eyebrow">Acciones</p>
+                  <h2>Entradas frecuentes</h2>
+                  <p className="muted">
+                    Accesos orientados a resolver el mes sin volver al menú lateral.
+                  </p>
+                </div>
+              </div>
+
+              <div className="dashboard-action-grid">
+                <DashboardActionCard
+                  title="Completar sin categoría"
+                  helper="Mejora reportes, presupuesto y comparación mensual."
+                  to={`${routePaths.transactions(profileId)}?onlyWithoutCategory=true`}
+                  tone="warning"
+                />
+                <DashboardActionCard
+                  title="Resolver transferencias"
+                  helper="Evita inflar ingresos o gastos con movimientos internos."
+                  to={`${routePaths.transactions(profileId)}?onlyInternalTransfers=true`}
+                  tone="info"
+                />
+                <DashboardActionCard
+                  title="Importar movimientos"
+                  helper="Cargar extractos y revisar duplicados antes de confirmar."
+                  to={routePaths.transactionImport(profileId)}
+                  tone="success"
+                />
+                <DashboardActionCard
+                  title="Planificar próximo mes"
+                  helper="Convertí compromisos y cuotas futuras en planificación."
+                  to={`${routePaths.planning(profileId)}/monthly`}
+                  tone="neutral"
+                />
+              </div>
+            </section>
+
+            <section aria-label="Control mensual">
+              <div className="section-title">
+                <div>
+                  <p className="eyebrow">Control mensual</p>
+                  <h2>Resumen por módulo</h2>
+                </div>
+              </div>
+
+              <div className="dashboard-snapshot-grid">
               <CompactSnapshot
                 title="Resumen de presupuesto"
                 value={formatMoney(summary.budgetSummary?.totalDifference ?? 0)}
@@ -146,6 +179,7 @@ export function DashboardPage() {
                 actionLabel="Ver préstamos"
                 to={routePaths.externalLoans(profileId)}
               />
+              </div>
             </section>
 
             {cashFlow ? (
@@ -186,6 +220,25 @@ export function DashboardPage() {
         ) : null}
       </Page>
     </AppShell>
+  );
+}
+
+function DashboardActionCard({
+  title,
+  helper,
+  to,
+  tone,
+}: {
+  title: string;
+  helper: string;
+  to: string;
+  tone: 'neutral' | 'info' | 'success' | 'warning';
+}) {
+  return (
+    <Link className="dashboard-action-card" data-tone={tone} to={to}>
+      <strong>{title}</strong>
+      <span>{helper}</span>
+    </Link>
   );
 }
 

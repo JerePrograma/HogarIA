@@ -90,9 +90,9 @@ export function ImportPreviewSummary({
       />
 
       <SummaryItem
-        title="Review"
+        title="A revisar"
         value={reviewRows}
-        helper="Pueden quedar pendientes o neutrales."
+        helper="No siempre bloquean; necesitan criterio antes del cierre."
         tone={reviewRows > 0 ? 'warning' : 'neutral'}
       />
 
@@ -111,14 +111,14 @@ export function ImportPreviewSummary({
       />
 
       <SummaryItem
-        title="Bloqueadas"
+        title="No importables ahora"
         value={blockedRows}
         helper="Filas que no se crearán con la decisión actual."
         tone={blockedRows > 0 ? 'danger' : 'neutral'}
       />
 
       <SummaryItem
-        title="Con error"
+        title="Error de archivo"
         value={invalidRows}
         helper="No se van a importar."
         tone={invalidRows > 0 ? 'danger' : 'neutral'}

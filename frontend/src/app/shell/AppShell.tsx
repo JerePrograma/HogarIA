@@ -6,10 +6,12 @@ type NavItem = {
   label: string;
   to: string;
   description?: string;
+  shortLabel?: string;
 };
 
 type NavSection = {
   title: string;
+  summary: string;
   items: NavItem[];
 };
 
@@ -30,6 +32,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
 
   const [theme, setTheme] = useState<ThemeMode>(getInitialTheme);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', theme === 'dark');
@@ -47,55 +50,83 @@ export function AppShell({ children }: { children: ReactNode }) {
     return [
       {
         title: 'Inicio',
+        summary: 'Lectura y control',
         items: [
           {
             label: 'Inicio',
             description: 'Lectura ejecutiva del mes',
+            shortLabel: 'Inicio',
             to: routePaths.dashboard(profileId),
           },
           {
             label: 'Centro de control',
             description: 'Calidad y revisión',
+            shortLabel: 'Control',
             to: routePaths.controlCenter(profileId),
           },
         ],
       },
       {
-        title: 'Operación mensual',
+        title: 'Movimientos',
+        summary: 'Registro y depuración',
+        items: [
+          {
+            label: 'Movimientos',
+            description: 'Registro real',
+            shortLabel: 'Listado',
+            to: routePaths.transactions(profileId),
+          },
+          {
+            label: 'Importar',
+            description: 'Carga guiada',
+            shortLabel: 'Importar',
+            to: routePaths.transactionImport(profileId),
+          },
+          {
+            label: 'Recategorizar',
+            description: 'Corrección masiva',
+            shortLabel: 'Recat.',
+            to: routePaths.transactionRecategorize(profileId),
+          },
+        ],
+      },
+      {
+        title: 'Planificación',
+        summary: 'Mes, presupuesto y desvíos',
         items: [
           {
             label: 'Planificación',
             description: 'Decidir y reconciliar',
+            shortLabel: 'Plan',
             to: routePaths.planning(profileId),
-          },
-          {
-            label: 'Movimientos',
-            description: 'Registro real',
-            to: routePaths.transactions(profileId),
           },
           {
             label: 'Presupuesto',
             description: 'Límites y control',
+            shortLabel: 'Presup.',
             to: routePaths.budgets(profileId),
           },
         ],
       },
       {
         title: 'Organización',
+        summary: 'Catálogo financiero',
         items: [
-          { label: 'Cuentas', to: routePaths.accounts(profileId) },
-          { label: 'Categorías', to: routePaths.categories(profileId) },
+          { label: 'Cuentas', description: 'Origen del dinero', shortLabel: 'Cuentas', to: routePaths.accounts(profileId) },
+          { label: 'Categorías', description: 'Reglas y jerarquía', shortLabel: 'Categorías', to: routePaths.categories(profileId) },
         ],
       },
       {
         title: 'Seguimiento',
+        summary: 'Evolución y contexto',
         items: [
-          { label: 'Objetivos', to: routePaths.goals(profileId) },
-          { label: 'Hábitos', to: routePaths.habits(profileId) },
-          { label: 'Inflación', to: routePaths.inflation(profileId) },
+          { label: 'Objetivos', description: 'Metas de ahorro', shortLabel: 'Objetivos', to: routePaths.goals(profileId) },
+          { label: 'Hábitos', description: 'Rutinas financieras', shortLabel: 'Hábitos', to: routePaths.habits(profileId) },
+          { label: 'Inflación', description: 'Contexto de precios', shortLabel: 'Inflación', to: routePaths.inflation(profileId) },
           {
             label: 'Préstamos externos',
             description: 'Consulta integrada',
+            shortLabel: 'Préstamos',
             to: routePaths.externalLoans(profileId),
           },
         ],
@@ -115,44 +146,76 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="app-shell">
-      <aside className="sidebar" aria-label="Navegación principal">
-        <div className="panel-accent mb-4">
+      <header className="mobile-shell-header">
+        <div>
           <p className="label-ui">HogarIA</p>
-          <h2>Tu economía del hogar</h2>
+          <strong>Economía del hogar</strong>
         </div>
 
-        <div className="surface-inset mb-4">
-          <p className="label-ui">Sesión actual</p>
+        <button
+          type="button"
+          className="boton-secundario mobile-nav-toggle"
+          aria-expanded={mobileNavOpen}
+          aria-controls="app-navigation"
+          onClick={() => setMobileNavOpen((open) => !open)}
+        >
+          {mobileNavOpen ? 'Cerrar' : 'Menú'}
+        </button>
+      </header>
 
-          <div className="mt-3 grid gap-2">
-            <div>
-              <p className="compact-muted">Usuario activo</p>
-              <strong className="texto-principal">{devUserId ? 'Usuario seleccionado' : 'Sin usuario'}</strong>
-              {devUserId && <p className="session-id">ID: {devUserId.slice(0, 8)}...</p>}
-            </div>
+      <aside
+        id="app-navigation"
+        className={`sidebar ${mobileNavOpen ? 'sidebar-open' : ''}`}
+        aria-label="Navegación principal"
+      >
+        <div className="sidebar-brand">
+          <div>
+            <p className="label-ui">HogarIA</p>
+            <h2>Economía del hogar</h2>
+          </div>
 
-            <div>
-              <p className="compact-muted">Perfil activo</p>
-              <strong className="texto-principal">{selectedProfileId ? 'Perfil seleccionado' : 'Sin perfil'}</strong>
-              {selectedProfileId && <p className="session-id">ID: {selectedProfileId.slice(0, 8)}...</p>}
-            </div>
+          <button
+            type="button"
+            className="sidebar-icon-button"
+            onClick={toggleTheme}
+            aria-label={theme === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
+          >
+            {theme === 'dark' ? 'Claro' : 'Oscuro'}
+          </button>
+        </div>
+
+        <div className="sidebar-session">
+          <div>
+            <p className="label-ui">Sesión</p>
+            <strong className="texto-principal">{devUserId ? 'Usuario activo' : 'Sin usuario'}</strong>
+            {devUserId && <p className="session-id">{devUserId.slice(0, 8)}...</p>}
+          </div>
+
+          <div>
+            <p className="label-ui">Perfil</p>
+            <strong className="texto-principal">{selectedProfileId ? 'Seleccionado' : 'Sin perfil'}</strong>
+            {selectedProfileId && <p className="session-id">{selectedProfileId.slice(0, 8)}...</p>}
           </div>
         </div>
 
         <div className="sidebar-nav" aria-label="Secciones de navegación">
           {navSections.map((section) => (
-            <nav key={section.title} aria-label={section.title}>
-              <p className="nav-group">{section.title}</p>
+            <nav key={section.title} className="nav-section" aria-label={section.title}>
+              <div className="nav-section-heading">
+                <p className="nav-group">{section.title}</p>
+                <span>{section.summary}</span>
+              </div>
 
               {section.items.map((item) => (
                 <NavLink
                   key={item.to}
                   to={item.to}
+                  onClick={() => setMobileNavOpen(false)}
                   className={({ isActive }) =>
                     `nav-item ${isActive ? 'nav-item-active' : ''}`.trim()
                   }
                 >
-                  <span className="nav-item-title">{item.label}</span>
+                  <span className="nav-item-title" data-short-label={item.shortLabel ?? item.label}>{item.label}</span>
                   {item.description ? <span className="nav-item-description">{item.description}</span> : null}
                 </NavLink>
               ))}
@@ -160,11 +223,15 @@ export function AppShell({ children }: { children: ReactNode }) {
           ))}
         </div>
 
-        <div className="sidebar-system" aria-label="Sistema">
-          <p className="nav-group">Sistema</p>
+        <div className="sidebar-system nav-section" aria-label="Sistema">
+          <div className="nav-section-heading">
+            <p className="nav-group">Sistema</p>
+            <span>Perfil y usuario</span>
+          </div>
 
           <NavLink
             to={routePaths.profiles}
+            onClick={() => setMobileNavOpen(false)}
             className={({ isActive }) =>
               `nav-item ${isActive ? 'nav-item-active' : ''}`.trim()
             }
@@ -174,7 +241,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
           <button
             type="button"
-            className="boton-secundario mt-3"
+            className="boton-secundario sidebar-theme-button"
             onClick={toggleTheme}
             aria-label={theme === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
           >
@@ -183,7 +250,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
           <button
             type="button"
-            className="boton-fantasma mt-2 w-full"
+            className="boton-fantasma"
             onClick={handleChangeUser}
             aria-label="Cambiar usuario activo"
           >

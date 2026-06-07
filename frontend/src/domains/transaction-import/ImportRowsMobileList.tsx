@@ -88,6 +88,12 @@ export function ImportRowsMobileList({
               />
             </div>
 
+            {locked ? (
+              <p className="import-row-note">
+                Esta fila no se edita desde la previsualización: se omitirá, ya existe o tiene un error de archivo.
+              </p>
+            ) : null}
+
             <div className="form-grid">
               <label>
                 Tipo
